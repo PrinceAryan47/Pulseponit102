@@ -1,0 +1,211 @@
+// ===============================================================
+// Assumed Data Model
+// ===============================================================
+//
+// Collection: users
+// Fields:
+//   - uid: string (required)
+//   - email: string (required)
+//   - role: string (required, enum: ['patient', 'doctor'])
+//   - fullName: string (required)
+//   - phoneNumber: string
+//   - photoURL: string
+//   - status: string (enum: ['pending', 'approved', 'rejected'])
+//
+// Collection: messages
+// Fields:
+//   - roomId: string (required)
+//   - text: string (required)
+//   - senderId: string (required)
+//   - senderName: string
+//   - timestamp: timestamp
+//
+// ===============================================================
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function hasRole(role) {
+      let path = /databases/$(database)/documents/users/$(request.auth.uid);
+      return isAuthenticated() && exists(path) && get(path).data.role == role;
+    }
+
+    function isSuperAdmin() {
+      return isAuthenticated() && 
+             (request.auth.token.email == "mafialord1247@gmail.com" || 
+              request.auth.token.email == "mafia.lord1247@gmail.com" || 
+              request.auth.token.email == "prince47aryan@gmail.com" ||
+              (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+               get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'));
+    }
+
+    function isDoctor() {
+      return hasRole('doctor') && getUserData().get('status', 'pending') == 'approved';
+    }
+
+    function isValidUser(data) {
+      return data.keys().hasAll(['uid', 'email', 'role', 'fullName']) &&
+             data.uid is string &&
+             data.email is string &&
+             data.role in ['patient', 'doctor'] &&
+             data.fullName is string && data.fullName.size() < 100 &&
+             (!('gender' in data) || data.gender is string) &&
+             (!('phoneNumber' in data) || data.phoneNumber is string) &&
+             (!('isOnline' in data) || data.isOnline is bool) &&
+             (!('lastSeen' in data) || data.lastSeen is timestamp) &&
+             (!('licenseNumber' in data) || data.licenseNumber is string) &&
+             (!('specialization' in data) || data.specialization is string) &&
+             (!('hospitalId' in data) || data.hospitalId is string) &&
+             (!('hospitalName' in data) || data.hospitalName is string) &&
+             (!('status' in data) || data.status in ['pending', 'approved', 'rejected']) &&
+             (!('licenseVerificationStatus' in data) || data.licenseVerificationStatus in ['pending', 'verified', 'rejected']) &&
+             (!('hospitalApprovalStatus' in data) || data.hospitalApprovalStatus in ['pending', 'approved', 'rejected']) &&
+             (!('createdAt' in data) || data.createdAt is timestamp || data.createdAt is string);
+    }
+
+    function isValidMessage(data) {
+      return data.keys().hasAll(['roomId', 'text', 'senderId']) &&
+             data.roomId is string &&
+             data.text is string && data.text.size() < 5000 &&
+             data.senderId == request.auth.uid;
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /emails/{email} {
+      // Allow anyone to check if an email exists during registration
+      allow read: if true;
+      // Allow creation if the email doesn't exist yet
+      allow create: if true;
+      // Only super admins can delete or update the registry
+      allow update, delete: if isSuperAdmin();
+    }
+
+    match /users/{userId} {
+      // Allow public read for counts and doctor search
+      allow read: if true;
+      
+      allow create: if isAuthenticated() && request.auth.uid == userId && isValidUser(request.resource.data) && 
+                    (request.resource.data.role == 'patient' || 
+                     request.resource.data.get('status', 'pending') == 'pending' || 
+                     request.resource.data.get('status', 'pending') == 'approved');
+      
+      allow update: if isAuthenticated() && (
+        isSuperAdmin() ||
+        (request.auth.uid == userId && isValidUser(request.resource.data) && (
+          // Allow updating online status fields even if they are new
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isOnline', 'lastSeen']) ||
+          // For other updates, prevent changing critical fields unless admin
+          !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'status', 'uid', 'email'])
+        ))
+      );
+
+      allow delete: if isSuperAdmin();
+    }
+
+    match /hospitals/{hospitalId} {
+      allow read: if true;
+      allow write: if isSuperAdmin();
+    }
+
+    match /appointments/{appointmentId} {
+      allow read: if isAuthenticated() && (request.auth.uid == resource.data.patientId || request.auth.uid == resource.data.doctorId || isSuperAdmin());
+      allow create: if isAuthenticated() && request.auth.uid == request.resource.data.patientId;
+      allow update: if isAuthenticated() && (
+        (request.auth.uid == resource.data.patientId && request.resource.data.status == resource.data.status) ||
+        (request.auth.uid == resource.data.doctorId && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'doctorNotes', 'meetingLink', 'updatedAt']))
+      );
+    }
+
+    match /medicalRecords/{recordId} {
+      allow read: if isAuthenticated() && (
+        request.auth.uid == resource.data.patientId || 
+        request.auth.uid == resource.data.doctorId ||
+        (exists(/databases/$(database)/documents/accessRequests/$(resource.data.patientId + "_" + request.auth.uid)) && 
+         get(/databases/$(database)/documents/accessRequests/$(resource.data.patientId + "_" + request.auth.uid)).data.status == 'approved')
+      );
+      allow create: if isDoctor() && request.auth.uid == request.resource.data.doctorId;
+      allow update: if isDoctor() && request.auth.uid == resource.data.doctorId;
+    }
+
+    match /accessRequests/{requestId} {
+      allow read: if isAuthenticated() && (
+        request.auth.uid == resource.data.patientId || 
+        request.auth.uid == resource.data.doctorId
+      );
+      allow create: if isAuthenticated() && request.resource.data.doctorId == request.auth.uid;
+      allow update: if isAuthenticated() && (
+        request.auth.uid == resource.data.patientId && 
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt'])
+      );
+      allow delete: if isAuthenticated() && (
+        request.auth.uid == resource.data.patientId || 
+        request.auth.uid == resource.data.doctorId
+      );
+    }
+
+    match /articles/{articleId} {
+      allow read: if true;
+      allow create: if isDoctor() || isSuperAdmin();
+      allow update: if (isDoctor() || isSuperAdmin()) || 
+                    (isAuthenticated() && request.resource.data.diff(resource.data).affectedKeys().hasAny(['likes', 'comments']));
+      allow delete: if isSuperAdmin() || isDoctor() || (isAuthenticated() && resource.data.authorId == request.auth.uid);
+    }
+
+    match /settings/{settingId} {
+      allow read: if true;
+      allow write: if isSuperAdmin();
+    }
+
+    match /notifications/{notificationId} {
+      allow read: if isAuthenticated() && request.auth.uid == resource.data.userId;
+      allow update: if isAuthenticated() && request.auth.uid == resource.data.userId && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']);
+      allow create: if isAuthenticated();
+    }
+
+    match /messages/{messageId} {
+      // roomId is [uid1, uid2].sort().join('_')
+      allow read: if isAuthenticated() && (resource.data.roomId.matches(".*" + request.auth.uid + ".*") || isSuperAdmin());
+      allow create: if isAuthenticated() && isValidMessage(request.resource.data) && 
+                    request.resource.data.roomId.matches(".*" + request.auth.uid + ".*");
+    }
+
+    match /meetings/{meetingId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated();
+      
+      match /offerCandidates/{candidateId} {
+        allow read, write: if isAuthenticated();
+      }
+      match /answerCandidates/{candidateId} {
+        allow read, write: if isAuthenticated();
+      }
+    }
+
+    match /calls/{callId} {
+      allow read: if isAuthenticated() && (resource.data.callerId == request.auth.uid || resource.data.receiverId == request.auth.uid);
+      allow create: if isAuthenticated() && request.resource.data.callerId == request.auth.uid;
+      allow update: if isAuthenticated() && (resource.data.callerId == request.auth.uid || resource.data.receiverId == request.auth.uid);
+      allow delete: if isAuthenticated() && (resource.data.callerId == request.auth.uid || resource.data.receiverId == request.auth.uid);
+    }
+  }
+}

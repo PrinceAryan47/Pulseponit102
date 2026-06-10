@@ -1,0 +1,21 @@
+{
+  "name": "PulsePoint Health Assistant",
+  "short_name": "PulsePoint",
+  "description": "Your simple health assistant. Connecting everyone to better care.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#00f3ff",
+  "icons": [
+    {
+      "src": "https://picsum.photos/seed/pulsepoint/192/192",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "https://picsum.photos/seed/pulsepoint/512/512",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

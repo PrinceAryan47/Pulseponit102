@@ -1,0 +1,184 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "Base user profile for all roles (Patient, Doctor)",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "role": { "type": "string", "enum": ["patient", "doctor"] },
+        "fullName": { "type": "string" },
+        "phoneNumber": { "type": "string" },
+        "photoURL": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "age": { "type": "integer" },
+        "gender": { "type": "string" },
+        "allergies": { "type": "string" },
+        "conditions": { "type": "string" },
+        "licenseNumber": { "type": "string" },
+        "specialization": { "type": "string" },
+        "experience": { "type": "integer" },
+        "qualifications": { "type": "string" },
+        "hospitalId": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "approved", "rejected"] },
+        "availability": { "type": "object" },
+        "isOnline": { "type": "boolean" },
+        "lastSeen": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email", "role", "fullName"]
+    },
+    "Hospital": {
+      "title": "Hospital",
+      "description": "Medical facility details",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "licenseNumber": { "type": "string" },
+        "address": { "type": "string" },
+        "location": { "type": "object" },
+        "contactPhone": { "type": "string" },
+        "contactEmail": { "type": "string" },
+        "services": { "type": "array", "items": { "type": "string" } },
+        "openingHours": { "type": "string" },
+        "photoURL": { "type": "string" }
+      },
+      "required": ["name", "licenseNumber", "address"]
+    },
+    "Appointment": {
+      "title": "Appointment",
+      "description": "Booking between patient and doctor",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "patientId": { "type": "string" },
+        "doctorId": { "type": "string" },
+        "hospitalId": { "type": "string" },
+        "dateTime": { "type": "string", "format": "date-time" },
+        "status": { "type": "string", "enum": ["pending", "confirmed", "rejected", "completed"] },
+        "notes": { "type": "string" }
+      },
+      "required": ["patientId", "doctorId", "dateTime", "status"]
+    },
+    "MedicalRecord": {
+      "title": "MedicalRecord",
+      "description": "Patient health history and reports",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "patientId": { "type": "string" },
+        "doctorId": { "type": "string" },
+        "date": { "type": "string", "format": "date-time" },
+        "diagnosis": { "type": "string" },
+        "prescription": { "type": "string" },
+        "labResults": { "type": "string" },
+        "notes": { "type": "string" },
+        "attachments": { "type": "array", "items": { "type": "string" } }
+      },
+      "required": ["patientId", "doctorId", "date"]
+    },
+    "Article": {
+      "title": "Article",
+      "description": "Health news and education content",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "summary": { "type": "string" },
+        "content": { "type": "string" },
+        "authorId": { "type": "string" },
+        "category": { "type": "string" },
+        "imageURL": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "likes": { "type": "array", "items": { "type": "string" } },
+        "comments": { 
+          "type": "array", 
+          "items": { 
+            "type": "object",
+            "properties": {
+              "userId": { "type": "string" },
+              "userName": { "type": "string" },
+              "text": { "type": "string" },
+              "createdAt": { "type": "string", "format": "date-time" }
+            }
+          }
+        }
+      },
+      "required": ["title", "content", "authorId"]
+    },
+    "Notification": {
+      "title": "Notification",
+      "description": "User alerts and updates",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "title": { "type": "string" },
+        "message": { "type": "string" },
+        "type": { "type": "string" },
+        "read": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "title", "message", "read"]
+    },
+    "Message": {
+      "title": "Message",
+      "description": "Chat message between users",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "roomId": { "type": "string" },
+        "text": { "type": "string" },
+        "senderId": { "type": "string" },
+        "senderName": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" }
+      },
+      "required": ["roomId", "text", "senderId"]
+    },
+    "Call": {
+      "title": "Call",
+      "description": "Real-time call request between patient and doctor",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "callerId": { "type": "string" },
+        "callerName": { "type": "string" },
+        "callerPhoto": { "type": "string" },
+        "receiverId": { "type": "string" },
+        "status": { "type": "string", "enum": ["ringing", "accepted", "declined", "missed", "ended"] },
+        "type": { "type": "string", "enum": ["video", "audio"] },
+        "roomId": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["callerId", "receiverId", "status", "type", "roomId"]
+    },
+    "AccessRequest": {
+      "title": "AccessRequest",
+      "description": "Patient consent for doctor to read their medical records",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "patientId": { "type": "string" },
+        "patientName": { "type": "string" },
+        "doctorId": { "type": "string" },
+        "doctorName": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "approved", "rejected"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["patientId", "doctorId", "status"]
+    }
+  },
+  "firestore": {
+    "/users/{uid}": { "schema": "User", "description": "User profiles" },
+    "/hospitals/{hospitalId}": { "schema": "Hospital", "description": "Hospital details" },
+    "/appointments/{appointmentId}": { "schema": "Appointment", "description": "Appointment bookings" },
+    "/medicalRecords/{recordId}": { "schema": "MedicalRecord", "description": "Medical records" },
+    "/articles/{articleId}": { "schema": "Article", "description": "Health articles" },
+    "/notifications/{notificationId}": { "schema": "Notification", "description": "User notifications" },
+    "/messages/{messageId}": { "schema": "Message", "description": "Chat messages" },
+    "/calls/{callId}": { "schema": "Call", "description": "Call requests" },
+    "/accessRequests/{requestId}": { "schema": "AccessRequest", "description": "Consent requests to access medical records" }
+  }
+}
