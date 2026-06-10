@@ -757,7 +757,8 @@ const AdminDashboard: React.FC = () => {
               <p className="text-slate-500 font-bold animate-pulse">Fetching records...</p>
             </div>
           ) : (
-            <table className="w-full text-left border-collapse">
+            <div className="overflow-x-auto w-full">
+              <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="bg-slate-50/50 dark:bg-slate-900/50">
                   <th className="px-6 py-4 text-xs font-black text-slate-500 uppercase tracking-widest">
@@ -1021,6 +1022,7 @@ const AdminDashboard: React.FC = () => {
                 ))}
               </tbody>
             </table>
+          </div>
           )}
         </div>
       </div>
