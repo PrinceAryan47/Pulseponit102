@@ -2,13 +2,9 @@ import "dotenv/config";
 import express from "express";
 import { createServer as createViteServer } from "vite";
 import path from "path";
-import { fileURLToPath } from "url";
 import { createServer } from "http";
 import { Server, Socket } from "socket.io";
 import { GoogleGenAI } from "@google/genai";
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 // Helper to calculate distance on server
 const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
@@ -100,7 +96,7 @@ async function startServer() {
       methods: ["GET", "POST"]
     }
   });
-  const PORT = 3000;
+  const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 
   app.use(express.json());
 
