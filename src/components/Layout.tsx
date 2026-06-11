@@ -27,12 +27,16 @@ import {
   BarChart3,
   Settings,
   ChevronRight,
-  Download
+  Download,
+  Search,
+  CloudOff,
+  Wifi
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useTheme } from '../context/ThemeContext';
 import AIAssistant from './AIAssistant';
 import NotificationDropdown from './NotificationDropdown';
+import GlobalSearch from './GlobalSearch';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const Layout: React.FC = () => {
@@ -43,6 +47,74 @@ const Layout: React.FC = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [showInstallBtn, setShowInstallBtn] = useState(false);
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [isOffline, setIsOffline] = useState(!navigator.onLine);
+  const [wasOffline, setWasOffline] = useState(false);
+  const [showOnlineBanner, setShowOnlineBanner] = useState(false);
+
+  useEffect(() => {
+    const handleOnline = () => {
+      setIsOffline(false);
+      setWasOffline(prev => {
+        if (prev) {
+          setShowOnlineBanner(true);
+          const timer = setTimeout(() => {
+            setShowOnlineBanner(false);
+          }, 4000);
+          return false;
+        }
+        return prev;
+      });
+    };
+
+    const handleOffline = () => {
+      setIsOffline(true);
+      setWasOffline(true);
+      setShowOnlineBanner(false);
+    };
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    if ('serviceWorker' in navigator) {
+      const handleSWMessage = (event: MessageEvent) => {
+        if (event.data && event.data.type === 'NETWORK_STATUS') {
+          if (event.data.online) {
+            handleOnline();
+          } else {
+            handleOffline();
+          }
+        }
+      };
+      navigator.serviceWorker.addEventListener('message', handleSWMessage);
+
+      if (navigator.serviceWorker.controller) {
+        navigator.serviceWorker.controller.postMessage({ type: 'CHECK_STATUS' });
+      }
+
+      return () => {
+        window.removeEventListener('online', handleOnline);
+        window.removeEventListener('offline', handleOffline);
+        navigator.serviceWorker.removeEventListener('message', handleSWMessage);
+      };
+    }
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+
+  useEffect(() => {
+    const handleGlobalKeydown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        setIsSearchOpen(prev => !prev);
+      }
+    };
+    window.addEventListener('keydown', handleGlobalKeydown);
+    return () => window.removeEventListener('keydown', handleGlobalKeydown);
+  }, []);
 
   useEffect(() => {
     window.addEventListener('beforeinstallprompt', (e) => {
@@ -195,16 +267,61 @@ const Layout: React.FC = () => {
               >
                 <Menu className="w-6 h-6" />
               </button>
+              <button
+                onClick={() => setIsSearchOpen(true)}
+                className="p-2 rounded-lg text-muted-foreground hover:text-primary transition-all"
+                title="Search PulsePoint"
+              >
+                <Search className="w-5 h-5" />
+              </button>
               <Link to="/" className="flex items-center gap-2">
                 <Heart className="w-6 h-6 text-primary" />
               </Link>
             </div>
 
             <div className="flex-grow max-w-xl mx-4 hidden sm:block">
-              {/* Search placeholder or other global tools */}
+              <button 
+                onClick={() => setIsSearchOpen(true)}
+                className="w-full flex items-center justify-between px-4 py-2 bg-muted/40 hover:bg-muted/75 text-muted-foreground hover:text-foreground border border-border rounded-xl transition-all cursor-pointer group"
+              >
+                <div className="flex items-center gap-2.5">
+                  <Search className="w-4 h-4 text-muted-foreground/80 group-hover:text-primary transition-colors" />
+                  <span className="text-sm font-medium">Search doctors, articles, first aid...</span>
+                </div>
+                <div className="flex items-center gap-1 bg-background border border-border px-1.5 py-0.5 rounded text-[10px] font-mono select-none">
+                  <span>⌘K</span>
+                </div>
+              </button>
             </div>
 
             <div className="flex items-center gap-4">
+              <AnimatePresence mode="popLayout">
+                {isOffline && (
+                  <motion.div 
+                    initial={{ opacity: 0, scale: 0.9, x: 10 }}
+                    animate={{ opacity: 1, scale: 1, x: 0 }}
+                    exit={{ opacity: 0, scale: 0.9, x: 10 }}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-500/10 border border-amber-500/20 text-amber-500 rounded-full text-xs font-bold leading-none select-none shrink-0"
+                    title="Lost connection to PulsePoint"
+                  >
+                    <CloudOff className="w-3.5 h-3.5 animate-pulse" />
+                    <span className="hidden sm:inline">Offline Mode</span>
+                    <span className="sm:hidden">Offline</span>
+                  </motion.div>
+                )}
+                {showOnlineBanner && (
+                  <motion.div 
+                    initial={{ opacity: 0, scale: 0.9, x: 10 }}
+                    animate={{ opacity: 1, scale: 1, x: 0 }}
+                    exit={{ opacity: 0, scale: 0.9, x: 10 }}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 rounded-full text-xs font-bold leading-none select-none shrink-0"
+                  >
+                    <Wifi className="w-3.5 h-3.5 text-emerald-500" />
+                    <span>Back Online</span>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
               <button 
                 onClick={toggleTheme}
                 className="p-2 text-muted-foreground hover:text-primary transition-colors rounded-lg"
@@ -276,6 +393,7 @@ const Layout: React.FC = () => {
           </main>
         </div>
         <AIAssistant />
+        <GlobalSearch isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} />
       </div>
     );
   }
@@ -330,6 +448,40 @@ const Layout: React.FC = () => {
             </div>
 
             <div className="hidden md:flex md:items-center md:gap-4">
+              <AnimatePresence mode="popLayout">
+                {isOffline && (
+                  <motion.div 
+                    initial={{ opacity: 0, scale: 0.9, x: 10 }}
+                    animate={{ opacity: 1, scale: 1, x: 0 }}
+                    exit={{ opacity: 0, scale: 0.9, x: 10 }}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-500/10 border border-amber-500/20 text-amber-500 rounded-full text-xs font-bold leading-none select-none shrink-0"
+                    title="Lost connection to PulsePoint"
+                  >
+                    <CloudOff className="w-3.5 h-3.5 animate-pulse" />
+                    <span>Offline Mode</span>
+                  </motion.div>
+                )}
+                {showOnlineBanner && (
+                  <motion.div 
+                    initial={{ opacity: 0, scale: 0.9, x: 10 }}
+                    animate={{ opacity: 1, scale: 1, x: 0 }}
+                    exit={{ opacity: 0, scale: 0.9, x: 10 }}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 rounded-full text-xs font-bold leading-none select-none shrink-0"
+                  >
+                    <Wifi className="w-3.5 h-3.5 text-emerald-500" />
+                    <span>Back Online</span>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              <button 
+                onClick={() => setIsSearchOpen(true)}
+                className="p-2 text-muted-foreground hover:text-primary transition-colors rounded-lg hover:bg-muted"
+                title="Search PulsePoint (Ctrl+K)"
+              >
+                <Search className="w-5 h-5" />
+              </button>
+
               <button 
                 onClick={toggleTheme}
                 className="p-2 text-muted-foreground hover:text-primary transition-colors rounded-lg hover:bg-muted"
@@ -382,6 +534,39 @@ const Layout: React.FC = () => {
             </div>
 
             <div className="flex items-center md:hidden gap-2">
+              <AnimatePresence mode="popLayout">
+                {isOffline && (
+                  <motion.div 
+                    initial={{ opacity: 0, scale: 0.9, x: 10 }}
+                    animate={{ opacity: 1, scale: 1, x: 0 }}
+                    exit={{ opacity: 0, scale: 0.9, x: 10 }}
+                    className="flex items-center gap-1 px-2 py-1 bg-amber-500/10 border border-amber-500/20 text-amber-500 rounded-full text-[10px] font-bold leading-none select-none shrink-0"
+                    title="Lost connection to PulsePoint"
+                  >
+                    <CloudOff className="w-3 h-3 animate-pulse" />
+                    <span>Offline</span>
+                  </motion.div>
+                )}
+                {showOnlineBanner && (
+                  <motion.div 
+                    initial={{ opacity: 0, scale: 0.9, x: 10 }}
+                    animate={{ opacity: 1, scale: 1, x: 0 }}
+                    exit={{ opacity: 0, scale: 0.9, x: 10 }}
+                    className="flex items-center gap-1 px-2 py-1 bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 rounded-full text-[10px] font-bold leading-none select-none shrink-0"
+                  >
+                    <Wifi className="w-3 h-3 text-emerald-500" />
+                    <span>Online</span>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              <button 
+                onClick={() => setIsSearchOpen(true)}
+                className="p-2 text-muted-foreground hover:text-primary transition-colors rounded-lg"
+                title="Search (Ctrl+K)"
+              >
+                <Search className="w-5 h-5" />
+              </button>
               <button 
                 onClick={toggleTheme}
                 className="p-2 text-muted-foreground hover:text-primary transition-colors rounded-lg"
@@ -536,6 +721,7 @@ const Layout: React.FC = () => {
         </div>
       </footer>
       <AIAssistant />
+      <GlobalSearch isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} />
     </div>
   );
 };

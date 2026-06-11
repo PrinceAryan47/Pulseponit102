@@ -54,6 +54,7 @@ const Dashboard: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [healthTip, setHealthTip] = useState<string | null>(null);
   const [isTipLoading, setIsTipLoading] = useState(false);
+  const [tipArticle, setTipArticle] = useState<Article | null>(null);
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
   const [isReplyModalOpen, setIsReplyModalOpen] = useState(false);
   const [doctorReply, setDoctorReply] = useState('');
@@ -141,35 +142,87 @@ const Dashboard: React.FC = () => {
   }, [selectedAppointment, doctorReply, meetingLink]);
 
   useEffect(() => {
-    const fetchHealthTip = async () => {
+    const selectArticleAndTip = async () => {
+      if (latestNews.length === 0) return;
       setIsTipLoading(true);
       try {
-        const tipDocRef = doc(db, 'settings', 'daily_tip');
-        const tipDoc = await getDoc(tipDocRef);
-        const today = new Date().toISOString().split('T')[0];
+        // Select an article based on the current date
+        const dayOfMonth = new Date().getDate();
+        const selectedArticle = latestNews[dayOfMonth % latestNews.length];
+        setTipArticle(selectedArticle);
 
-        if (tipDoc.exists() && tipDoc.data().date === today) {
-          setHealthTip(tipDoc.data().tip);
+        // Check if we already have a cached tip for this article/date
+        const today = new Date().toISOString().split('T')[0];
+        const localCacheKey = `daily_tip_article_${selectedArticle.id}_${today}`;
+        const cachedTip = localStorage.getItem(localCacheKey);
+
+        if (cachedTip) {
+          setHealthTip(cachedTip);
+        } else {
+          // Attempt to extract a short, ultra-compelling action tip from the article's text using Gemini!
+          if (process.env.GEMINI_API_KEY) {
+            try {
+              const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+              const response = await ai.models.generateContent({
+                model: "gemini-3-flash-preview",
+                contents: `Extract or formulate a compelling, single-sentence action-oriented daily health tip (max 25 words) from the following health article content:
+Category: ${selectedArticle.category}
+Title: ${selectedArticle.title}
+Summary/Content: ${selectedArticle.summary || selectedArticle.content}
+Make it highly direct, inspiring, and actionable. Do not wrap it in quotes.`,
+              });
+              const newTip = response.text.trim().replace(/^["']|["']$/g, '');
+              setHealthTip(newTip);
+              localStorage.setItem(localCacheKey, newTip);
+            } catch (aiErr) {
+              console.error("Gemini tip extraction failed, using summary:", aiErr);
+              const fallback = selectedArticle.summary.split('.')[0] + '.';
+              setHealthTip(fallback);
+            }
+          } else {
+            const fallback = selectedArticle.summary.split('.')[0] + '.';
+            setHealthTip(fallback);
+          }
+        }
+      } catch (err) {
+        console.error("Error setting article tip:", err);
+      } finally {
+        setIsTipLoading(false);
+      }
+    };
+
+    selectArticleAndTip();
+  }, [latestNews]);
+
+  useEffect(() => {
+    const fetchGeneralHealthTip = async () => {
+      if (latestNews.length > 0) return; // skip if we have articles
+      setIsTipLoading(true);
+      try {
+        const today = new Date().toISOString().split('T')[0];
+        const cachedTip = localStorage.getItem(`general_daily_tip_${today}`);
+        if (cachedTip) {
+          setHealthTip(cachedTip);
         } else {
           const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' });
           const response = await ai.models.generateContent({
             model: "gemini-3-flash-preview",
-            contents: "Generate a short, inspiring, and evidence-based daily health tip (max 30 words) for a wellness app. Focus on nutrition, mental health, or physical activity.",
+            contents: "Generate a short, inspiring, and evidence-based daily health tip (max 30 words) for a wellness app. Focus on nutrition, mental health, or physical activity. Do not wrap in quotes.",
           });
-          const newTip = response.text.trim();
+          const newTip = response.text.trim().replace(/^["']|["']$/g, '');
           setHealthTip(newTip);
-          await setDoc(tipDocRef, { tip: newTip, date: today });
+          localStorage.setItem(`general_daily_tip_${today}`, newTip);
         }
       } catch (error) {
-        console.error("Error fetching health tip:", error);
+        console.error("Error fetching general health tip:", error);
         setHealthTip("Stay hydrated! Drinking enough water is essential for your body's vital functions.");
       } finally {
         setIsTipLoading(false);
       }
     };
 
-    fetchHealthTip();
-  }, []);
+    fetchGeneralHealthTip();
+  }, [latestNews]);
 
   useEffect(() => {
     if (!profile) return;
@@ -201,7 +254,7 @@ const Dashboard: React.FC = () => {
       const qNews = query(
         collection(db, 'articles'),
         orderBy('createdAt', 'desc'),
-        limit(3)
+        limit(10)
       );
       const unsubscribeNews = onSnapshot(qNews, (snap) => {
         setLatestNews(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as unknown as Article)));
@@ -229,7 +282,7 @@ const Dashboard: React.FC = () => {
     const qNews = query(
       collection(db, 'articles'),
       orderBy('createdAt', 'desc'),
-      limit(3)
+      limit(10)
     );
     const unsubscribeNews = onSnapshot(qNews, (snap) => {
       setLatestNews(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as unknown as Article)));
@@ -285,24 +338,54 @@ const Dashboard: React.FC = () => {
             <motion.div 
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              className="bg-gradient-to-br from-primary/20 to-purple-500/10 p-8 rounded-[2.5rem] border border-primary/20 relative overflow-hidden"
+              className="bg-gradient-to-br from-primary/20 to-purple-500/10 p-8 rounded-[2.5rem] border border-primary/20 relative overflow-hidden shadow-sm hover:shadow-md transition-all"
             >
               <div className="absolute top-0 right-0 p-8 opacity-10">
                 <Activity className="w-32 h-32 text-primary" />
               </div>
-              <div className="relative z-10">
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="w-10 h-10 bg-primary/20 rounded-xl flex items-center justify-center">
-                    <Heart className="w-5 h-5 text-primary" />
+              <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
+                <div className="space-y-4 max-w-xl">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-primary/20 rounded-xl flex items-center justify-center shrink-0">
+                      <Heart className="w-5 h-5 text-primary" />
+                    </div>
+                    <div>
+                      <h2 className="text-xs font-bold text-muted-foreground uppercase tracking-widest leading-none">Daily Health Tip</h2>
+                      {tipArticle && (
+                        <span className="inline-block mt-1 text-[10px] bg-primary/10 text-primary px-2.5 py-0.5 rounded-full font-bold uppercase tracking-wider">
+                          Sourced from {tipArticle.category}
+                        </span>
+                      )}
+                    </div>
                   </div>
-                  <h2 className="text-lg font-bold text-foreground uppercase tracking-widest">Daily Health Tip</h2>
+                  {isTipLoading ? (
+                    <div className="space-y-2">
+                      <div className="h-5 w-3/4 bg-muted animate-pulse rounded-md"></div>
+                      <div className="h-5 w-1/2 bg-muted animate-pulse rounded-md"></div>
+                    </div>
+                  ) : (
+                    <p className="text-lg md:text-xl font-medium text-foreground/95 leading-relaxed italic pr-2">
+                      "{healthTip}"
+                    </p>
+                  )}
+                  {tipArticle && (
+                    <div className="pt-1">
+                      <p className="text-xs text-muted-foreground">
+                        Source topic: <span className="font-semibold text-foreground">{tipArticle.title}</span>
+                      </p>
+                    </div>
+                  )}
                 </div>
-                {isTipLoading ? (
-                  <div className="h-12 w-full bg-muted animate-pulse rounded-xl"></div>
-                ) : (
-                  <p className="text-xl font-medium text-foreground/80 leading-relaxed italic">
-                    "{healthTip}"
-                  </p>
+                {tipArticle && (
+                  <div className="shrink-0">
+                    <Link 
+                      to={`/articles/${tipArticle.id}`}
+                      className="inline-flex items-center gap-2 px-5 py-3 bg-primary text-primary-foreground font-bold text-xs rounded-2xl hover:bg-neon-blue-dark transition-all shadow-md hover:shadow-lg shadow-primary/25 hover:translate-x-1"
+                    >
+                      <span>Read Article</span>
+                      <ArrowRight className="w-3.5 h-3.5" />
+                    </Link>
+                  </div>
                 )}
               </div>
             </motion.div>
@@ -560,7 +643,7 @@ const Dashboard: React.FC = () => {
                   <Link to="/articles" className="text-xs font-bold text-primary hover:underline">View All</Link>
                 </div>
                 <div className="space-y-6">
-                  {latestNews.length > 0 ? latestNews.map((article) => (
+                  {latestNews.length > 0 ? latestNews.slice(0, 3).map((article) => (
                     <Link 
                       key={article.id} 
                       to={`/articles/${article.id}`}

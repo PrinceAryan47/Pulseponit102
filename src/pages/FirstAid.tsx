@@ -28,6 +28,7 @@ import { cn } from '../lib/utils';
 import Markdown from 'react-markdown';
 import { useAuth } from '../context/AuthContext';
 import GuestOverlay from '../components/GuestOverlay';
+import { useSearchParams } from 'react-router-dom';
 
 // Visual Animation Component for CPR
 const CPRAnimation = () => (
@@ -218,13 +219,23 @@ const PoisoningAnimation = () => (
 );
 
 const FirstAid: React.FC = () => {
+  const [searchParams] = useSearchParams();
   const [searchTerm, setSearchTerm] = useState('');
   const [aiQuery, setAiQuery] = useState('');
   const [aiResponse, setAiResponse] = useState<string | null>(null);
   const [isAiLoading, setIsAiLoading] = useState(false);
-  const [selectedGuide, setSelectedGuide] = useState<string | null>(null);
+  const [selectedGuide, setSelectedGuide] = useState<string | null>(() => {
+    return searchParams.get('guide') || null;
+  });
   const [isAudioEnabled, setIsAudioEnabled] = useState(false);
   const { user } = useAuth();
+
+  useEffect(() => {
+    const guideParam = searchParams.get('guide');
+    if (guideParam) {
+      setSelectedGuide(guideParam);
+    }
+  }, [searchParams]);
 
   const enableAudio = () => {
     if ('speechSynthesis' in window) {

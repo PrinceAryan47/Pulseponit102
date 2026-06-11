@@ -15,7 +15,8 @@ import {
   ThumbsUp,
   Trash2,
   Send,
-  Edit3
+  Edit3,
+  Globe
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -181,11 +182,24 @@ const ArticleDetail: React.FC = () => {
               <div className="flex flex-wrap items-center gap-8 text-slate-200">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 bg-white/10 rounded-full flex items-center justify-center backdrop-blur-sm">
-                    <User className="w-5 h-5" />
+                    {article.sourceUrl ? <Globe className="w-5 h-5 text-primary" /> : <User className="w-5 h-5" />}
                   </div>
                   <div>
-                    <p className="text-xs text-slate-400 uppercase font-bold tracking-wider">Author</p>
-                    <p className="font-bold">{article.authorName}</p>
+                    <p className="text-xs text-slate-400 uppercase font-bold tracking-wider">
+                      {article.sourceUrl ? 'Source Website' : 'Author'}
+                    </p>
+                    {article.sourceUrl ? (
+                      <a 
+                        href={article.sourceUrl} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="font-bold text-primary hover:underline hover:text-neon-blue transition-colors flex items-center gap-1"
+                      >
+                        {article.sourceName || article.authorName}
+                      </a>
+                    ) : (
+                      <p className="font-bold">{article.authorName}</p>
+                    )}
                   </div>
                 </div>
                 <div className="flex items-center gap-3">

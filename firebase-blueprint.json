@@ -91,6 +91,8 @@
         "category": { "type": "string" },
         "imageURL": { "type": "string" },
         "createdAt": { "type": "string", "format": "date-time" },
+        "sourceName": { "type": "string" },
+        "sourceUrl": { "type": "string" },
         "likes": { "type": "array", "items": { "type": "string" } },
         "comments": { 
           "type": "array", 

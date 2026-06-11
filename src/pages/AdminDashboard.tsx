@@ -25,7 +25,8 @@ import {
   Sparkles,
   RefreshCw,
   Plus,
-  Trash2
+  Trash2,
+  Globe
 } from 'lucide-react';
 import { collection, query, getDocs, getDoc, setDoc, serverTimestamp, updateDoc, doc, where, orderBy, limit, getCountFromServer, deleteDoc, addDoc, onSnapshot } from 'firebase/firestore';
 import { auth, db } from '../firebase';
@@ -987,7 +988,18 @@ const AdminDashboard: React.FC = () => {
                         </div>
                         <div>
                           <p className="font-bold text-[rgb(var(--foreground))] line-clamp-1">{article.title}</p>
-                          <p className="text-xs text-slate-500">{article.authorName}</p>
+                          {article.sourceUrl ? (
+                            <a 
+                              href={article.sourceUrl} 
+                              target="_blank" 
+                              rel="noopener noreferrer" 
+                              className="text-xs text-primary hover:underline flex items-center gap-1 font-semibold"
+                            >
+                              <Globe className="w-3 h-3 text-primary" /> {article.sourceName || article.authorName}
+                            </a>
+                          ) : (
+                            <p className="text-xs text-slate-500">{article.authorName}</p>
+                          )}
                         </div>
                       </div>
                     </td>
@@ -1203,10 +1215,22 @@ const AdminDashboard: React.FC = () => {
                     <div className="w-40 h-40 rounded-2xl overflow-hidden shrink-0">
                       <img src={news.imageURL} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                     </div>
-                    <div className="space-y-3">
-                      <span className="px-3 py-1 bg-purple-500/10 text-purple-500 rounded-full text-[10px] font-black uppercase tracking-widest">
-                        {news.category}
-                      </span>
+                    <div className="space-y-3 flex-grow">
+                      <div className="flex items-center justify-between">
+                        <span className="px-3 py-1 bg-purple-500/10 text-purple-500 rounded-full text-[10px] font-black uppercase tracking-widest">
+                          {news.category}
+                        </span>
+                        {news.sourceUrl && (
+                          <a 
+                            href={news.sourceUrl} 
+                            target="_blank" 
+                            rel="noopener noreferrer" 
+                            className="text-xs text-purple-500 hover:underline flex items-center gap-1 font-bold"
+                          >
+                            <Globe className="w-3.5 h-3.5" /> Source: {news.sourceName || 'Link'}
+                          </a>
+                        )}
+                      </div>
                       <h3 className="text-xl font-bold text-[rgb(var(--foreground))]">{news.title}</h3>
                       <p className="text-slate-500 dark:text-slate-400 text-sm leading-relaxed">{news.summary}</p>
                     </div>

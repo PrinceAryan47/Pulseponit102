@@ -90,6 +90,8 @@ export interface Article {
   imageURL?: string;
   createdAt: string;
   authorName?: string;
+  sourceName?: string;
+  sourceUrl?: string;
   likes?: string[];
   comments?: {
     userId: string;

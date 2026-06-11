@@ -17,13 +17,35 @@ import { GoogleGenAI } from "@google/genai";
 import { cn } from '../lib/utils';
 import Markdown from 'react-markdown';
 
+import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import GuestOverlay from '../components/GuestOverlay';
 
 const HealthTools: React.FC = () => {
-  const [activeTool, setActiveTool] = useState<'bmi' | 'symptom' | 'calorie' | 'water' | 'heart' | 'pregnancy' | 'period' | 'sleep' | 'fitness' | 'mens-health'>('bmi');
+  const [searchParams] = useSearchParams();
+  const [activeTool, setActiveTool] = useState<'bmi' | 'symptom' | 'calorie' | 'water' | 'heart' | 'pregnancy' | 'period' | 'sleep' | 'fitness' | 'mens-health'>(() => {
+    const toolParam = searchParams.get('tool');
+    const validTools = ['bmi', 'symptom', 'calorie', 'water', 'heart', 'pregnancy', 'period', 'sleep', 'fitness', 'mens-health'];
+    if (toolParam && validTools.includes(toolParam)) {
+      return toolParam as any;
+    }
+    return 'bmi';
+  });
   const [activeCategory, setActiveCategory] = useState<'all' | 'men' | 'women'>('all');
   const { profile } = useAuth();
+
+  React.useEffect(() => {
+    const toolParam = searchParams.get('tool');
+    const validTools = ['bmi', 'symptom', 'calorie', 'water', 'heart', 'pregnancy', 'period', 'sleep', 'fitness', 'mens-health'];
+    if (toolParam && validTools.includes(toolParam)) {
+      setActiveTool(toolParam as any);
+      // Automatically adjust category if the tool is gender-specific
+      const isFemaleTool = ['pregnancy', 'period'].includes(toolParam);
+      const isMaleTool = ['mens-health'].includes(toolParam);
+      if (isFemaleTool) setActiveCategory('women');
+      else if (isMaleTool) setActiveCategory('men');
+    }
+  }, [searchParams]);
 
   React.useEffect(() => {
     if (profile?.gender === 'female') {

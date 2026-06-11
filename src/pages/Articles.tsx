@@ -15,7 +15,8 @@ import {
   Heart,
   Activity,
   Apple,
-  Plus
+  Plus,
+  Globe
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { motion } from 'framer-motion';
@@ -135,8 +136,23 @@ const Articles: React.FC = () => {
             </p>
             <div className="flex items-center gap-6 text-slate-300">
               <div className="flex items-center gap-2">
-                <User className="w-4 h-4" />
-                <span className="text-sm font-medium">{filteredArticles[0].authorName}</span>
+                {filteredArticles[0].sourceUrl ? (
+                  <a 
+                    href={filteredArticles[0].sourceUrl} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    onClick={(e) => e.stopPropagation()}
+                    className="flex items-center gap-2 text-primary hover:underline group/src"
+                  >
+                    <Globe className="w-4 h-4 text-primary shrink-0 transition-transform group-hover/src:scale-110" />
+                    <span className="text-sm font-bold truncate">Source: {filteredArticles[0].sourceName || filteredArticles[0].authorName}</span>
+                  </a>
+                ) : (
+                  <>
+                    <User className="w-4 h-4" />
+                    <span className="text-sm font-medium">{filteredArticles[0].authorName}</span>
+                  </>
+                )}
               </div>
               <div className="flex items-center gap-2">
                 <Clock className="w-4 h-4" />
@@ -173,7 +189,25 @@ const Articles: React.FC = () => {
               <div className="flex items-center gap-4 text-xs text-muted-foreground font-bold uppercase tracking-wider mb-4">
                 <span className="flex items-center gap-1.5 shrink-0"><Clock className="w-3.5 h-3.5" /> {safeFormat(article.createdAt, 'MMM dd')}</span>
                 <span className="w-1 h-1 bg-border rounded-full shrink-0"></span>
-                <span className="flex items-center gap-1.5 truncate"><User className="w-3.5 h-3.5 shrink-0" /> {article.authorName}</span>
+                <span className="flex items-center gap-1.5 truncate max-w-[150px]">
+                  {article.sourceUrl ? (
+                    <a 
+                      href={article.sourceUrl} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      onClick={(e) => e.stopPropagation()}
+                      className="flex items-center gap-1 text-primary hover:underline group/src inline-flex"
+                    >
+                      <Globe className="w-3.5 h-3.5 text-primary shrink-0 transition-transform group-hover/src:scale-110" />
+                      <span className="truncate">{article.sourceName || article.authorName}</span>
+                    </a>
+                  ) : (
+                    <>
+                      <User className="w-3.5 h-3.5 shrink-0 mr-1" />
+                      {article.authorName}
+                    </>
+                  )}
+                </span>
               </div>
               <h3 className="text-xl font-bold text-foreground mb-3 group-hover:text-primary transition-colors line-clamp-2">
                 {article.title}
