@@ -150,7 +150,7 @@ const AIAssistant: React.FC = () => {
             }}
             exit={{ opacity: 0, scale: 0.9, y: 20 }}
             className={cn(
-              "w-[calc(100vw-2rem)] sm:w-[380px] bg-white dark:bg-slate-800 rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-700 overflow-hidden flex flex-col mb-4 transition-all duration-300",
+              "w-[380px] bg-white dark:bg-slate-800 rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-700 overflow-hidden flex flex-col mb-4 transition-all duration-300",
               isMinimized ? "h-16" : "h-[500px]"
             )}
           >
