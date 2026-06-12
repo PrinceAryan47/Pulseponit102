@@ -2,6 +2,7 @@ import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { initializeFirestore, doc, getDocFromServer } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
+import { getMessaging, isSupported } from 'firebase/messaging';
 import firebaseConfig from '../firebase-applet-config.json';
 
 const app = initializeApp(firebaseConfig);
@@ -13,6 +14,15 @@ export const db = initializeFirestore(app, {
   experimentalForceLongPolling: true,
   ignoreUndefinedProperties: true,
 }, firebaseConfig.firestoreDatabaseId);
+
+let messagingInstance: any = null;
+isSupported().then((supported) => {
+  if (supported) {
+    messagingInstance = getMessaging(app);
+  }
+}).catch(err => console.log("Firebase Messaging is not supported or blocked in this browser environment", err));
+
+export const getFirebaseMessaging = () => messagingInstance;
 
 // Test connection
 async function testConnection() {

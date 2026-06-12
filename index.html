@@ -9,6 +9,19 @@
     <link rel="manifest" href="/manifest.json" />
     <meta name="theme-color" content="#00f3ff" />
     <script>
+      (function() {
+        try {
+          const savedTheme = localStorage.getItem('theme');
+          const theme = savedTheme === 'light' || savedTheme === 'dark' ? savedTheme : 'dark';
+          if (theme === 'dark') {
+            document.documentElement.classList.add('dark');
+          } else {
+            document.documentElement.classList.remove('dark');
+          }
+        } catch (_) {}
+      })();
+    </script>
+    <script>
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
           navigator.serviceWorker.register('/sw.js')
