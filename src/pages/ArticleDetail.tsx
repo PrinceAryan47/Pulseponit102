@@ -340,24 +340,48 @@ const ArticleDetail: React.FC = () => {
 
           {/* Sidebar */}
           <div className="lg:col-span-4 space-y-12">
-            {/* Author Card */}
+            {/* Author or Source Card */}
             <div className="bg-white dark:bg-slate-800 p-8 rounded-[2.5rem] border border-slate-100 dark:border-slate-700 shadow-sm">
-              <h3 className="text-lg font-bold mb-6">About the Author</h3>
+              <h3 className="text-lg font-bold mb-6">
+                {article.authorId === 'system' || article.sourceUrl ? 'Article Source' : 'About the Author'}
+              </h3>
               <div className="flex items-center gap-4 mb-6">
-                <div className="w-16 h-16 bg-neon-blue/10 rounded-2xl flex items-center justify-center">
-                  <User className="w-8 h-8 text-neon-blue" />
+                <div className="w-16 h-16 bg-neon-blue/10 rounded-2xl flex items-center justify-center shrink-0">
+                  {article.sourceUrl ? (
+                    <Globe className="w-8 h-8 text-neon-blue" />
+                  ) : (
+                    <User className="w-8 h-8 text-neon-blue" />
+                  )}
                 </div>
-                <div>
-                  <p className="font-bold text-[rgb(var(--foreground))]">{article.authorName}</p>
-                  <p className="text-sm text-slate-500">Medical Specialist</p>
+                <div className="min-w-0">
+                  <p className="font-bold text-[rgb(var(--foreground))] truncate">
+                    {article.authorId === 'system' ? (article.sourceName || article.authorName) : article.authorName}
+                  </p>
+                  <p className="text-sm text-slate-500">
+                    {article.authorId === 'system' || article.sourceUrl ? 'Reputable Medical Publisher' : 'Medical Specialist'}
+                  </p>
                 </div>
               </div>
               <p className="text-sm text-slate-500 dark:text-slate-400 leading-relaxed mb-6">
-                Dedicated to providing accurate and accessible health information to help you live your best life.
+                {article.authorId === 'system' || article.sourceUrl 
+                  ? "This article is sourced from verified medical literature and reputable health journals on the internet."
+                  : "Dedicated to providing accurate and accessible health information to help you live your best life."}
               </p>
-              <button className="w-full py-3 bg-slate-50 dark:bg-slate-900 rounded-xl font-bold hover:bg-neon-blue hover:text-slate-900 transition-all">
-                View Profile
-              </button>
+              {article.sourceUrl ? (
+                <a 
+                  href={article.sourceUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full py-3 bg-slate-50 dark:bg-slate-900 rounded-xl font-bold hover:bg-neon-blue hover:text-slate-900 transition-all flex items-center justify-center gap-2 text-center border border-border"
+                >
+                  <Globe className="w-4 h-4 text-primary" />
+                  <span>Visit Original Source</span>
+                </a>
+              ) : (
+                <button className="w-full py-3 bg-slate-50 dark:bg-slate-900 rounded-xl font-bold hover:bg-neon-blue hover:text-slate-900 transition-all">
+                  View Profile
+                </button>
+              )}
             </div>
 
             {/* Newsletter */}

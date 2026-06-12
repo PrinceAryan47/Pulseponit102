@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenAI } from "../services/aiService";
 import { MessageSquare, X, Send, Bot, User, Minimize2, Maximize2, Sparkles, Volume2, VolumeX } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import ReactMarkdown from 'react-markdown';
@@ -66,7 +66,7 @@ const AIAssistant: React.FC = () => {
 
     try {
       const genAI = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' });
-      const model = "gemini-3-flash-preview";
+      const model = "gemini-2.5-flash";
       
       const systemInstruction = `You are the PulsePoint AI Assistant, a helpful and professional health guide. 
       Your goal is to help users navigate the app, understand its features, and provide insights into their health metrics.

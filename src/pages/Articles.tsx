@@ -32,6 +32,7 @@ const Articles: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
+    checkAndRefreshArticles();
     const q = query(collection(db, 'articles'), orderBy('createdAt', 'desc'));
     const unsubscribe = onSnapshot(q, (snap) => {
       setArticles(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as unknown as Article)));

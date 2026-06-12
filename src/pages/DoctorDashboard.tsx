@@ -38,7 +38,8 @@ import {
   ArrowRight,
   X,
   Video,
-  Sparkles
+  Sparkles,
+  Edit
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '../lib/utils';
@@ -58,7 +59,8 @@ const OverviewTab = ({
   navigate,
   profile,
   setSelectedAppointment,
-  setIsReplyModalOpen
+  setIsReplyModalOpen,
+  onViewCalendar
 }: { 
   appointments: Appointment[], 
   stats: any, 
@@ -66,7 +68,8 @@ const OverviewTab = ({
   navigate: any,
   profile: any,
   setSelectedAppointment: (app: any) => void,
-  setIsReplyModalOpen: (open: boolean) => void
+  setIsReplyModalOpen: (open: boolean) => void,
+  onViewCalendar: () => void
 }) => {
   const { initiateCall } = useSocket();
   return (
@@ -107,7 +110,12 @@ const OverviewTab = ({
         <div className="bg-card rounded-3xl border border-border shadow-sm overflow-hidden">
           <div className="p-6 border-b border-border flex items-center justify-between">
             <h2 className="text-xl font-bold text-foreground">Upcoming Schedule</h2>
-            <button className="text-sm font-bold text-primary hover:underline">View Calendar</button>
+            <button 
+              onClick={onViewCalendar}
+              className="text-sm font-bold text-primary hover:underline"
+            >
+              View Calendar
+            </button>
           </div>
           <div className="divide-y divide-border">
             {appointments.length > 0 ? appointments.map((app) => (
@@ -172,13 +180,6 @@ const OverviewTab = ({
         <div className="bg-card p-6 rounded-3xl border border-border shadow-sm">
           <h2 className="text-lg font-bold text-foreground mb-6">Quick Actions</h2>
           <div className="grid grid-cols-1 gap-3">
-            <button 
-              onClick={onStartMeeting}
-              className="flex items-center gap-3 p-4 bg-primary/10 text-primary rounded-2xl font-bold hover:bg-primary/20 transition-all text-left"
-            >
-              <Video className="w-5 h-5" />
-              <span>Create Meeting Link</span>
-            </button>
             <button className="flex items-center gap-3 p-4 bg-purple-500/10 text-purple-600 dark:text-purple-400 rounded-2xl font-bold hover:bg-purple-500/20 transition-all text-left">
               <Pill className="w-5 h-5" />
               <span>Add Prescription</span>
@@ -1176,71 +1177,318 @@ const AnalyticsTab = () => {
 };
 
 const WorkplaceTab = () => {
+  const { profile } = useAuth();
+  const [isEditing, setIsEditing] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
+  // Initialize form state
+  const [formData, setFormData] = useState({
+    hospitalName: '',
+    description: '',
+    beds: '',
+    specialists: '',
+    department: '',
+    floor: '',
+    room: '',
+    workingHoursWeekday: '',
+    workingHoursSaturday: ''
+  });
+
+  useEffect(() => {
+    if (profile) {
+      const wp = profile.workplace || {};
+      setFormData({
+        hospitalName: wp.hospitalName || profile.hospitalName || "City General Hospital",
+        description: wp.description || "A leading healthcare institution providing world-class medical services with state-of-the-art facilities and a dedicated team of specialists.",
+        beds: wp.beds || "500+ Beds",
+        specialists: wp.specialists || "200+ Specialists",
+        department: wp.department || "Cardiology",
+        floor: wp.floor || "4th Floor, Wing B",
+        room: wp.room || "Consultation Room 402",
+        workingHoursWeekday: wp.workingHoursWeekday || "09:00 AM - 05:00 PM",
+        workingHoursSaturday: wp.workingHoursSaturday || "09:00 AM - 01:00 PM"
+      });
+    }
+  }, [profile]);
+
+  const handleInputChange = (field: string, val: string) => {
+    setFormData(prev => ({
+      ...prev,
+      [field]: val
+    }));
+  };
+
+  const handleSave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!profile) return;
+    setIsSaving(true);
+    setFeedback(null);
+
+    try {
+      await updateDoc(doc(db, 'users', profile.uid), {
+        workplace: formData,
+        hospitalName: formData.hospitalName
+      });
+      setFeedback({ type: 'success', message: 'Workplace information updated successfully!' });
+      setIsEditing(false);
+      setTimeout(() => setFeedback(null), 4000);
+    } catch (err: any) {
+      console.error("Failed to save workplace information:", err);
+      setFeedback({ type: 'error', message: err.message || 'Failed to update workplace.' });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   return (
     <div className="space-y-8">
-      <div className="bg-card p-10 rounded-[3rem] border border-border shadow-sm overflow-hidden relative">
-        <div className="absolute top-0 right-0 w-64 h-64 bg-primary/5 rounded-full -translate-y-1/2 translate-x-1/2 blur-3xl"></div>
-        <div className="relative flex flex-col md:flex-row gap-10 items-center">
-          <div className="w-48 h-48 bg-muted rounded-[2.5rem] flex items-center justify-center shrink-0 border-4 border-background shadow-xl">
-            <Hospital className="w-20 h-20 text-primary" />
-          </div>
-          <div className="flex-grow text-center md:text-left">
-            <div className="flex flex-wrap items-center justify-center md:justify-start gap-3 mb-4">
-              <span className="px-3 py-1 bg-primary/10 text-primary rounded-full text-xs font-bold uppercase tracking-wider">Primary Workplace</span>
-              <span className="px-3 py-1 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 rounded-full text-xs font-bold uppercase tracking-wider">Verified</span>
-            </div>
-            <h2 className="text-4xl font-bold text-foreground mb-4">City General Hospital</h2>
-            <p className="text-lg text-muted-foreground mb-6 max-w-2xl">
-              A leading healthcare institution providing world-class medical services with state-of-the-art facilities and a dedicated team of specialists.
-            </p>
-            <div className="flex flex-wrap items-center justify-center md:justify-start gap-6">
-              <div className="flex items-center gap-2 text-foreground/80">
-                <BarChart3 className="w-5 h-5 text-primary" />
-                <span className="font-bold">500+ Beds</span>
-              </div>
-              <div className="flex items-center gap-2 text-foreground/80">
-                <Users className="w-5 h-5 text-primary" />
-                <span className="font-bold">200+ Specialists</span>
-              </div>
-            </div>
-          </div>
+      {feedback && (
+        <div className={cn(
+          "p-4 rounded-2xl flex items-center gap-3 border shadow-sm max-w-4xl",
+          feedback.type === 'success' 
+            ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-600 dark:text-emerald-400" 
+            : "bg-destructive/10 border-destructive/20 text-destructive"
+        )}>
+          {feedback.type === 'success' ? <CheckCircle2 className="w-5 h-5 shrink-0" /> : <AlertCircle className="w-5 h-5 shrink-0" />}
+          <span className="font-bold text-sm">{feedback.message}</span>
         </div>
-      </div>
+      )}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-        <div className="bg-card p-8 rounded-[3rem] border border-border shadow-sm">
-          <h3 className="text-xl font-bold text-foreground mb-6">Department Info</h3>
-          <div className="space-y-4">
-            <div className="flex items-center justify-between p-4 bg-muted/50 rounded-2xl">
-              <span className="text-muted-foreground font-medium">Department</span>
-              <span className="font-bold text-foreground">Cardiology</span>
+      {isEditing ? (
+        <form onSubmit={handleSave} className="bg-card p-10 rounded-[3rem] border border-border shadow-sm max-w-4xl space-y-8">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-2xl font-bold text-foreground">Edit Workplace Details</h2>
+              <p className="text-sm text-muted-foreground mt-1">Specify your current medical work center setup.</p>
             </div>
-            <div className="flex items-center justify-between p-4 bg-muted/50 rounded-2xl">
-              <span className="text-muted-foreground font-medium">Floor</span>
-              <span className="font-bold text-foreground">4th Floor, Wing B</span>
-            </div>
-            <div className="flex items-center justify-between p-4 bg-muted/50 rounded-2xl">
-              <span className="text-muted-foreground font-medium">Room</span>
-              <span className="font-bold text-foreground">Consultation Room 402</span>
-            </div>
+            <button
+              type="button"
+              onClick={() => setIsEditing(false)}
+              className="p-3 hover:bg-muted rounded-full transition-colors"
+            >
+              <X className="w-6 h-6 text-foreground" />
+            </button>
           </div>
-        </div>
-        <div className="bg-card p-8 rounded-[3rem] border border-border shadow-sm">
-          <h3 className="text-xl font-bold text-foreground mb-6">Working Hours</h3>
-          <div className="space-y-3">
-            {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'].map((day) => (
-              <div key={day} className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">{day}</span>
-                <span className="font-bold text-foreground">09:00 AM - 05:00 PM</span>
+
+          <div className="space-y-6">
+            <div>
+              <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 mb-2 uppercase tracking-wider">Hospital/Workplace Name</label>
+              <input
+                type="text"
+                required
+                value={formData.hospitalName}
+                onChange={(e) => handleInputChange('hospitalName', e.target.value)}
+                className="w-full px-5 py-4 bg-muted/30 border border-border rounded-2xl text-foreground outline-none focus:ring-2 focus:ring-primary transition-all font-medium"
+                placeholder="e.g. City General Hospital"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 mb-2 uppercase tracking-wider">Description</label>
+              <textarea
+                required
+                rows={3}
+                value={formData.description}
+                onChange={(e) => handleInputChange('description', e.target.value)}
+                className="w-full px-5 py-4 bg-muted/30 border border-border rounded-2xl text-foreground outline-none focus:ring-2 focus:ring-primary transition-all font-medium resize-none"
+                placeholder="Hospital bio or specialized facilities info..."
+              />
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+              <div>
+                <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 mb-2 uppercase tracking-wider">Beds Capacity</label>
+                <input
+                  type="text"
+                  required
+                  value={formData.beds}
+                  onChange={(e) => handleInputChange('beds', e.target.value)}
+                  className="w-full px-5 py-4 bg-muted/30 border border-border rounded-2xl text-foreground outline-none focus:ring-2 focus:ring-primary transition-all font-medium"
+                  placeholder="e.g. 500+ Beds"
+                />
               </div>
-            ))}
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground">Saturday</span>
-              <span className="font-bold text-amber-500">09:00 AM - 01:00 PM</span>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 mb-2 uppercase tracking-wider">Specialists Count</label>
+                <input
+                  type="text"
+                  required
+                  value={formData.specialists}
+                  onChange={(e) => handleInputChange('specialists', e.target.value)}
+                  className="w-full px-5 py-4 bg-muted/30 border border-border rounded-2xl text-foreground outline-none focus:ring-2 focus:ring-primary transition-all font-medium"
+                  placeholder="e.g. 200+ Specialists"
+                />
+              </div>
+            </div>
+
+            <div className="border-t border-border pt-6">
+              <h3 className="text-lg font-bold text-foreground mb-4">Location & Department</h3>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 mb-2 uppercase tracking-wider">Department</label>
+                  <input
+                    type="text"
+                    required
+                    value={formData.department}
+                    onChange={(e) => handleInputChange('department', e.target.value)}
+                    className="w-full px-5 py-4 bg-muted/30 border border-border rounded-2xl text-foreground outline-none focus:ring-2 focus:ring-primary transition-all font-medium"
+                    placeholder="e.g. Cardiology"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 mb-2 uppercase tracking-wider">Floor info</label>
+                  <input
+                    type="text"
+                    required
+                    value={formData.floor}
+                    onChange={(e) => handleInputChange('floor', e.target.value)}
+                    className="w-full px-5 py-4 bg-muted/30 border border-border rounded-2xl text-foreground outline-none focus:ring-2 focus:ring-primary transition-all font-medium"
+                    placeholder="e.g. 4th Floor, Wing B"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 mb-2 uppercase tracking-wider">Room</label>
+                  <input
+                    type="text"
+                    required
+                    value={formData.room}
+                    onChange={(e) => handleInputChange('room', e.target.value)}
+                    className="w-full px-5 py-4 bg-muted/30 border border-border rounded-2xl text-foreground outline-none focus:ring-2 focus:ring-primary transition-all font-medium"
+                    placeholder="e.g. Consultation Room 402"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="border-t border-border pt-6">
+              <h3 className="text-lg font-bold text-foreground mb-4">Consultation Shift Schedule</h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 mb-2 uppercase tracking-wider">Weekday Hours (Mon-Fri)</label>
+                  <input
+                    type="text"
+                    required
+                    value={formData.workingHoursWeekday}
+                    onChange={(e) => handleInputChange('workingHoursWeekday', e.target.value)}
+                    className="w-full px-5 py-4 bg-muted/30 border border-border rounded-2xl text-foreground outline-none focus:ring-2 focus:ring-primary transition-all font-medium"
+                    placeholder="e.g. 09:00 AM - 05:00 PM"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 mb-2 uppercase tracking-wider">Saturday Hours</label>
+                  <input
+                    type="text"
+                    required
+                    value={formData.workingHoursSaturday}
+                    onChange={(e) => handleInputChange('workingHoursSaturday', e.target.value)}
+                    className="w-full px-5 py-4 bg-muted/30 border border-border rounded-2xl text-foreground outline-none focus:ring-2 focus:ring-primary transition-all font-medium"
+                    placeholder="e.g. 09:00 AM - 01:00 PM"
+                  />
+                </div>
+              </div>
             </div>
           </div>
-        </div>
-      </div>
+
+          <div className="flex justify-end gap-3 pt-6 border-t border-border">
+            <button
+              type="button"
+              onClick={() => setIsEditing(false)}
+              className="px-6 py-3 border border-border bg-transparent text-foreground hover:bg-muted rounded-2xl font-bold transition-all"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={isSaving}
+              className="px-8 py-3 bg-primary text-primary-foreground hover:opacity-90 rounded-2xl font-bold transition-all flex items-center gap-2"
+            >
+              <Save className="w-4 h-4" />
+              {isSaving ? 'Saving...' : 'Save Changes'}
+            </button>
+          </div>
+        </form>
+      ) : (
+        <>
+          <div className="bg-card p-10 rounded-[3rem] border border-border shadow-sm overflow-hidden relative">
+            <div className="absolute top-0 right-0 w-64 h-64 bg-primary/5 rounded-full -translate-y-1/2 translate-x-1/2 blur-3xl"></div>
+            
+            <div className="absolute top-6 right-6 z-10">
+              <button
+                onClick={() => setIsEditing(true)}
+                className="flex items-center gap-2 px-5 py-2.5 bg-background border border-border hover:bg-muted text-foreground font-bold rounded-2xl transition-all shadow-sm"
+              >
+                <Edit className="w-4 h-4 text-primary" />
+                <span>Edit Workplace</span>
+              </button>
+            </div>
+
+            <div className="relative flex flex-col md:flex-row gap-10 items-center">
+              <div className="w-48 h-48 bg-muted rounded-[2.5rem] flex items-center justify-center shrink-0 border-4 border-background shadow-xl">
+                <Hospital className="w-20 h-20 text-primary" />
+              </div>
+              <div className="flex-grow text-center md:text-left">
+                <div className="flex flex-wrap items-center justify-center md:justify-start gap-3 mb-4">
+                  <span className="px-3 py-1 bg-primary/10 text-primary rounded-full text-xs font-bold uppercase tracking-wider">Primary Workplace</span>
+                  <span className="px-3 py-1 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 rounded-full text-xs font-bold uppercase tracking-wider">Verified</span>
+                </div>
+                <h2 className="text-4xl font-bold text-foreground mb-4">{formData.hospitalName}</h2>
+                <p className="text-lg text-muted-foreground mb-6 max-w-2xl leading-relaxed">
+                  {formData.description}
+                </p>
+                <div className="flex flex-wrap items-center justify-center md:justify-start gap-6">
+                  <div className="flex items-center gap-2 text-foreground/80">
+                    <BarChart3 className="w-5 h-5 text-primary" />
+                    <span className="font-bold">{formData.beds}</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-foreground/80">
+                    <Users className="w-5 h-5 text-primary" />
+                    <span className="font-bold">{formData.specialists}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <div className="bg-card p-8 rounded-[3rem] border border-border shadow-sm">
+              <h3 className="text-xl font-bold text-foreground mb-6">Department Info</h3>
+              <div className="space-y-4">
+                <div className="flex items-center justify-between p-4 bg-muted/50 rounded-2xl">
+                  <span className="text-muted-foreground font-medium">Department</span>
+                  <span className="font-bold text-foreground">{formData.department}</span>
+                </div>
+                <div className="flex items-center justify-between p-4 bg-muted/50 rounded-2xl">
+                  <span className="text-muted-foreground font-medium">Floor</span>
+                  <span className="font-bold text-foreground">{formData.floor}</span>
+                </div>
+                <div className="flex items-center justify-between p-4 bg-muted/50 rounded-2xl">
+                  <span className="text-muted-foreground font-medium">Room</span>
+                  <span className="font-bold text-foreground">{formData.room}</span>
+                </div>
+              </div>
+            </div>
+            <div className="bg-card p-8 rounded-[3rem] border border-border shadow-sm">
+              <h3 className="text-xl font-bold text-foreground mb-6">Working Hours</h3>
+              <div className="space-y-3">
+                {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'].map((day) => (
+                  <div key={day} className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">{day}</span>
+                    <span className="font-bold text-foreground">{formData.workingHoursWeekday}</span>
+                  </div>
+                ))}
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground">Saturday</span>
+                  <span className="font-bold text-amber-500">{formData.workingHoursSaturday}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 };
@@ -1572,6 +1820,7 @@ const DoctorDashboard: React.FC = () => {
           profile={profile}
           setSelectedAppointment={setSelectedAppointment}
           setIsReplyModalOpen={setIsReplyModalOpen}
+          onViewCalendar={() => setSearchParams({ tab: 'appointments' })}
         />
       );
       case 'appointments': return (
@@ -1601,6 +1850,7 @@ const DoctorDashboard: React.FC = () => {
           profile={profile}
           setSelectedAppointment={setSelectedAppointment}
           setIsReplyModalOpen={setIsReplyModalOpen}
+          onViewCalendar={() => setSearchParams({ tab: 'appointments' })}
         />
       );
     }

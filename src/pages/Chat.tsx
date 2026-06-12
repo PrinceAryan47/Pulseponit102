@@ -201,6 +201,50 @@ const Chat: React.FC = () => {
         if (audioChunksRef.current.length === 0) return;
 
         setUploadingFile(true);
+        setUploadProgress(10);
+
+        const sendVoiceAsBase64 = () => {
+          const reader = new FileReader();
+          reader.onload = async (event) => {
+            try {
+              const dataUrl = event.target?.result as string;
+              if (dataUrl) {
+                const messageData = {
+                  roomId,
+                  text: `🎙️ Voice Note (${recordingDuration}s)`,
+                  voiceURL: dataUrl,
+                  fileURL: dataUrl,
+                  fileName: 'Voice Note',
+                  fileType: 'audio/webm',
+                  recordingDuration,
+                  senderId: profile?.uid || user?.uid,
+                  senderName: profile?.fullName || 'User',
+                  timestamp: serverTimestamp(),
+                  ...(replyToMessage && {
+                    parentMessageId: replyToMessage.id || '',
+                    parentMessageText: replyToMessage.text || 'File Attachment',
+                    parentMessageSenderName: replyToMessage.senderName || '',
+                  })
+                };
+                await addDoc(collection(db, 'messages'), messageData);
+                socket?.emit('send-message', { ...messageData, timestamp: new Date().toISOString() });
+              }
+            } catch (err) {
+              console.error("Failed to save base64 voice note:", err);
+            } finally {
+              setUploadingFile(false);
+              setUploadProgress(0);
+              setReplyToMessage(null);
+            }
+          };
+          reader.onerror = (err) => {
+            console.error("Reader error on audio fallback:", err);
+            setUploadingFile(false);
+            setUploadProgress(0);
+          };
+          reader.readAsDataURL(audioBlob);
+        };
+
         try {
           const storageRef = ref(storage, `chats/${roomId}/${Date.now()}_voice.webm`);
           const uploadTask = uploadBytesResumable(storageRef, audioBlob);
@@ -208,42 +252,47 @@ const Chat: React.FC = () => {
           uploadTask.on('state_changed', 
             (snapshot) => {
               const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-              setUploadProgress(progress);
+              setUploadProgress(Math.max(10, progress));
             }, 
             (error) => {
-              console.error("Audio recording save failed:", error);
-              setUploadingFile(false);
+              console.warn("Audio storage upload failed, falling back to database transfer...", error);
+              sendVoiceAsBase64();
             }, 
             async () => {
-              const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
-              const messageData = {
-                roomId,
-                text: `🎙️ Voice Note (${recordingDuration}s)`,
-                voiceURL: downloadURL,
-                fileURL: downloadURL,
-                fileName: 'Voice Note',
-                fileType: 'audio/webm',
-                recordingDuration,
-                senderId: profile?.uid || user?.uid,
-                senderName: profile?.fullName || 'User',
-                timestamp: serverTimestamp(),
-                ...(replyToMessage && {
-                  parentMessageId: replyToMessage.id || '',
-                  parentMessageText: replyToMessage.text || 'File Attachment',
-                  parentMessageSenderName: replyToMessage.senderName || '',
-                })
-              };
+              try {
+                const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+                const messageData = {
+                  roomId,
+                  text: `🎙️ Voice Note (${recordingDuration}s)`,
+                  voiceURL: downloadURL,
+                  fileURL: downloadURL,
+                  fileName: 'Voice Note',
+                  fileType: 'audio/webm',
+                  recordingDuration,
+                  senderId: profile?.uid || user?.uid,
+                  senderName: profile?.fullName || 'User',
+                  timestamp: serverTimestamp(),
+                  ...(replyToMessage && {
+                    parentMessageId: replyToMessage.id || '',
+                    parentMessageText: replyToMessage.text || 'File Attachment',
+                    parentMessageSenderName: replyToMessage.senderName || '',
+                  })
+                };
 
-              await addDoc(collection(db, 'messages'), messageData);
-              socket?.emit('send-message', { ...messageData, timestamp: new Date().toISOString() });
-              setUploadingFile(false);
-              setUploadProgress(0);
-              setReplyToMessage(null);
+                await addDoc(collection(db, 'messages'), messageData);
+                socket?.emit('send-message', { ...messageData, timestamp: new Date().toISOString() });
+                setUploadingFile(false);
+                setUploadProgress(0);
+                setReplyToMessage(null);
+              } catch (e) {
+                console.warn("Storage upload completed but download URL retrieval failed, falling back:", e);
+                sendVoiceAsBase64();
+              }
             }
           );
         } catch (error) {
-          console.error("Audio save process error:", error);
-          setUploadingFile(false);
+          console.warn("Audio save process error, using database fallback:", error);
+          sendVoiceAsBase64();
         }
       };
 
@@ -420,43 +469,98 @@ const Chat: React.FC = () => {
     if (!file || !roomId || !profile) return;
 
     setUploadingFile(true);
-    const storageRef = ref(storage, `chats/${roomId}/${Date.now()}_${file.name}`);
-    const uploadTask = uploadBytesResumable(storageRef, file);
+    setUploadProgress(10); // Start progress bar
 
-    uploadTask.on('state_changed', 
-      (snapshot) => {
-        const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-        setUploadProgress(progress);
-      }, 
-      (error) => {
-        console.error("Upload error:", error);
-        setUploadingFile(false);
-      }, 
-      async () => {
-        const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
-        const messageData = {
-          roomId,
-          text: `Sent a file: ${file.name}`,
-          fileURL: downloadURL,
-          fileName: file.name,
-          fileType: file.type,
-          senderId: profile.uid,
-          senderName: profile.fullName,
-          timestamp: serverTimestamp(),
-          ...(replyToMessage && {
-            parentMessageId: replyToMessage.id || '',
-            parentMessageText: replyToMessage.text || 'File Attachment',
-            parentMessageSenderName: replyToMessage.senderName || '',
-          })
+    const finalizeFileMessage = async (url: string, fileName: string, fileType: string) => {
+      if (!profile) return;
+      const messageData = {
+        roomId,
+        text: `Sent a file: ${fileName}`,
+        fileURL: url,
+        fileName: fileName,
+        fileType: fileType,
+        senderId: profile.uid,
+        senderName: profile.fullName,
+        timestamp: serverTimestamp(),
+        ...(replyToMessage && {
+          parentMessageId: replyToMessage.id || '',
+          parentMessageText: replyToMessage.text || 'File Attachment',
+          parentMessageSenderName: replyToMessage.senderName || '',
+        })
+      };
+
+      await addDoc(collection(db, 'messages'), messageData);
+      socket?.emit('send-message', { ...messageData, timestamp: new Date().toISOString() });
+      setUploadingFile(false);
+      setUploadProgress(0);
+      setReplyToMessage(null);
+    };
+
+    const sendFileAsBase64 = (f: File) => {
+      return new Promise<void>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = async (event) => {
+          try {
+            const dataUrl = event.target?.result as string;
+            if (dataUrl) {
+              await finalizeFileMessage(dataUrl, f.name, f.type);
+            }
+            resolve();
+          } catch (err) {
+            console.error("Error finalizing fallback message:", err);
+            setUploadingFile(false);
+            setUploadProgress(0);
+            reject(err);
+          }
         };
+        reader.onerror = (err) => {
+          setUploadingFile(false);
+          setUploadProgress(0);
+          reject(err);
+        };
+        reader.readAsDataURL(f);
+      });
+    };
 
-        await addDoc(collection(db, 'messages'), messageData);
-        socket?.emit('send-message', { ...messageData, timestamp: new Date().toISOString() });
+    try {
+      const storageRef = ref(storage, `chats/${roomId}/${Date.now()}_${file.name}`);
+      const uploadTask = uploadBytesResumable(storageRef, file);
+
+      uploadTask.on('state_changed', 
+        (snapshot) => {
+          const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+          setUploadProgress(Math.max(10, progress));
+        }, 
+        async (error) => {
+          console.warn("Storage upload failed, attempting backend database fallback:", error);
+          if (file.size > 800 * 1024) {
+            alert(`File sharing failed. Firebase Storage is not enabled on your project, and this file (${(file.size / 1024 / 1024).toFixed(2)}MB) exceeds the 800KB offline limit. Please compress or link a smaller file.`);
+            setUploadingFile(false);
+            setUploadProgress(0);
+            return;
+          }
+          await sendFileAsBase64(file);
+        }, 
+        async () => {
+          try {
+            const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+            await finalizeFileMessage(downloadURL, file.name, file.type);
+          } catch (e) {
+            console.warn("Failed to retrieve Storage URL, using database fallback:", e);
+            await sendFileAsBase64(file);
+          }
+        }
+      );
+    } catch (err) {
+      console.warn("Could not initiate Storage upload, using database fallback route:", err);
+      if (file.size > 800 * 1024) {
+        alert(`Storage is not configured or offline, and this file exceeds the 800KB database fallback limit.`);
         setUploadingFile(false);
         setUploadProgress(0);
-        setReplyToMessage(null);
+        return;
       }
-    );
+      await sendFileAsBase64(file);
+    }
   };
 
   return (

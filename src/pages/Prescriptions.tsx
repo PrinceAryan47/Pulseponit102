@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { useNavigate } from 'react-router-dom';
 import { collection, query, where, onSnapshot, orderBy } from 'firebase/firestore';
 import { db } from '../firebase';
 import { MedicalRecord } from '../types';
@@ -19,6 +20,7 @@ import GuestOverlay from '../components/GuestOverlay';
 
 const Prescriptions: React.FC = () => {
   const { profile } = useAuth();
+  const navigate = useNavigate();
   const [records, setRecords] = useState<MedicalRecord[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -43,6 +45,21 @@ const Prescriptions: React.FC = () => {
 
     return () => unsubscribe();
   }, [profile]);
+
+  const handleContactDoctor = (doctorId?: string) => {
+    if (!profile) {
+      navigate('/login');
+      return;
+    }
+    const targetDoctorId = doctorId || (records.length > 0 ? records[0].doctorId : null);
+    if (targetDoctorId) {
+      const roomId = [profile.uid, targetDoctorId].sort().join('_');
+      navigate(`/chat/${roomId}`);
+    } else {
+      // No recent doctor found, send to clinical doctors listing
+      navigate('/doctors');
+    }
+  };
 
   return (
     <GuestOverlay
@@ -106,7 +123,10 @@ const Prescriptions: React.FC = () => {
                   <Download className="w-4 h-4" />
                   Download PDF
                 </button>
-                <button className="text-sm font-bold text-slate-400 hover:text-[rgb(var(--foreground))] transition-colors">
+                <button 
+                  onClick={() => handleContactDoctor(record.doctorId)}
+                  className="text-sm font-bold text-slate-400 hover:text-[rgb(var(--foreground))] transition-colors"
+                >
                   Refill Request
                 </button>
               </div>
@@ -147,7 +167,10 @@ const Prescriptions: React.FC = () => {
             <p className="text-white/80 text-sm mb-6 leading-relaxed">
               You can request a prescription refill directly from your doctor via chat or by booking a quick follow-up.
             </p>
-            <button className="w-full py-3 bg-white text-neon-blue rounded-xl font-bold hover:bg-slate-50 transition-colors">
+            <button 
+              onClick={() => handleContactDoctor()}
+              className="w-full py-3 bg-white text-neon-blue rounded-xl font-bold hover:bg-slate-50 transition-colors"
+            >
               Contact Doctor
             </button>
           </div>

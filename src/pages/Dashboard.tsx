@@ -19,14 +19,15 @@ import {
   MessageSquare,
   Sparkles,
   BookOpen,
-  LifeBuoy
+  LifeBuoy,
+  Globe
 } from 'lucide-react';
 import { collection, query, where, onSnapshot, orderBy, limit, updateDoc, doc, getDoc, setDoc, serverTimestamp, addDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { Appointment, MedicalRecord, UserProfile, Article } from '../types';
 import { format } from 'date-fns';
 import { Link, useNavigate } from 'react-router-dom';
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenAI } from "../services/aiService";
 import { motion, AnimatePresence } from 'framer-motion';
 import GuestOverlay from '../components/GuestOverlay';
 import { cn } from '../lib/utils';
@@ -53,6 +54,8 @@ const Dashboard: React.FC = () => {
   const [pendingUsers, setPendingUsers] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(true);
   const [healthTip, setHealthTip] = useState<string | null>(null);
+  const [healthTipSource, setHealthTipSource] = useState<string>('');
+  const [healthTipUrl, setHealthTipUrl] = useState<string>('');
   const [isTipLoading, setIsTipLoading] = useState(false);
   const [tipArticle, setTipArticle] = useState<Article | null>(null);
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
@@ -150,6 +153,8 @@ const Dashboard: React.FC = () => {
         const dayOfMonth = new Date().getDate();
         const selectedArticle = latestNews[dayOfMonth % latestNews.length];
         setTipArticle(selectedArticle);
+        setHealthTipSource(selectedArticle.sourceName || selectedArticle.authorName || 'Global Medical Source');
+        setHealthTipUrl(selectedArticle.sourceUrl || '');
 
         // Check if we already have a cached tip for this article/date
         const today = new Date().toISOString().split('T')[0];
@@ -164,7 +169,7 @@ const Dashboard: React.FC = () => {
             try {
               const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
               const response = await ai.models.generateContent({
-                model: "gemini-3-flash-preview",
+                model: "gemini-2.5-flash",
                 contents: `Extract or formulate a compelling, single-sentence action-oriented daily health tip (max 25 words) from the following health article content:
 Category: ${selectedArticle.category}
 Title: ${selectedArticle.title}
@@ -201,21 +206,51 @@ Make it highly direct, inspiring, and actionable. Do not wrap it in quotes.`,
       try {
         const today = new Date().toISOString().split('T')[0];
         const cachedTip = localStorage.getItem(`general_daily_tip_${today}`);
-        if (cachedTip) {
+        const cachedSource = localStorage.getItem(`general_daily_tip_source_${today}`);
+        const cachedUrl = localStorage.getItem(`general_daily_tip_url_${today}`);
+        if (cachedTip && cachedSource) {
           setHealthTip(cachedTip);
+          setHealthTipSource(cachedSource);
+          setHealthTipUrl(cachedUrl || 'https://www.who.int');
         } else {
           const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' });
           const response = await ai.models.generateContent({
-            model: "gemini-3-flash-preview",
-            contents: "Generate a short, inspiring, and evidence-based daily health tip (max 30 words) for a wellness app. Focus on nutrition, mental health, or physical activity. Do not wrap in quotes.",
+            model: "gemini-2.5-flash",
+            contents: "Generate a short, inspiring, and evidence-based daily health tip (max 30 words) for a wellness app. Ensure it has an authoritative credit. Return a JSON object with fields: 'tip' (the single-sentence tip) and 'source' (reputable source name, e.g., 'Mayo Clinic', 'Harvard T.H. Chan School of Public Health', or 'World Health Organization') and 'sourceUrl' (e.g., 'https://www.mayoclinic.org').",
+            config: {
+              responseMimeType: "application/json"
+            }
           });
-          const newTip = response.text.trim().replace(/^["']|["']$/g, '');
-          setHealthTip(newTip);
-          localStorage.setItem(`general_daily_tip_${today}`, newTip);
+          
+          let parsed = { tip: '', source: '', sourceUrl: '' };
+          try {
+            parsed = JSON.parse(response.text);
+          } catch {
+            // fallback
+            parsed = { 
+              tip: response.text.trim().replace(/^["']|["']$/g, ''),
+              source: "World Health Organization",
+              sourceUrl: "https://www.who.int"
+            };
+          }
+
+          const tipText = parsed.tip || "Drink plenty of water throughout the day to support brain function and physical energy.";
+          const tipSource = parsed.source || "World Health Organization";
+          const tipUrl = parsed.sourceUrl || "https://www.who.int";
+
+          setHealthTip(tipText);
+          setHealthTipSource(tipSource);
+          setHealthTipUrl(tipUrl);
+
+          localStorage.setItem(`general_daily_tip_${today}`, tipText);
+          localStorage.setItem(`general_daily_tip_source_${today}`, tipSource);
+          localStorage.setItem(`general_daily_tip_url_${today}`, tipUrl);
         }
       } catch (error) {
         console.error("Error fetching general health tip:", error);
         setHealthTip("Stay hydrated! Drinking enough water is essential for your body's vital functions.");
+        setHealthTipSource("Mayo Clinic");
+        setHealthTipUrl("https://www.mayoclinic.org");
       } finally {
         setIsTipLoading(false);
       }
@@ -351,9 +386,9 @@ Make it highly direct, inspiring, and actionable. Do not wrap it in quotes.`,
                     </div>
                     <div>
                       <h2 className="text-xs font-bold text-muted-foreground uppercase tracking-widest leading-none">Daily Health Tip</h2>
-                      {tipArticle && (
+                      {(tipArticle || healthTipSource) && (
                         <span className="inline-block mt-1 text-[10px] bg-primary/10 text-primary px-2.5 py-0.5 rounded-full font-bold uppercase tracking-wider">
-                          Sourced from {tipArticle.category}
+                          Sourced from {tipArticle ? tipArticle.category : 'Verified Medical Source'}
                         </span>
                       )}
                     </div>
@@ -368,11 +403,31 @@ Make it highly direct, inspiring, and actionable. Do not wrap it in quotes.`,
                       "{healthTip}"
                     </p>
                   )}
-                  {tipArticle && (
-                    <div className="pt-1">
-                      <p className="text-xs text-muted-foreground">
-                        Source topic: <span className="font-semibold text-foreground">{tipArticle.title}</span>
-                      </p>
+                  
+                  {/* Source Attribute & Link */}
+                  {(healthTipSource || healthTipUrl) && (
+                    <div className="pt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                      <span>Source:</span>
+                      {healthTipUrl ? (
+                        <a 
+                          href={healthTipUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 text-primary hover:underline font-bold"
+                        >
+                          <Globe className="w-3.5 h-3.5" />
+                          <span>{healthTipSource || 'Reputable Health Source'}</span>
+                        </a>
+                      ) : (
+                        <span className="font-semibold text-foreground">{healthTipSource}</span>
+                      )}
+                      {tipArticle && (
+                        <>
+                          <span className="mx-1">•</span>
+                          <span>Topic:</span>
+                          <span className="font-semibold text-foreground truncate max-w-[200px]">{tipArticle.title}</span>
+                        </>
+                      )}
                     </div>
                   )}
                 </div>

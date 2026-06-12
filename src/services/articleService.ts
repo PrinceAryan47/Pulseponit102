@@ -12,14 +12,44 @@ import {
   limit
 } from 'firebase/firestore';
 import { db } from '../firebase';
-import { GoogleGenAI, Type } from "@google/genai";
+import { GoogleGenAI, Type } from "./aiService";
 
 const SETTINGS_COLLECTION = 'settings';
 const ARTICLE_REFRESH_DOC = 'article_refresh';
 const ARTICLES_COLLECTION = 'articles';
 
+export const cleanupOldArticles = async () => {
+  try {
+    const now = Date.now();
+    const twoWeeksInMs = 14 * 24 * 60 * 60 * 1000;
+    const articlesSnap = await getDocs(collection(db, ARTICLES_COLLECTION));
+    const deletePromises = [];
+
+    for (const d of articlesSnap.docs) {
+      const data = d.data();
+      if (data.createdAt) {
+        const createdTime = new Date(data.createdAt).getTime();
+        if (!isNaN(createdTime) && now - createdTime > twoWeeksInMs) {
+          console.log(`Auto-deleting article older than two weeks: ${d.id} (${data.title})`);
+          deletePromises.push(deleteDoc(doc(db, ARTICLES_COLLECTION, d.id)));
+        }
+      }
+    }
+
+    if (deletePromises.length > 0) {
+      await Promise.all(deletePromises);
+      console.log(`Cleaned up ${deletePromises.length} old articles.`);
+    }
+  } catch (error) {
+    console.error('Error during old articles cleanup:', error);
+  }
+};
+
 export const checkAndRefreshArticles = async () => {
   try {
+    // 1. Run automatic cleanup of all articles older than two weeks
+    await cleanupOldArticles();
+
     const refreshDocRef = doc(db, SETTINGS_COLLECTION, ARTICLE_REFRESH_DOC);
     const refreshDoc = await getDoc(refreshDocRef);
     
@@ -49,15 +79,17 @@ export const checkAndRefreshArticles = async () => {
 
 const refreshArticles = async () => {
   try {
-    // 1. Delete all existing articles
+    // 1. Delete all existing SYSTEM articles
     const articlesSnap = await getDocs(collection(db, ARTICLES_COLLECTION));
-    const deletePromises = articlesSnap.docs.map(d => deleteDoc(doc(db, ARTICLES_COLLECTION, d.id)));
+    const deletePromises = articlesSnap.docs
+      .filter(d => d.data().authorId === 'system')
+      .map(d => deleteDoc(doc(db, ARTICLES_COLLECTION, d.id)));
     await Promise.all(deletePromises);
 
     // 2. Generate new articles using Gemini
     const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' });
     const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
+      model: "gemini-2.5-flash",
       contents: "Generate 10 high-quality, evidence-based health and wellness articles for a digital health platform. Each article should include: 1. A catchy title. 2. A 2-sentence summary. 3. A detailed content body in Markdown (at least 600 words) with headings, lists, and professional advice. 4. A category (must be one of: Nutrition, Fitness, Mental Health, Prevention). 5. A realistic author name. The authors should be a mix of medical professionals (e.g., 'Dr. Sarah Chen') and globally recognized health organizations (e.g., 'World Health Organization (WHO)', 'Mayo Clinic', 'NHS Digital', 'CDC Health Advisory'). Ensure the content is strictly evidence-based and follows international medical standards.",
       config: {
         responseMimeType: "application/json",

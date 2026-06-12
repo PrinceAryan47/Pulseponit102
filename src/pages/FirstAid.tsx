@@ -23,7 +23,7 @@ import {
   Volume2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenAI } from "../services/aiService";
 import { cn } from '../lib/utils';
 import Markdown from 'react-markdown';
 import { useAuth } from '../context/AuthContext';
@@ -347,7 +347,7 @@ const FirstAid: React.FC = () => {
     try {
       const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
       const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
+        model: "gemini-2.5-flash",
         contents: `You are a professional emergency first aid assistant. Provide immediate, step-by-step first aid instructions for the following situation: "${aiQuery}". 
         
         Rules:

@@ -443,6 +443,36 @@ async function startServer() {
     res.json({ status: "ok", timestamp: new Date().toISOString() });
   });
 
+  // Secure server-side Gemini generation proxy
+  app.post("/api/ai/generate", async (req, res) => {
+    const { model, contents, config } = req.body;
+    if (!contents) {
+      return res.status(400).json({ error: "contents is a required field" });
+    }
+
+    try {
+      const ai = getAIClient();
+      
+      // Map newer or preview model names to stable ones if needed, or stick to requested model
+      let targetModel = model || "gemini-1.5-flash";
+      if (targetModel.includes("gemini-3-flash") || targetModel.includes("gemini-3")) {
+        targetModel = "gemini-2.5-flash"; // stable, blazing fast, fully featured standard model
+      }
+
+      console.log(`Backend proxy: Generating content using model ${targetModel}`);
+      const response = await ai.models.generateContent({
+        model: targetModel,
+        contents,
+        config,
+      });
+
+      res.json({ text: response.text });
+    } catch (error: any) {
+      console.error("AI Generation error on server proxy:", error);
+      res.status(500).json({ error: error.message || "Failed to generate AI content" });
+    }
+  });
+
   // Proxy to fetch real facilities near the coordinates using Gemini grounding
   app.post("/api/facilities", async (req, res) => {
     const { lat, lng } = req.body;

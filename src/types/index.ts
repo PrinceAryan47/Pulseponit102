@@ -32,6 +32,17 @@ export interface UserProfile {
   availability?: Record<string, string[]>;
   isOnline?: boolean;
   lastSeen?: string;
+  workplace?: {
+    hospitalName?: string;
+    description?: string;
+    beds?: string;
+    specialists?: string;
+    department?: string;
+    floor?: string;
+    room?: string;
+    workingHoursWeekday?: string;
+    workingHoursSaturday?: string;
+  };
 }
 
 export interface Hospital {
