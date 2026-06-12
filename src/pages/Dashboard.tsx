@@ -169,7 +169,7 @@ const Dashboard: React.FC = () => {
             try {
               const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
               const response = await ai.models.generateContent({
-                model: "gemini-2.5-flash",
+                model: "gemini-3.5-flash",
                 contents: `Extract or formulate a compelling, single-sentence action-oriented daily health tip (max 25 words) from the following health article content:
 Category: ${selectedArticle.category}
 Title: ${selectedArticle.title}
@@ -215,7 +215,7 @@ Make it highly direct, inspiring, and actionable. Do not wrap it in quotes.`,
         } else {
           const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' });
           const response = await ai.models.generateContent({
-            model: "gemini-2.5-flash",
+            model: "gemini-3.5-flash",
             contents: "Generate a short, inspiring, and evidence-based daily health tip (max 30 words) for a wellness app. Ensure it has an authoritative credit. Return a JSON object with fields: 'tip' (the single-sentence tip) and 'source' (reputable source name, e.g., 'Mayo Clinic', 'Harvard T.H. Chan School of Public Health', or 'World Health Organization') and 'sourceUrl' (e.g., 'https://www.mayoclinic.org').",
             config: {
               responseMimeType: "application/json"
@@ -260,13 +260,16 @@ Make it highly direct, inspiring, and actionable. Do not wrap it in quotes.`,
   }, [latestNews]);
 
   useEffect(() => {
-    if (!profile) return;
+    if (!profile || !user) return;
+
+    const currentUserId = user.uid || profile.uid;
+    if (!currentUserId) return;
 
     const qField = profile.role === 'patient' ? 'patientId' : 'doctorId';
     
     const qApp = query(
       collection(db, 'appointments'),
-      where(qField, '==', profile.uid),
+      where(qField, '==', currentUserId),
       orderBy('dateTime', 'desc'),
       limit(5)
     );
@@ -278,7 +281,7 @@ Make it highly direct, inspiring, and actionable. Do not wrap it in quotes.`,
     if (profile.role === 'patient') {
       const qRec = query(
         collection(db, 'medicalRecords'),
-        where('patientId', '==', profile.uid),
+        where('patientId', '==', currentUserId),
         orderBy('date', 'desc'),
         limit(3)
       );
@@ -297,7 +300,7 @@ Make it highly direct, inspiring, and actionable. Do not wrap it in quotes.`,
 
       const qAccess = query(
         collection(db, 'accessRequests'),
-        where('patientId', '==', profile.uid),
+        where('patientId', '==', currentUserId),
         where('status', '==', 'pending')
       );
       const unsubscribeAccess = onSnapshot(qAccess, (snap) => {
@@ -327,7 +330,7 @@ Make it highly direct, inspiring, and actionable. Do not wrap it in quotes.`,
       unsubscribeApp();
       unsubscribeNews();
     };
-  }, [profile]);
+  }, [profile, user]);
 
   return (
     <GuestOverlay

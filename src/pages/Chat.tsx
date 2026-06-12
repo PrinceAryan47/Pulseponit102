@@ -125,6 +125,9 @@ const Chat: React.FC = () => {
     return localStorage.getItem(`muted_room_${roomId}`) === 'true';
   });
 
+  // Permission Error State
+  const [permissionError, setPermissionError] = useState<string | null>(null);
+
   const toggleMute = () => {
     const nextVal = !isMuted;
     setIsMuted(nextVal);
@@ -249,16 +252,26 @@ const Chat: React.FC = () => {
           const storageRef = ref(storage, `chats/${roomId}/${Date.now()}_voice.webm`);
           const uploadTask = uploadBytesResumable(storageRef, audioBlob);
 
+          let uploadStalledTimeout = setTimeout(() => {
+            console.warn("Audio storage upload stalled (timeout), cancelling and falling back to base64...");
+            uploadTask.cancel();
+          }, 2000);
+
           uploadTask.on('state_changed', 
             (snapshot) => {
               const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+              if (progress > 0) {
+                clearTimeout(uploadStalledTimeout);
+              }
               setUploadProgress(Math.max(10, progress));
             }, 
             (error) => {
-              console.warn("Audio storage upload failed, falling back to database transfer...", error);
+              clearTimeout(uploadStalledTimeout);
+              console.warn("Audio storage upload failed or cancelled, falling back to database transfer...", error);
               sendVoiceAsBase64();
             }, 
             async () => {
+              clearTimeout(uploadStalledTimeout);
               try {
                 const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
                 const messageData = {
@@ -306,7 +319,7 @@ const Chat: React.FC = () => {
 
     } catch (error) {
       console.error("Microphone setup failed:", error);
-      alert("Missing microphone permission. Please allow audio capture.");
+      setPermissionError("Missing microphone permission. If you are viewing this app inside the AI Studio frame, please open the application in a new tab using the 'Open in sub-window' icon at the top-right of your preview pane, then allow microphone access in your browser security prompt.");
     }
   };
 
@@ -526,12 +539,21 @@ const Chat: React.FC = () => {
       const storageRef = ref(storage, `chats/${roomId}/${Date.now()}_${file.name}`);
       const uploadTask = uploadBytesResumable(storageRef, file);
 
+      let uploadStalledTimeout = setTimeout(() => {
+        console.warn("File storage upload stalled (timeout), cancelling and falling back to base64...");
+        uploadTask.cancel();
+      }, 2000);
+
       uploadTask.on('state_changed', 
         (snapshot) => {
           const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+          if (progress > 0) {
+            clearTimeout(uploadStalledTimeout);
+          }
           setUploadProgress(Math.max(10, progress));
         }, 
         async (error) => {
+          clearTimeout(uploadStalledTimeout);
           console.warn("Storage upload failed, attempting backend database fallback:", error);
           if (file.size > 800 * 1024) {
             alert(`File sharing failed. Firebase Storage is not enabled on your project, and this file (${(file.size / 1024 / 1024).toFixed(2)}MB) exceeds the 800KB offline limit. Please compress or link a smaller file.`);
@@ -542,6 +564,7 @@ const Chat: React.FC = () => {
           await sendFileAsBase64(file);
         }, 
         async () => {
+          clearTimeout(uploadStalledTimeout);
           try {
             const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
             await finalizeFileMessage(downloadURL, file.name, file.type);
@@ -825,6 +848,35 @@ const Chat: React.FC = () => {
                 type="button"
                 onClick={() => setReplyToMessage(null)}
                 className="p-1.5 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-full text-slate-400 hover:text-red-500 transition-all shrink-0"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Permission Error Banner */}
+        <AnimatePresence>
+          {permissionError && (
+            <motion.div 
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              className="max-w-4xl mx-auto mb-3 bg-red-500/10 border border-red-500/30 rounded-2xl p-4 flex items-start gap-4 relative overflow-hidden"
+            >
+              <div className="p-2 bg-red-500/20 rounded-xl">
+                <Mic className="w-5 h-5 text-red-500 shrink-0" />
+              </div>
+              <div className="flex-grow min-w-0 pr-6">
+                <p className="text-sm font-bold text-red-500 mb-1">Microphone Access Blocked</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed font-semibold">
+                  {permissionError}
+                </p>
+              </div>
+              <button 
+                type="button"
+                onClick={() => setPermissionError(null)}
+                className="absolute top-4 right-4 p-1 hover:bg-red-500/10 rounded-full text-slate-400 hover:text-red-500 transition-all shrink-0"
               >
                 <X className="w-4 h-4" />
               </button>

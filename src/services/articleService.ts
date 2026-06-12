@@ -89,7 +89,7 @@ const refreshArticles = async () => {
     // 2. Generate new articles using Gemini
     const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' });
     const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
+      model: "gemini-3.5-flash",
       contents: "Generate 10 high-quality, evidence-based health and wellness articles for a digital health platform. Each article should include: 1. A catchy title. 2. A 2-sentence summary. 3. A detailed content body in Markdown (at least 600 words) with headings, lists, and professional advice. 4. A category (must be one of: Nutrition, Fitness, Mental Health, Prevention). 5. A realistic author name. The authors should be a mix of medical professionals (e.g., 'Dr. Sarah Chen') and globally recognized health organizations (e.g., 'World Health Organization (WHO)', 'Mayo Clinic', 'NHS Digital', 'CDC Health Advisory'). Ensure the content is strictly evidence-based and follows international medical standards.",
       config: {
         responseMimeType: "application/json",

@@ -17,6 +17,7 @@ import {
 import { format } from 'date-fns';
 import { motion } from 'framer-motion';
 import GuestOverlay from '../components/GuestOverlay';
+import { downloadPrescriptionPDF } from '../components/PrescriptionPDF';
 
 const Prescriptions: React.FC = () => {
   const { profile } = useAuth();
@@ -119,7 +120,15 @@ const Prescriptions: React.FC = () => {
                 </div>
               </div>
               <div className="px-6 py-4 bg-slate-50 dark:bg-slate-900/50 flex items-center justify-between">
-                <button className="text-sm font-bold text-neon-blue hover:underline flex items-center gap-2">
+                <button 
+                  onClick={() => downloadPrescriptionPDF({
+                    record,
+                    patientName: profile?.fullName || 'Patient',
+                    patientAge: profile?.age,
+                    patientGender: profile?.gender
+                  })}
+                  className="text-sm font-bold text-neon-blue hover:underline flex items-center gap-2 cursor-pointer"
+                >
                   <Download className="w-4 h-4" />
                   Download PDF
                 </button>

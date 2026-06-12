@@ -28,6 +28,7 @@ const Profile = React.lazy(() => import('./pages/Profile'));
 const FirstAid = React.lazy(() => import('./pages/FirstAid'));
 const DoctorDashboard = React.lazy(() => import('./pages/DoctorDashboard'));
 const AdminDashboard = React.lazy(() => import('./pages/AdminDashboard'));
+const Messages = React.lazy(() => import('./pages/Messages'));
 
 const Chat = React.lazy(() => import('./pages/Chat'));
 const Meeting = React.lazy(() => import('./pages/Meeting'));
@@ -119,6 +120,11 @@ export default function App() {
                   <Route path="prescriptions" element={
                     <ProtectedRoute>
                       <Prescriptions />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="messages" element={
+                    <ProtectedRoute>
+                      <Messages />
                     </ProtectedRoute>
                   } />
                   <Route path="profile" element={

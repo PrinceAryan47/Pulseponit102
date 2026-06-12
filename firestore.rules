@@ -136,7 +136,13 @@ service cloud.firestore {
     }
 
     match /medicalRecords/{recordId} {
-      allow read: if isAuthenticated() && (
+      allow get: if isAuthenticated() && (
+        request.auth.uid == resource.data.patientId || 
+        request.auth.uid == resource.data.doctorId ||
+        (exists(/databases/$(database)/documents/accessRequests/$(resource.data.patientId + "_" + request.auth.uid)) && 
+         get(/databases/$(database)/documents/accessRequests/$(resource.data.patientId + "_" + request.auth.uid)).data.status == 'approved')
+      );
+      allow list: if isAuthenticated() && (
         request.auth.uid == resource.data.patientId || 
         request.auth.uid == resource.data.doctorId ||
         (exists(/databases/$(database)/documents/accessRequests/$(resource.data.patientId + "_" + request.auth.uid)) && 
@@ -147,7 +153,11 @@ service cloud.firestore {
     }
 
     match /accessRequests/{requestId} {
-      allow read: if isAuthenticated() && (
+      allow get: if isAuthenticated() && (
+        request.auth.uid == resource.data.patientId || 
+        request.auth.uid == resource.data.doctorId
+      );
+      allow list: if isAuthenticated() && (
         request.auth.uid == resource.data.patientId || 
         request.auth.uid == resource.data.doctorId
       );

@@ -17,7 +17,7 @@ export interface GeneratedArticle {
 export const generateHealthNews = async (): Promise<GeneratedArticle[]> => {
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
+      model: "gemini-3.5-flash",
       contents: "Perform a comprehensive search for the most recent and trending health news globally and specifically in East Africa (Uganda, Kenya, Tanzania). Find 10 unique stories from the last 7 days covering medical breakthroughs, public health alerts, wellness trends, and nutritional science. For each story, you MUST provide: 1. A catchy title. 2. A short summary (2-3 sentences). 3. The full content in detailed paragraphs (at least 3-4 paragraphs) in Markdown. 4. A relevant category (Nutrition, Fitness, Mental Health, Prevention, Medical Discovery, or Public Health). 5. A high-quality relevant image URL from Unsplash. 6. The real direct news website or medical journal name (e.g., 'BBC Health', 'World Health Organization', 'The Lancet', 'Mayo Clinic') as `sourceName` based on the search results. 7. A precise, realistic URL of the source article as `sourceUrl` (e.g., 'https://www.who.int/...', 'https://www.nature.com/...'). Return the data as a JSON array of objects.",
       config: {
         tools: [{ googleSearch: {} }],

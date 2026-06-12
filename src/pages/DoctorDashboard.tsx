@@ -50,6 +50,7 @@ import { format } from 'date-fns';
 import { checkAndTriggerAutoNews } from '../services/newsSchedulerService';
 import { safeFormat } from '../lib/dateUtils';
 import { useSocket } from '../context/SocketContext';
+import { downloadPrescriptionPDF } from '../components/PrescriptionPDF';
 
 // Tab Components
 const OverviewTab = ({ 
@@ -304,7 +305,7 @@ const AppointmentsTab: React.FC<{
 };
 
 const PatientsTab = () => {
-  const { profile } = useAuth();
+  const { profile, user } = useAuth();
   const { initiateCall } = useSocket();
   const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState('');
@@ -330,10 +331,11 @@ const PatientsTab = () => {
   }, []);
 
   useEffect(() => {
-    if (!profile?.uid) return;
+    const currentUserId = user?.uid || profile?.uid;
+    if (!currentUserId) return;
     const q = query(
       collection(db, 'accessRequests'),
-      where('doctorId', '==', profile.uid)
+      where('doctorId', '==', currentUserId)
     );
     const unsubscribe = onSnapshot(q, (snap) => {
       setAccessRequests(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
@@ -341,7 +343,7 @@ const PatientsTab = () => {
       console.error("Error fetching access requests:", error);
     });
     return () => unsubscribe();
-  }, [profile]);
+  }, [profile, user]);
 
   useEffect(() => {
     if (!selectedHistoryPatient) {
@@ -935,7 +937,33 @@ const PrescriptionsTab = () => {
         </div>
 
         <div className="mt-8 pt-8 border-t border-border flex justify-end gap-3">
-          <button className="px-8 py-3 bg-muted text-foreground rounded-2xl font-bold hover:bg-muted/80 transition-all flex items-center gap-2">
+          <button 
+            type="button"
+            onClick={() => {
+              if (!formData.patientId || !formData.medicationName) {
+                alert("Please select a patient and enter a medication name first to generate a printable PDF draft.");
+                return;
+              }
+              const selectedPatient = patients.find(p => p.uid === formData.patientId);
+              const prescriptionText = `${formData.medicationName} - ${formData.dosage} (${formData.frequency}) for ${formData.duration}. ${formData.instructions}`;
+              
+              downloadPrescriptionPDF({
+                record: {
+                  id: 'DRAFT',
+                  patientId: formData.patientId,
+                  doctorId: profile?.uid || 'doctor',
+                  date: new Date().toISOString(),
+                  diagnosis: 'Prescription Issued (Draft)',
+                  prescription: prescriptionText,
+                  doctorName: profile?.fullName || 'Licensed Specialist'
+                },
+                patientName: selectedPatient?.fullName || 'Patient',
+                patientAge: selectedPatient?.age,
+                patientGender: selectedPatient?.gender
+              });
+            }}
+            className="px-8 py-3 bg-muted text-foreground rounded-2xl font-bold hover:bg-muted/80 transition-all flex items-center gap-2 cursor-pointer"
+          >
             <Download className="w-5 h-5" />
             Print PDF
           </button>

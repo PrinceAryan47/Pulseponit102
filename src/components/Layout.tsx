@@ -167,6 +167,7 @@ const Layout: React.FC = () => {
   const patientNavItems = [
     { label: 'Overview', path: '/dashboard', icon: LayoutDashboard },
     { label: 'Appointments', path: '/appointments', icon: Calendar },
+    { label: 'Messages', path: '/messages', icon: MessageSquare },
     { label: 'Medical Records', path: '/medical-records', icon: FileText },
     { label: 'Prescriptions', path: '/prescriptions', icon: Pill },
     { label: 'Health Tools', path: '/health-tools', icon: Activity },

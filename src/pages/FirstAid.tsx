@@ -347,7 +347,7 @@ const FirstAid: React.FC = () => {
     try {
       const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
       const response = await ai.models.generateContent({
-        model: "gemini-2.5-flash",
+        model: "gemini-3.5-flash",
         contents: `You are a professional emergency first aid assistant. Provide immediate, step-by-step first aid instructions for the following situation: "${aiQuery}". 
         
         Rules:

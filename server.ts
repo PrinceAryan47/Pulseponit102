@@ -30,7 +30,14 @@ function getAIClient() {
     if (!apiKey) {
       console.warn("GEMINI_API_KEY environment variable is not defined");
     }
-    aiClient = new GoogleGenAI({ apiKey: apiKey || "" });
+    aiClient = new GoogleGenAI({
+      apiKey: apiKey || "",
+      httpOptions: {
+        headers: {
+          'User-Agent': 'aistudio-build',
+        }
+      }
+    });
   }
   return aiClient;
 }
@@ -453,10 +460,20 @@ async function startServer() {
     try {
       const ai = getAIClient();
       
-      // Map newer or preview model names to stable ones if needed, or stick to requested model
-      let targetModel = model || "gemini-1.5-flash";
-      if (targetModel.includes("gemini-3-flash") || targetModel.includes("gemini-3")) {
-        targetModel = "gemini-2.5-flash"; // stable, blazing fast, fully featured standard model
+      // Standardize on the modern, high-performance gemini-3.5-flash model
+      let targetModel = model || "gemini-3.5-flash";
+      
+      const prohibitedOrDeprecated = [
+        "gemini-1.5-flash",
+        "gemini-1.5-pro",
+        "gemini-pro",
+        "gemini-2.0-flash",
+        "gemini-2.0-pro",
+        "gemini-2.0-flash-thinking",
+        "gemini-2.5-flash"
+      ];
+      if (prohibitedOrDeprecated.includes(targetModel)) {
+        targetModel = "gemini-3.5-flash";
       }
 
       console.log(`Backend proxy: Generating content using model ${targetModel}`);
@@ -483,7 +500,7 @@ async function startServer() {
     try {
       const ai = getAIClient();
       const response = await ai.models.generateContent({
-        model: "gemini-1.5-flash",
+        model: "gemini-3.5-flash",
         contents: `Find real medical facilities (hospitals, clinics, pharmacies) near coordinates ${lat}, ${lng}. 
         Return a list of real facilities with their exact names, full addresses, and types. 
         Prioritize hospitals and clinics with 24/7 service if available.`,

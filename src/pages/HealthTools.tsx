@@ -173,7 +173,7 @@ const MensHealthGuide = () => {
     try {
       const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
       const response = await ai.models.generateContent({
-        model: "gemini-2.5-flash",
+        model: "gemini-3.5-flash",
         contents: `As a professional health consultant, provide a comprehensive health screening and wellness guide for a male patient aged ${age}.
         
         Include:
@@ -253,7 +253,7 @@ const FitnessWorkoutTool = () => {
     try {
       const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
       const response = await ai.models.generateContent({
-        model: "gemini-2.5-flash",
+        model: "gemini-3.5-flash",
         contents: `As a professional fitness trainer, create a personalized weekly workout routine for a patient with the following details:
         
         Details:
@@ -497,7 +497,7 @@ const SymptomChecker = () => {
     try {
       const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
       const response = await ai.models.generateContent({
-        model: "gemini-2.5-flash",
+        model: "gemini-3.5-flash",
         contents: `As a medical symptom checker assistant, analyze the following patient information for potential health insights:
         
         Patient Details:

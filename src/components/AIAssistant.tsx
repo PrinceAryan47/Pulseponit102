@@ -66,7 +66,7 @@ const AIAssistant: React.FC = () => {
 
     try {
       const genAI = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' });
-      const model = "gemini-2.5-flash";
+      const model = "gemini-3.5-flash";
       
       const systemInstruction = `You are the PulsePoint AI Assistant, a helpful and professional health guide. 
       Your goal is to help users navigate the app, understand its features, and provide insights into their health metrics.
