@@ -255,7 +255,7 @@ const Chat: React.FC = () => {
           let uploadStalledTimeout = setTimeout(() => {
             console.warn("Audio storage upload stalled (timeout), cancelling and falling back to base64...");
             uploadTask.cancel();
-          }, 2000);
+          }, 300);
 
           uploadTask.on('state_changed', 
             (snapshot) => {
@@ -542,7 +542,7 @@ const Chat: React.FC = () => {
       let uploadStalledTimeout = setTimeout(() => {
         console.warn("File storage upload stalled (timeout), cancelling and falling back to base64...");
         uploadTask.cancel();
-      }, 2000);
+      }, 300);
 
       uploadTask.on('state_changed', 
         (snapshot) => {
@@ -645,26 +645,6 @@ const Chat: React.FC = () => {
             <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
             <span className="text-[9px] font-black uppercase tracking-widest text-slate-500">End-to-End Encrypted</span>
           </div>
-          <button 
-            onClick={() => {
-              if (!user || !profile || !otherUser) return;
-              initiateCall(otherUser.id, otherUser.fullName, otherUser.photoURL || '', 'audio', roomId);
-            }}
-            className="w-10 h-10 flex items-center justify-center text-slate-600 dark:text-slate-400 hover:text-neon-blue hover:bg-neon-blue/10 rounded-xl transition-all"
-            title="Voice Call"
-          >
-            <Phone className="w-5 h-5" />
-          </button>
-          <button 
-            onClick={() => {
-              if (!user || !profile || !otherUser) return;
-              initiateCall(otherUser.id, otherUser.fullName, otherUser.photoURL || '', 'video', roomId);
-            }}
-            className="w-10 h-10 flex items-center justify-center text-slate-600 dark:text-slate-400 hover:text-neon-blue hover:bg-neon-blue/10 rounded-xl transition-all"
-            title="Video Call"
-          >
-            <Video className="w-5 h-5" />
-          </button>
           
           {/* Mute Notification Toggle Button */}
           <button 

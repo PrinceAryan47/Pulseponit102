@@ -252,45 +252,26 @@ const Doctors: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="flex flex-col sm:flex-row gap-3 mb-6">
+                <div className="flex gap-3 mb-4">
                   <button 
                     onClick={() => {
                       if (!user) return navigate('/login');
                       const roomId = [user.uid, doctor.uid].sort().join('_');
                       navigate(`/chat/${roomId}`);
                     }}
-                    className="flex-grow py-3 bg-muted/50 text-muted-foreground rounded-2xl font-bold hover:bg-primary/10 hover:text-primary transition-all flex items-center justify-center gap-2"
+                    className="flex-1 py-3 bg-primary/10 text-primary rounded-2xl font-bold hover:bg-primary hover:text-primary-foreground transition-all flex items-center justify-center gap-2"
                   >
                     <MessageSquare className="w-5 h-5" />
                     Message
                   </button>
                   <button 
-                    onClick={() => {
-                      if (!user || !profile) return navigate('/login');
-                      const roomId = [user.uid, doctor.uid].sort().join('_');
-                      initiateCall(
-                        doctor.uid,
-                        doctor.fullName,
-                        doctor.photoURL || '',
-                        'video',
-                        roomId
-                      );
-                    }}
-                    className="flex-grow py-3 bg-primary text-primary-foreground rounded-2xl font-bold hover:bg-neon-blue-dark transition-all flex items-center justify-center gap-2 shadow-lg shadow-primary/20 neon-glow"
-                    title="Video Consultation (WebRTC)"
+                    onClick={() => handleOpenBooking(doctor)}
+                    className="flex-[2] py-3 bg-primary text-primary-foreground rounded-2xl font-bold hover:bg-rose-600 transition-all shadow-lg shadow-primary/20 flex items-center justify-center gap-2"
                   >
-                    <Stethoscope className="w-5 h-5" />
-                    Consult
+                    Book Appointment
+                    <ChevronRight className="w-5 h-5 animate-pulse" />
                   </button>
                 </div>
-
-                <button 
-                  onClick={() => handleOpenBooking(doctor)}
-                  className="w-full py-4 bg-primary text-primary-foreground rounded-2xl font-bold hover:bg-neon-blue-dark transition-all shadow-lg shadow-primary/20 flex items-center justify-center gap-2 neon-glow"
-                >
-                  Book Appointment
-                  <ChevronRight className="w-5 h-5" />
-                </button>
               </div>
             </motion.div>
           ))}

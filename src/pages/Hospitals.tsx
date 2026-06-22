@@ -205,7 +205,11 @@ const Hospitals: React.FC = () => {
   }
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 transition-colors duration-300">
+    <GuestOverlay
+      title="Access Medical Facilities"
+      description="Sign in to find nearby hospitals, clinics, and pharmacies using real-time geolocation mapping, directions, and health reviews."
+    >
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 transition-colors duration-300">
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-12">
         <div>
           <h1 className="text-4xl font-bold text-foreground mb-4 tracking-tight neon-text">Medical Facilities</h1>
@@ -375,79 +379,74 @@ const Hospitals: React.FC = () => {
             </div>
           ) : (
             <div className="space-y-6">
-              <GuestOverlay 
-                title="Sign in to find facilities"
-                description="Join PulsePoint to locate nearby hospitals, clinics, and pharmacies with real-time navigation and patient reviews."
-              >
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {filteredNearby.length > 0 ? filteredNearby.map((facility, idx) => (
-                    <motion.div
-                      key={idx}
-                      initial={{ opacity: 0, scale: 0.95 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      transition={{ delay: idx * 0.05 }}
-                      className="bg-card border border-border p-6 rounded-[2rem] group hover:border-primary/50 transition-all shadow-sm hover:shadow-md"
-                    >
-                      <div className="flex items-start justify-between mb-4">
-                        <div className="flex items-center gap-3">
-                          <div className="p-3 bg-primary/10 rounded-2xl">
-                            {facility.type === 'pharmacy' ? (
-                              <PlusCircle className="w-6 h-6 text-primary" />
-                            ) : facility.type === 'clinic' ? (
-                              <Activity className="w-6 h-6 text-primary" />
-                            ) : (
-                              <Hospital className="w-6 h-6 text-primary" />
-                            )}
-                          </div>
-                          {facility.distanceDisplay && (
-                            <div className="flex items-center gap-1.5 px-3 py-1 bg-primary text-primary-foreground rounded-full text-[10px] font-black uppercase tracking-widest shadow-lg shadow-primary/20">
-                              <MapPin className="w-3 h-3" />
-                              {facility.distanceDisplay} Away
-                            </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {filteredNearby.length > 0 ? filteredNearby.map((facility, idx) => (
+                  <motion.div
+                    key={idx}
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ delay: idx * 0.05 }}
+                    className="bg-card border border-border p-6 rounded-[2rem] group hover:border-primary/50 transition-all shadow-sm hover:shadow-md"
+                  >
+                    <div className="flex items-start justify-between mb-4">
+                      <div className="flex items-center gap-3">
+                        <div className="p-3 bg-primary/10 rounded-2xl">
+                          {facility.type === 'pharmacy' ? (
+                            <PlusCircle className="w-6 h-6 text-primary" />
+                          ) : facility.type === 'clinic' ? (
+                            <Activity className="w-6 h-6 text-primary" />
+                          ) : (
+                            <Hospital className="w-6 h-6 text-primary" />
                           )}
                         </div>
-                        <span className="px-3 py-1 bg-muted rounded-full text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
-                          {facility.type}
-                        </span>
+                        {facility.distanceDisplay && (
+                          <div className="flex items-center gap-1.5 px-3 py-1 bg-primary text-primary-foreground rounded-full text-[10px] font-black uppercase tracking-widest shadow-lg shadow-primary/20">
+                            <MapPin className="w-3 h-3" />
+                            {facility.distanceDisplay} Away
+                          </div>
+                        )}
                       </div>
-                      <h3 className="text-lg font-bold text-foreground mb-2 group-hover:text-primary transition-colors">
-                        {facility.name}
-                      </h3>
-                      <p className="text-sm text-muted-foreground mb-4 line-clamp-2">
-                        {facility.address}
-                      </p>
-                      <div className="flex gap-2">
-                        <button 
-                          onClick={() => handleLocateFacility(facility)}
-                          className="flex-grow py-3 bg-primary text-primary-foreground rounded-xl font-bold transition-all text-sm flex items-center justify-center gap-2 hover:bg-primary/90 shadow-lg shadow-primary/20"
-                        >
-                          <Navigation className="w-4 h-4" />
-                          Locate
-                        </button>
-                        <a 
-                          href={facility.mapsUrl} 
-                          target="_blank" 
-                          rel="noopener noreferrer"
-                          className="flex items-center justify-center gap-2 px-6 py-3 bg-muted hover:bg-slate-200 dark:hover:bg-slate-800 rounded-xl font-bold transition-all text-sm border border-border"
-                          title="Open in Google Maps"
-                        >
-                          <img 
-                            src="https://www.google.com/images/branding/product/ico/maps15_64dp.ico" 
-                            alt="Maps" 
-                            className="w-5 h-5 grayscale group-hover:grayscale-0 transition-all"
-                          />
-                          Maps
-                        </a>
-                      </div>
-                    </motion.div>
-                  )) : (
-                    <div className="col-span-full py-20 text-center bg-card rounded-[2.5rem] border border-dashed border-border">
-                      <Navigation className="w-12 h-12 text-muted/20 mx-auto mb-4" />
-                      <p className="text-muted-foreground">Click "Locate Nearby" to find facilities around you.</p>
+                      <span className="px-3 py-1 bg-muted rounded-full text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
+                        {facility.type}
+                      </span>
                     </div>
-                  )}
-                </div>
-              </GuestOverlay>
+                    <h3 className="text-lg font-bold text-foreground mb-2 group-hover:text-primary transition-colors">
+                      {facility.name}
+                    </h3>
+                    <p className="text-sm text-muted-foreground mb-4 line-clamp-2">
+                      {facility.address}
+                    </p>
+                    <div className="flex gap-2">
+                      <button 
+                        onClick={() => handleLocateFacility(facility)}
+                        className="flex-grow py-3 bg-primary text-primary-foreground rounded-xl font-bold transition-all text-sm flex items-center justify-center gap-2 hover:bg-primary/90 shadow-lg shadow-primary/20"
+                      >
+                        <Navigation className="w-4 h-4" />
+                        Locate
+                      </button>
+                      <a 
+                        href={facility.mapsUrl} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="flex items-center justify-center gap-2 px-6 py-3 bg-muted hover:bg-slate-200 dark:hover:bg-slate-800 rounded-xl font-bold transition-all text-sm border border-border"
+                        title="Open in Google Maps"
+                      >
+                        <img 
+                          src="https://www.google.com/images/branding/product/ico/maps15_64dp.ico" 
+                          alt="Maps" 
+                          className="w-5 h-5 grayscale group-hover:grayscale-0 transition-all"
+                        />
+                        Maps
+                      </a>
+                    </div>
+                  </motion.div>
+                )) : (
+                  <div className="col-span-full py-20 text-center bg-card rounded-[2.5rem] border border-dashed border-border">
+                    <Navigation className="w-12 h-12 text-muted/20 mx-auto mb-4" />
+                    <p className="text-muted-foreground">Click "Locate Nearby" to find facilities around you.</p>
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </div>
@@ -531,6 +530,7 @@ const Hospitals: React.FC = () => {
         </div>
       </div>
     </div>
+    </GuestOverlay>
   );
 };
 
