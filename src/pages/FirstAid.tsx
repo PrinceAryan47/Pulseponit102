@@ -218,6 +218,23 @@ const PoisoningAnimation = () => (
   </div>
 );
 
+const COMMON_EMERGENCIES = [
+  { id: 'heart_attack', name: 'Heart Attack / Cardiac Arrest', query: 'Heart Attack (Chest Pain / Cardiac Arrest)' },
+  { id: 'stroke', name: 'Stroke / Face Droop', query: 'Stroke (B.E. F.A.S.T.)' },
+  { id: 'anaphylaxis', name: 'Anaphylaxis / Allergic Reaction', query: 'Anaphylaxis (Severe Allergic Reaction)' },
+  { id: 'asthma', name: 'Asthma Attack / Breathing Difficulty', query: 'Severe Asthma Attack / Breathing Difficulty' },
+  { id: 'choking', name: 'Choking / Blocked Airway', query: 'Choking (Heimlich Maneuver)' },
+  { id: 'bleeding', name: 'Heavy Bleeding / Hemorrhage', query: 'Severe Bleeding and Wound Management' },
+  { id: 'burns', name: 'Severe Burns / Scalding', query: 'Severe Burns (1st, 2nd, and 3rd Degree)' },
+  { id: 'heat_stroke', name: 'Heat Stroke / Heat Prostration', query: 'Heat Stroke / Severe Heat Exhaustion' },
+  { id: 'seizure', name: 'Seizures / Epilepsy', query: 'Seizure or Convulsions First Aid' },
+  { id: 'poisoning', name: 'Poisoning / Toxins', query: 'Poisoning / Toxic Ingestion First Aid' },
+  { id: 'fracture', name: 'Fracture / Broken Bone', query: 'Bone Fracture or Dislocation First Aid' },
+  { id: 'snake_bite', name: 'Snake or Insect Bite', query: 'Venomous Snake Bite or Sting First Aid' },
+  { id: 'concussion', name: 'Concussion / Head Injury', query: 'Head Injury, Concussion, or Trauma First Aid' },
+  { id: 'electric_shock', name: 'Electric Shock', query: 'Electric Shock or High Voltage Exposure First Aid' },
+];
+
 const FirstAid: React.FC = () => {
   const [searchParams] = useSearchParams();
   const [searchTerm, setSearchTerm] = useState('');
@@ -230,12 +247,73 @@ const FirstAid: React.FC = () => {
   const [isAudioEnabled, setIsAudioEnabled] = useState(false);
   const { user } = useAuth();
 
+  // Smart Search States
+  const [smartSearchQuery, setSmartSearchQuery] = useState('');
+  const [smartAiInstructions, setSmartAiInstructions] = useState<string | null>(null);
+  const [isSmartAiLoading, setIsSmartAiLoading] = useState(false);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+
   useEffect(() => {
     const guideParam = searchParams.get('guide');
     if (guideParam) {
       setSelectedGuide(guideParam);
     }
   }, [searchParams]);
+
+  useEffect(() => {
+    const handleOutsideClick = () => {
+      setShowSuggestions(false);
+    };
+    window.addEventListener('click', handleOutsideClick);
+    return () => window.removeEventListener('click', handleOutsideClick);
+  }, []);
+
+  const triggerSmartFirstAidAi = async (queryText: string) => {
+    if (!queryText.trim()) return;
+    setIsSmartAiLoading(true);
+    setSmartAiInstructions(null);
+    setSmartSearchQuery(queryText);
+    
+    // Auto sync/focus matching visual guide if applicable
+    const lowerQuery = queryText.toLowerCase();
+    if (lowerQuery.includes('cpr') || lowerQuery.includes('cardiac') || lowerQuery.includes('heart attack')) {
+      setSelectedGuide('cpr');
+    } else if (lowerQuery.includes('chok')) {
+      setSelectedGuide('choking');
+    } else if (lowerQuery.includes('bleed') || lowerQuery.includes('wound') || lowerQuery.includes('hemorrhage')) {
+      setSelectedGuide('bleeding');
+    } else if (lowerQuery.includes('burn') || lowerQuery.includes('scalding')) {
+      setSelectedGuide('burns');
+    } else if (lowerQuery.includes('stroke') || lowerQuery.includes('fast')) {
+      setSelectedGuide('stroke');
+    } else if (lowerQuery.includes('poison')) {
+      setSelectedGuide('poisoning');
+    }
+
+    try {
+      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+      const response = await ai.models.generateContent({
+        model: "gemini-3.5-flash",
+        contents: `You are an expert emergency medical consultant. Provide high-priority, bullet-pointed, step-by-step first aid instructions for a life-threatening or urgent crisis query of: "${queryText}".
+
+Format your response using Markdown:
+- Start with a clear level-3 heading "## IMMEDIATE ACTIONS" followed by 3-5 bold numbered steps.
+- Provide a brief "⚠️ CRITICAL WARNINGS / WHAT NOT TO DO" section.
+- Conclude with a clear reminder of when/how to contact emergency responders (911 / 112).
+- Ensure the tone is direct, calm, and lacks any technical jargon, tailored for someone in high panic.`,
+      });
+      const responseText = response.text || "Unable to generate custom instructions at this time. Please call 911 immediately.";
+      setSmartAiInstructions(responseText);
+      if (isAudioEnabled) {
+        speakInstructions(responseText);
+      }
+    } catch (err) {
+      console.error(err);
+      setSmartAiInstructions("Error connecting to Gemini Emergency Service. Call 911 immediately.\n\n### Essential Standard Advice\n1. Check scene safety.\n2. Tap and shout to check responsiveness.\n3. Keep airway open.\n4. Apply direct pressure to heavy wounds.");
+    } finally {
+      setIsSmartAiLoading(false);
+    }
+  };
 
   const enableAudio = () => {
     if ('speechSynthesis' in window) {
@@ -450,6 +528,272 @@ const FirstAid: React.FC = () => {
                 <Heart className="w-24 h-24 text-white fill-white" />
               </motion.div>
             </div>
+          </div>
+        </div>
+
+        {/* Dynamic Search & AI Guidance Center */}
+        <div 
+          onClick={(e) => e.stopPropagation()}
+          className="mb-12 bg-card rounded-[3rem] p-8 md:p-10 border-4 border-destructive/10 shadow-2xl relative overflow-hidden transition-all duration-300"
+        >
+          <div className="absolute top-0 right-0 w-80 h-80 bg-destructive/5 rounded-full blur-3xl -mr-32 -mt-32 pointer-events-none"></div>
+          <div className="relative z-10">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8">
+              <div>
+                <h2 className="text-3xl font-black uppercase tracking-tighter text-foreground flex items-center gap-3">
+                  <LifeBuoy className="w-8 h-8 text-destructive animate-pulse" />
+                  Instant Emergency AI Search
+                </h2>
+                <p className="text-muted-foreground font-medium text-lg mt-1">
+                  Type any injury or emergency (e.g. "heat stroke", "dog bite") for immediate AI-generated triage and instructions.
+                </p>
+              </div>
+              {smartAiInstructions && (
+                <button
+                  onClick={() => {
+                    setSmartSearchQuery('');
+                    setSmartAiInstructions(null);
+                  }}
+                  className="self-start md:self-auto px-6 py-3 bg-muted hover:bg-muted/80 text-muted-foreground rounded-2xl font-bold transition-all flex items-center gap-2 border border-border"
+                >
+                  <RotateCcw className="w-5 h-5" />
+                  Clear Search
+                </button>
+              )}
+            </div>
+
+            {/* Smart Search Input & Suggestions */}
+            <div className="relative mb-6">
+              <div className="relative">
+                <Search className="absolute left-6 top-1/2 -translate-y-1/2 w-6 h-6 text-muted-foreground" />
+                <input
+                  type="text"
+                  value={smartSearchQuery}
+                  onFocus={(e) => {
+                    e.stopPropagation();
+                    setShowSuggestions(true);
+                  }}
+                  onChange={(e) => {
+                    setSmartSearchQuery(e.target.value);
+                    setShowSuggestions(true);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      triggerSmartFirstAidAi(smartSearchQuery);
+                      setShowSuggestions(false);
+                    }
+                  }}
+                  placeholder="What is the medical emergency? (e.g., snake bite, chest pain, seizure...)"
+                  className="w-full pl-16 pr-44 py-6 bg-muted/60 border-2 border-border rounded-[2rem] focus:ring-4 focus:ring-destructive/20 outline-none transition-all text-lg md:text-xl font-bold text-foreground placeholder:text-muted-foreground/30"
+                />
+                <button
+                  onClick={() => {
+                    triggerSmartFirstAidAi(smartSearchQuery);
+                    setShowSuggestions(false);
+                  }}
+                  disabled={isSmartAiLoading || !smartSearchQuery.trim()}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 px-6 py-4 bg-destructive text-white rounded-[1.5rem] font-bold uppercase tracking-wider hover:bg-destructive/90 transition-all flex items-center gap-2 shadow-lg shadow-destructive/20 text-sm disabled:opacity-45"
+                >
+                  {isSmartAiLoading ? (
+                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <>
+                      <Zap className="w-4 h-4 fill-white" />
+                      Ask AI
+                    </>
+                  )}
+                </button>
+              </div>
+
+              {/* Suggestions Panel */}
+              <AnimatePresence>
+                {showSuggestions && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 15 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: 10 }}
+                    className="absolute z-30 left-0 right-0 mt-3 p-4 bg-popover border-2 border-border rounded-[2.5rem] shadow-2xl max-h-80 overflow-y-auto"
+                  >
+                    <div className="px-4 py-2 text-xs font-bold text-muted-foreground uppercase tracking-widest border-b border-border mb-3">
+                      Common Emergency Situations
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                      {COMMON_EMERGENCIES.filter(item => 
+                        item.name.toLowerCase().includes(smartSearchQuery.toLowerCase())
+                      ).map((item) => (
+                        <button
+                          key={item.id}
+                          onClick={() => {
+                            setSmartSearchQuery(item.name);
+                            triggerSmartFirstAidAi(item.query);
+                            setShowSuggestions(false);
+                          }}
+                          className="flex items-center justify-between p-4 bg-muted/30 hover:bg-destructive/10 text-foreground hover:text-destructive rounded-2xl transition-all text-left font-bold"
+                        >
+                          <span className="flex items-center gap-3">
+                            <span className="w-2.5 h-2.5 rounded-full bg-destructive/60" />
+                            {item.name}
+                          </span>
+                          <ChevronRight className="w-5 h-5 opacity-40" />
+                        </button>
+                      ))}
+                    </div>
+                    {smartSearchQuery.trim() && (
+                      <button
+                        onClick={() => {
+                          triggerSmartFirstAidAi(smartSearchQuery);
+                          setShowSuggestions(false);
+                        }}
+                        className="w-full mt-4 p-4 bg-primary/10 text-primary hover:bg-primary hover:text-primary-foreground rounded-2xl transition-all text-center font-black uppercase tracking-wider text-sm flex items-center justify-center gap-2"
+                      >
+                        <Zap className="w-4 h-4" />
+                        Search custom issue: "{smartSearchQuery}" via Emergency AI
+                      </button>
+                    )}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+
+            {/* Clickable Quick Tags */}
+            <div className="flex flex-wrap gap-2 mb-6">
+              <span className="text-sm font-bold text-muted-foreground/80 self-center mr-2 uppercase tracking-widest text-[10px]">Quick Taps:</span>
+              {COMMON_EMERGENCIES.slice(0, 7).map((item) => (
+                <button
+                  key={item.id}
+                  onClick={() => {
+                    setSmartSearchQuery(item.name);
+                    triggerSmartFirstAidAi(item.query);
+                  }}
+                  className="px-4 py-2.5 bg-muted/40 hover:bg-destructive/10 text-muted-foreground hover:text-destructive rounded-full text-xs font-bold transition-all border border-border/80"
+                >
+                  {item.name.split(' / ')[0]}
+                </button>
+              ))}
+            </div>
+
+            {/* Main AI Instructions Display Panel */}
+            <AnimatePresence>
+              {isSmartAiLoading && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  className="mt-6 p-8 bg-destructive/[0.03] rounded-[2.5rem] border-2 border-dashed border-destructive/20 flex flex-col items-center justify-center py-12 text-center"
+                >
+                  <div className="relative mb-6">
+                    <motion.div
+                      animate={{ scale: [1, 1.2, 1], opacity: [0.5, 1, 0.5] }}
+                      transition={{ duration: 1.5, repeat: Infinity }}
+                      className="w-20 h-20 bg-destructive/10 rounded-full flex items-center justify-center animate-pulse"
+                    >
+                      <Zap className="w-10 h-10 text-destructive fill-destructive/30" />
+                    </motion.div>
+                  </div>
+                  <h3 className="text-2xl font-black text-foreground uppercase tracking-tighter mb-2 animate-pulse">Contacting Specialist Trauma AI...</h3>
+                  <p className="text-muted-foreground font-semibold max-w-md">
+                    Retrieving medically reviewed, high-priority emergency workflows. Stay calm and follow instructions.
+                  </p>
+                </motion.div>
+              )}
+
+              {smartAiInstructions && !isSmartAiLoading && (
+                <motion.div
+                  initial={{ opacity: 0, y: 15 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="mt-6 border-2 border-destructive/20 rounded-[2.5rem] overflow-hidden shadow-2xl bg-destructive/[0.02]"
+                >
+                  {/* Status Banner */}
+                  <div className="bg-destructive p-6 text-white flex flex-col sm:flex-row items-center justify-between gap-4">
+                    <div className="flex items-center gap-4">
+                      <div className="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center">
+                        <LifeBuoy className="w-7 h-7 text-white fill-white/20 animate-bounce" />
+                      </div>
+                      <div>
+                        <span className="text-xs font-black uppercase tracking-[0.2em] opacity-85">EMERGENCY PROTOCOL GENERATED</span>
+                        <h4 className="text-2xl font-black uppercase tracking-tighter leading-none">{smartSearchQuery}</h4>
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => speakInstructions(smartAiInstructions)}
+                        className="px-6 py-3 bg-white text-destructive hover:bg-slate-100 rounded-xl font-black text-xs uppercase tracking-wider transition-all flex items-center gap-2 shadow-lg shadow-black/10"
+                      >
+                        <Volume2 className="w-4 h-4" />
+                        Listen (Audio)
+                      </button>
+                      <button
+                        onClick={stopSpeaking}
+                        className="p-3 bg-red-800 text-white hover:bg-red-900 rounded-xl transition-all"
+                        title="Pause speech"
+                      >
+                        <Pause className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Body Content */}
+                  <div className="p-8 md:p-10">
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                      {/* Left Block: Core Flow & Quick Warning Card */}
+                      <div className="lg:col-span-2 space-y-6">
+                        <div className="markdown-body text-foreground/90 font-medium tracking-tight text-lg leading-relaxed shadow-sm bg-background/50 p-6 rounded-3xl border border-border">
+                          <Markdown>{smartAiInstructions}</Markdown>
+                        </div>
+                      </div>
+
+                      {/* Right Block: Instant Assistance Checklist & First Responder Details */}
+                      <div className="lg:col-span-1 space-y-6">
+                        {/* Red Emergency Action Card */}
+                        <div className="bg-destructive/10 border-2 border-destructive p-6 rounded-3xl">
+                          <h5 className="text-xl font-black text-destructive uppercase tracking-tighter mb-4 flex items-center gap-2">
+                            <AlertTriangle className="w-6 h-6" />
+                            DO NOT PANIC
+                          </h5>
+                          <ul className="space-y-3 font-semibold text-sm text-foreground/80">
+                            <li className="flex gap-2">
+                              <span className="text-destructive font-black">✓</span> Ensure your own safety first.
+                            </li>
+                            <li className="flex gap-2">
+                              <span className="text-destructive font-black">✓</span> Call emergency dispatchers immediately (911 / 112).
+                            </li>
+                            <li className="flex gap-2">
+                              <span className="text-destructive font-black">✓</span> Keep the patient warm and comforted.
+                            </li>
+                          </ul>
+                          <div className="mt-6">
+                            <a
+                              href="tel:911"
+                              className="w-full py-4 bg-destructive text-white rounded-2xl font-black uppercase tracking-wider text-center flex items-center justify-center gap-2 hover:bg-destructive/95 transition-all shadow-xl shadow-destructive/20 text-sm"
+                            >
+                              <Phone className="w-4 h-4" />
+                              Call 911 Immediately
+                            </a>
+                          </div>
+                        </div>
+
+                        {/* Local Hospital Locator Link */}
+                        <div className="bg-card border border-border p-6 rounded-3xl flex flex-col justify-between">
+                          <div>
+                            <h5 className="text-lg font-black uppercase tracking-tighter text-foreground mb-1">Locate Closest Clinic</h5>
+                            <p className="text-xs text-muted-foreground font-semibold leading-relaxed mb-4">
+                              Instantly look up the nearest medical emergency center with navigation and active traffic.
+                            </p>
+                          </div>
+                          <a
+                            href="/hospitals"
+                            className="py-3 bg-muted hover:bg-muted/80 text-foreground font-black uppercase tracking-wider rounded-2xl text-center text-xs flex items-center justify-center gap-2 transition-all border border-border"
+                          >
+                            <ExternalLink className="w-4 h-4 hover:scale-110 transition-transform" />
+                            Open Hospital Locator
+                          </a>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
         </div>
 

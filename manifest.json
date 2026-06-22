@@ -1,7 +1,7 @@
 {
-  "name": "PulsePoint Health Assistant",
+  "name": "PulsePoint",
   "short_name": "PulsePoint",
-  "description": "Your simple health assistant. Connecting everyone to better care.",
+  "description": "Connecting everyone to better care, one click at a time.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",

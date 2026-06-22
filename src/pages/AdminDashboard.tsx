@@ -356,25 +356,41 @@ const AdminDashboard: React.FC = () => {
   };
 
   const handleDeleteArticle = async (id: string) => {
-    if (!window.confirm("Are you sure you want to delete this article?")) return;
-    const path = `articles/${id}`;
-    try {
-      await deleteDoc(doc(db, 'articles', id));
-      fetchData();
-    } catch (error) {
-      handleFirestoreError(error, OperationType.DELETE, path);
-    }
+    setModalConfig({
+      isOpen: true,
+      title: "Delete Article",
+      message: "Are you sure you want to delete this article? This action cannot be undone.",
+      type: 'danger',
+      onConfirm: async () => {
+        const path = `articles/${id}`;
+        try {
+          await deleteDoc(doc(db, 'articles', id));
+          fetchData();
+          setAlertConfig({ isOpen: true, message: "Article deleted successfully.", type: 'success' });
+        } catch (error) {
+          handleFirestoreError(error, OperationType.DELETE, path);
+        }
+      }
+    });
   };
 
   const handleDeleteHospital = async (id: string) => {
-    if (!window.confirm("Are you sure you want to delete this hospital? This will affect doctors registered at this facility.")) return;
-    const path = `hospitals/${id}`;
-    try {
-      await deleteDoc(doc(db, 'hospitals', id));
-      fetchData();
-    } catch (error) {
-      handleFirestoreError(error, OperationType.DELETE, path);
-    }
+    setModalConfig({
+      isOpen: true,
+      title: "Delete Hospital",
+      message: "Are you sure you want to delete this hospital? This will affect doctors registered at this facility.",
+      type: 'danger',
+      onConfirm: async () => {
+        const path = `hospitals/${id}`;
+        try {
+          await deleteDoc(doc(db, 'hospitals', id));
+          fetchData();
+          setAlertConfig({ isOpen: true, message: "Hospital deleted successfully.", type: 'success' });
+        } catch (error) {
+          handleFirestoreError(error, OperationType.DELETE, path);
+        }
+      }
+    });
   };
 
   const handleSaveHospital = async (e: React.FormEvent) => {

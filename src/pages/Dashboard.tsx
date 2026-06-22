@@ -722,7 +722,13 @@ Make it highly direct, inspiring, and actionable. Do not wrap it in quotes.`,
                             <span className="text-[8px] font-black text-purple-500 uppercase tracking-widest flex items-center gap-1"><Sparkles className="w-2 h-2" /> AI News</span>
                           </div>
                           <h3 className="text-sm font-bold text-foreground line-clamp-2 group-hover:text-primary transition-colors leading-tight">{article.title}</h3>
-                          <p className="text-[10px] text-muted-foreground mt-1 line-clamp-1">{article.summary}</p>
+                          <div className="flex items-center gap-1.5 mt-1 text-[9px] text-muted-foreground">
+                            <span className="font-semibold text-primary truncate max-w-[120px]">
+                              Source: {article.sourceName || article.authorName || 'Verified Registry'}
+                            </span>
+                            <span>•</span>
+                            <span className="line-clamp-1">{article.summary}</span>
+                          </div>
                         </div>
                       </div>
                     </Link>

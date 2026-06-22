@@ -1,6 +1,6 @@
 {
-  "name": "PulsePoint Health",
-  "description": "A modern health management application with neon blue theme, dark mode, and AI-powered health tools.",
+  "name": "PulsePoint",
+  "description": "A modern health management application with neon blue theme, dark mode, and emergency health tools.",
   "requestFramePermissions": [
     "camera",
     "microphone",

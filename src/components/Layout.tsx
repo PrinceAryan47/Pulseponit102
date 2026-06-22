@@ -34,16 +34,47 @@ import {
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useTheme } from '../context/ThemeContext';
-import AIAssistant from './AIAssistant';
 import NotificationDropdown from './NotificationDropdown';
 import GlobalSearch from './GlobalSearch';
 import { motion, AnimatePresence } from 'framer-motion';
+
+const pageVariants = {
+  initial: {
+    opacity: 0,
+    y: 12,
+  },
+  animate: {
+    opacity: 1,
+    y: 0,
+    transition: {
+      duration: 0.35,
+      ease: [0.16, 1, 0.3, 1] as any, // Custom smooth cubic bezier
+    }
+  },
+  exit: {
+    opacity: 0,
+    y: -8,
+    transition: {
+      duration: 0.2,
+      ease: [0.7, 0, 0.84, 0] as any, // Fast ease-in cubic bezier
+    }
+  }
+};
 
 const Layout: React.FC = () => {
   const { user, profile } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
   const location = useLocation();
+
+  useEffect(() => {
+    // Scroll window and containers to top instantly on route/path changes for seamless transitions
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' as ScrollBehavior });
+    const mainContainers = document.querySelectorAll('main');
+    mainContainers.forEach(container => {
+      container.scrollTo({ top: 0, left: 0, behavior: 'instant' as ScrollBehavior });
+    });
+  }, [location.pathname]);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [showInstallBtn, setShowInstallBtn] = useState(false);
@@ -382,10 +413,10 @@ const Layout: React.FC = () => {
             <AnimatePresence mode="wait">
               <motion.div
                 key={location.pathname}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -10 }}
-                transition={{ duration: 0.2, ease: "easeOut" }}
+                variants={pageVariants}
+                initial="initial"
+                animate="animate"
+                exit="exit"
                 className="min-h-full motion-gpu"
               >
                 <Outlet />
@@ -393,7 +424,6 @@ const Layout: React.FC = () => {
             </AnimatePresence>
           </main>
         </div>
-        <AIAssistant />
         <GlobalSearch isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} />
       </div>
     );
@@ -656,10 +686,10 @@ const Layout: React.FC = () => {
         <AnimatePresence mode="wait">
           <motion.div
             key={location.pathname}
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
-            transition={{ duration: 0.2, ease: "easeOut" }}
+            variants={pageVariants}
+            initial="initial"
+            animate="animate"
+            exit="exit"
             className="min-h-full motion-gpu"
           >
             <Outlet />
@@ -679,7 +709,7 @@ const Layout: React.FC = () => {
                 <span className="text-2xl font-black text-foreground tracking-tighter neon-text uppercase">PulsePoint</span>
               </Link>
               <p className="text-xl text-muted-foreground max-w-sm leading-tight font-medium mb-6">
-                Your simple health assistant. Connecting everyone to better care, one click at a time.
+                Connecting everyone to better care, one click at a time.
               </p>
               {showInstallBtn && (
                 <button
@@ -721,7 +751,6 @@ const Layout: React.FC = () => {
           </div>
         </div>
       </footer>
-      <AIAssistant />
       <GlobalSearch isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} />
     </div>
   );

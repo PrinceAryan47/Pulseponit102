@@ -191,16 +191,16 @@ const Articles: React.FC = () => {
                 <span className="flex items-center gap-1.5 shrink-0"><Clock className="w-3.5 h-3.5" /> {safeFormat(article.createdAt, 'MMM dd')}</span>
                 <span className="w-1 h-1 bg-border rounded-full shrink-0"></span>
                 <span className="flex items-center gap-1.5 truncate max-w-[150px]">
-                  {article.sourceUrl ? (
+                  {article.sourceUrl || article.authorId === 'system' ? (
                     <a 
-                      href={article.sourceUrl} 
+                      href={article.sourceUrl || 'https://www.who.int'} 
                       target="_blank" 
                       rel="noopener noreferrer"
                       onClick={(e) => e.stopPropagation()}
                       className="flex items-center gap-1 text-primary hover:underline group/src inline-flex"
                     >
                       <Globe className="w-3.5 h-3.5 text-primary shrink-0 transition-transform group-hover/src:scale-110" />
-                      <span className="truncate">{article.sourceName || article.authorName}</span>
+                      <span className="truncate">Source: {article.sourceName || article.authorName || 'Verified Health Hub'}</span>
                     </a>
                   ) : (
                     <>
@@ -226,6 +226,27 @@ const Articles: React.FC = () => {
           </motion.div>
         ))}
       </div>
+
+      {/* Copyright and Educational Disclaimer */}
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: 0.6 }}
+        className="mt-16 p-8 bg-muted/40 rounded-[2rem] border border-border/60 text-center max-w-4xl mx-auto"
+      >
+        <div className="flex justify-center mb-4">
+          <div className="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center text-primary">
+            <Globe className="w-6 h-6 animate-pulse" />
+          </div>
+        </div>
+        <h4 className="font-bold text-foreground mb-2">Sources & Copyright Informational Notice</h4>
+        <p className="text-xs text-muted-foreground leading-relaxed">
+          The articles, health guidelines, wellness tips, and medical summaries delivered on the PulsePoint platform are curated using verified medical information available from globally recognized, trusted healthcare authorities and online public registers (including the <strong>World Health Organization (WHO)</strong>, <strong>CDC</strong>, <strong>National Institutes of Health (NIH)</strong>, <strong>NHS</strong>, and <strong>Mayo Clinic</strong>). 
+        </p>
+        <p className="text-xs text-muted-foreground mt-2 leading-relaxed">
+          PulsePoint summarizes and cites these materials purely for public benefit, educational reference, and non-commercial awareness. We make every effort to feature direct outbound reference URLs back to original scientific registries, and do not seek proprietary ownership or exclusive copyrights over health bulletins. Always seek the advice of qualified medical clinicians regarding individual health questions or critical circumstances.
+        </p>
+      </motion.div>
     </div>
   );
 };

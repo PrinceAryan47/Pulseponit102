@@ -284,7 +284,7 @@ const Home: React.FC = () => {
               },
               {
                 title: 'First Aid Guide',
-                desc: 'Immediate, step-by-step instructions for medical emergencies and an AI assistant for quick advice.',
+                desc: 'Immediate, step-by-step instructions and emergency guides for medical crises.',
                 icon: LifeBuoy,
                 color: 'bg-red-500/10 text-red-600 dark:text-red-400'
               },
