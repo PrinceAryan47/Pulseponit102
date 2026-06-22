@@ -65,7 +65,7 @@ const AIAssistant: React.FC = () => {
     setIsLoading(true);
 
     try {
-      const genAI = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' });
+      const genAI = new GoogleGenAI({ apiKey: '' });
       const model = "gemini-3.5-flash";
       
       const systemInstruction = `You are the PulsePoint AI Assistant, a helpful and professional health guide. 

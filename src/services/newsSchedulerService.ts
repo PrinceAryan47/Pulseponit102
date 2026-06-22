@@ -3,6 +3,9 @@ import { db } from "../firebase";
 import { generateHealthNews, publishGeneratedNews } from "./newsAiService";
 
 export const checkAndTriggerAutoNews = async (adminId: string, adminName: string) => {
+  if (typeof window !== 'undefined' && (window as any).firestoreQuotaExceeded) {
+    return false;
+  }
   try {
     const settingsRef = doc(db, 'settings', 'news_config');
     const settingsDoc = await getDoc(settingsRef);

@@ -13,13 +13,24 @@ export const UserStatusManager: React.FC = () => {
     
     // Set online status
     const updateOnlineStatus = (online: boolean) => {
+      if ((window as any).firestoreQuotaExceeded) {
+        return;
+      }
       updateDoc(userRef, {
         isOnline: online,
         lastSeen: serverTimestamp()
       }).catch(err => {
         // Ignore "No document to update" errors if they happen during race conditions
-        if (err instanceof Error && !err.message.includes('No document to update')) {
-          console.error(`Error updating ${online ? 'online' : 'offline'} status:`, err);
+        if (err instanceof Error) {
+          const errMsg = err.message.toLowerCase();
+          if (errMsg.includes('quota') || errMsg.includes('resource-exhausted') || errMsg.includes('exhausted')) {
+            (window as any).firestoreQuotaExceeded = true;
+            window.dispatchEvent(new CustomEvent('firestore-quota-exceeded'));
+            return;
+          }
+          if (!err.message.includes('No document to update')) {
+            console.error(`Error updating ${online ? 'online' : 'offline'} status:`, err);
+          }
         }
       });
     };

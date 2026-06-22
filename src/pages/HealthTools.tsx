@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Activity, 
   Calculator, 
@@ -162,8 +162,35 @@ const HealthTools: React.FC = () => {
 const MensHealthGuide = () => {
   const { profile } = useAuth();
   const [age, setAge] = useState(profile?.age?.toString() || '');
+  const [focus, setFocus] = useState('overall');
+  const [activity, setActivity] = useState('moderate');
+  const [familyHistory, setFamilyHistory] = useState('none');
   const [loading, setLoading] = useState(false);
   const [guide, setGuide] = useState<string | null>(null);
+
+  // Dynamic Client-side Screening Checklist based on age limits
+  const getScreeningRecommendations = (currentAge: number) => {
+    const list = [
+      { id: 'bp', label: 'Blood Pressure Assessment', frequency: 'Annually', desc: 'Identify risks for hypertension and silent stroke indicators.', minAge: 18 },
+      { id: 'lipids', label: 'Lipid Panel / Cholesterol Test', frequency: 'Every 4-6 years', desc: 'Assess cardiovascular lipid plaque build-ups.', minAge: 20 },
+      { id: 'diabetes', label: 'Type 2 Diabetes Screening / HbA1c', frequency: 'Every 3 years', desc: 'Check metabolic blood sugar levels and insulin resistance.', minAge: 35 },
+      { id: 'colon', label: 'Colorectal Cancer Screening / Colonoscopy', frequency: 'Every 5-10 years', desc: 'Detect precancerous colonic growths early.', minAge: 45 },
+      { id: 'prostate', label: 'Prostate-Specific PSA Test & Consult', frequency: 'Annually / Consult Doctor', desc: 'Discuss screening pathways with your doctor.', minAge: 45 },
+      { id: 'shingles', label: 'Shingles (Zoster) Vaccination', frequency: '2 doses', desc: 'Prevent long-term postherpetic nerve pains.', minAge: 50 },
+      { id: 'pneumo', label: 'Pneumococcal Immunization', frequency: 'One-time', desc: 'Provides defense against acute bacterial pneumonias.', minAge: 65 }
+    ];
+    return list.filter(item => currentAge >= item.minAge);
+  };
+
+  const parsedAge = parseInt(age, 10) || 0;
+  const screeningList = getScreeningRecommendations(parsedAge);
+
+  // Simple local state to track checked screenings
+  const [checkedScreenings, setCheckedScreenings] = useState<Record<string, boolean>>({});
+
+  const toggleScreening = (id: string) => {
+    setCheckedScreenings(prev => ({ ...prev, [id]: !prev[id] }));
+  };
 
   const generateGuide = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -171,18 +198,35 @@ const MensHealthGuide = () => {
     
     setLoading(true);
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+      const ai = new GoogleGenAI({ apiKey: "" });
       const response = await ai.models.generateContent({
         model: "gemini-3.5-flash",
-        contents: `As a professional health consultant, provide a comprehensive health screening and wellness guide for a male patient aged ${age}.
+        contents: `As an expert clinical health consultant specializing in men's health, preventive care, and longevity medicine, create a comprehensive, highly personalized screening and wellness guide for a male patient.
         
-        Include:
-        1. Recommended screenings (e.g., prostate, colon, heart health) based on age.
-        2. Common health risks for men in this age group.
-        3. Lifestyle and nutrition tips for optimal male health.
-        4. Mental health considerations.
+        Patient Profile:
+        - Age: ${age}
+        - Primary Focus Area: ${focus}
+        - Physical Activity Level: ${activity}
+        - Family History / Risks: ${familyHistory}
         
-        Format the response using professional Markdown with clear headings and bullet points.`,
+        Provide a detailed health screening report in high-quality Markdown. Make sure it is structured as follows:
+        
+        # PERSONALIZED MEN'S PREVENTIVE HEALTH REPORT
+        
+        ## 📋 Recommended Screenings & Preventive Timeline
+        Provide a customized, chronological list of mandatory and recommended medical screenings (e.g. Prostate-Specific Antigen (PSA) test, Colonoscopy, Lipid Panel, Blood Pressure, Cardiovascular scans etc.) based on this patient's age (${age} years) and profile risks. State the recommended starting frequency and what each test looks for.
+        
+        ## ⚠️ Key Health Risks & Vulnerabilities
+        Identify specific physical and physiological risks associated with the ${age}-year-old bracket, factoring in the primary focus of "${focus}" and family history of "${familyHistory}".
+        
+        ## 🥗 Target Nutrition, Supplementation & Lifestyle Guidelines
+        Deliver an evidence-based roadmap for daily life. Detail custom food groups to prioritize, key essential nutrients (like Omega-3, Vitamin D, Magnesium, Zinc etc.) if applicable, stress-mitigation patterns, and sleep hygiene adjustments.
+        
+        ## 🧠 Cognitive Support & Mental Health Considerations
+        Specific age-appropriate mental wellness tips, focusing on managing work/life stressors, preventative neurology, and preserving peak cognitive focus with age.
+        
+        ## 🩺 Doctor Consultation Checklist
+        Give the client 3-5 high-value, precise questions they can directly ask their primary care doctor during their next visit.`,
       });
       setGuide(response.text || "Unable to generate guide at this time.");
     } catch (err) {
@@ -195,41 +239,294 @@ const MensHealthGuide = () => {
 
   return (
     <div>
-      <h2 className="text-2xl font-bold text-foreground mb-2">Men's Health & Screening Guide</h2>
-      <p className="text-muted-foreground mb-10">Get personalized health screening recommendations and wellness tips for men.</p>
+      <h2 className="text-3xl font-bold text-foreground mb-2 flex items-center gap-2.5">
+        <Activity className="w-8 h-8 text-primary animate-pulse" />
+        Men's Health & Screening Guide
+      </h2>
+      <p className="text-muted-foreground mb-10 leading-relaxed max-w-2xl text-sm">
+        Generate custom screening plans, age-graded risk reports, and evidence-guided preventative roadmaps from our clinical database.
+      </p>
       
-      <form onSubmit={generateGuide} className="space-y-6 max-w-md">
-        <div>
-          <label className="block text-sm font-semibold text-foreground/70 mb-2">Your Age</label>
-          <input
-            type="number"
-            required
-            value={age}
-            onChange={(e) => setAge(e.target.value)}
-            className="w-full px-4 py-3 bg-muted/50 border border-border rounded-2xl focus:ring-2 focus:ring-primary outline-none transition-all text-foreground"
-            placeholder="e.g. 45"
-          />
-        </div>
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+        {/* Form panel */}
+        <form onSubmit={generateGuide} className="lg:col-span-5 bg-muted/30 p-6 sm:p-8 rounded-3xl border border-border/80 space-y-6">
+          <h3 className="font-bold text-sm text-foreground uppercase tracking-widest pb-2 border-b border-border/60">Patient Criteria</h3>
+          
+          <div>
+            <label className="block text-xs font-bold text-foreground/80 uppercase tracking-wider mb-2">Age</label>
+            <input
+              type="number"
+              required
+              value={age}
+              onChange={(e) => setAge(e.target.value)}
+              className="w-full px-5 py-3.5 bg-background border border-border rounded-xl focus:ring-2 focus:ring-primary outline-none transition-all text-foreground text-sm font-medium"
+              placeholder="e.g. 45"
+              min="1"
+              max="120"
+            />
+          </div>
 
-        <button
-          type="submit"
-          disabled={loading}
-          className="w-full py-4 bg-primary text-primary-foreground rounded-2xl font-bold hover:bg-neon-blue-dark transition-all flex items-center justify-center gap-2 disabled:opacity-50 neon-glow"
-        >
-          {loading ? 'Generating Guide...' : 'Generate Health Guide'}
-          <Activity className="w-5 h-5" />
-        </button>
-      </form>
+          <div>
+            <label className="block text-xs font-bold text-foreground/80 uppercase tracking-wider mb-2">Primary Wellness Focus</label>
+            <select
+              value={focus}
+              onChange={(e) => setFocus(e.target.value)}
+              className="w-full px-5 py-3.5 bg-background border border-border rounded-xl focus:ring-2 focus:ring-primary outline-none transition-all text-foreground text-sm font-medium"
+            >
+              <option value="overall">Overall Longevity & Screening</option>
+              <option value="cardio">Cardiovascular Fitness & Heart Health</option>
+              <option value="strength">Muscle Density & Hormone Balance</option>
+              <option value="recovery">Energy, Sleep & Recovery Optimization</option>
+              <option value="mental">Cognitive Focus & Stress Resilience</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold text-foreground/80 uppercase tracking-wider mb-2">Exercise / Activity State</label>
+            <select
+              value={activity}
+              onChange={(e) => setActivity(e.target.value)}
+              className="w-full px-5 py-3.5 bg-background border border-border rounded-xl focus:ring-2 focus:ring-primary outline-none transition-all text-foreground text-sm font-medium"
+            >
+              <option value="sedentary">Sedentary (desk job, minimal movement)</option>
+              <option value="light">Lightly Active (active walking, casual activity)</option>
+              <option value="moderate">Moderately Active (structured workouts 3-5x/week)</option>
+              <option value="active">Very Active (heavy weight splits / intense sports)</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold text-foreground/80 uppercase tracking-wider mb-2">Known Hereditary History Risks</label>
+            <select
+              value={familyHistory}
+              onChange={(e) => setFamilyHistory(e.target.value)}
+              className="w-full px-5 py-3.5 bg-background border border-border rounded-xl focus:ring-2 focus:ring-primary outline-none transition-all text-foreground text-sm font-medium"
+            >
+              <option value="none">No known hereditary family history</option>
+              <option value="heart">Cardiovascular disease or heart attacks</option>
+              <option value="diabetes">Type 2 Diabetes / Metabolic concerns</option>
+              <option value="cancer">Prostate or Colon cancer history</option>
+              <option value="bloodpressure">Clinical Stroke / Arterial hypertension</option>
+            </select>
+          </div>
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full py-4 bg-primary text-primary-foreground rounded-xl font-bold hover:bg-neon-blue-dark transition-all flex items-center justify-center gap-2 disabled:opacity-50 neon-glow text-xs uppercase tracking-wider"
+          >
+            {loading ? 'Synthesizing Guide...' : 'Generate Health Guide'}
+            <Activity className="w-4 h-4 ml-1" />
+          </button>
+        </form>
+
+        {/* Live clinical checkpoints panel */}
+        <div className="lg:col-span-7 bg-muted/20 p-6 sm:p-8 rounded-3xl border border-border/60">
+          <h3 className="font-bold text-base text-foreground mb-1">Target Men's Health Screenings</h3>
+          <p className="text-xs text-muted-foreground mb-6">Based on your entered age ({parsedAge || 'Fill form above'}), track and tick off your key age-graded clinical examinations:</p>
+          
+          {parsedAge <= 0 ? (
+            <div className="py-8 text-center text-muted-foreground text-sm bg-muted/10 rounded-2xl border border-dashed border-border">
+              Please insert your age in the form to initialize recommended diagnostic checklist trackups.
+            </div>
+          ) : screeningList.length === 0 ? (
+            <div className="py-8 text-center text-muted-foreground text-sm">
+              No critical screening thresholds triggered yet for this age range.
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {screeningList.map((item) => (
+                <div 
+                  key={item.id} 
+                  onClick={() => toggleScreening(item.id)}
+                  className={cn(
+                    "p-4 rounded-2xl border transition-all cursor-pointer flex gap-4 items-start select-none",
+                    checkedScreenings[item.id]
+                      ? "bg-primary/5 border-primary/20 text-foreground"
+                      : "bg-background border-border hover:border-border-dark text-foreground/90"
+                  )}
+                >
+                  <div className={cn(
+                    "w-5 h-5 rounded-md border flex items-center justify-center mt-0.5 shrink-0 transition-all text-[10px] font-bold",
+                    checkedScreenings[item.id]
+                      ? "bg-primary border-primary text-white"
+                      : "border-muted-foreground/50 text-transparent animate-pulse"
+                  )}>
+                    ✓
+                  </div>
+                  <div>
+                    <div className="flex gap-2 items-center flex-wrap">
+                      <span className={cn("font-bold text-sm", checkedScreenings[item.id] ? "line-through text-muted-foreground" : "")}>
+                        {item.label}
+                      </span>
+                      <span className="px-2 py-0.5 rounded-full bg-primary/10 text-[9px] text-primary font-bold tracking-tight">
+                        {item.frequency}
+                      </span>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">{item.desc}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Endocrine & Longevity FAQ Accordion */}
+      <div className="bg-muted/15 p-6 sm:p-8 rounded-[2rem] mt-8 border border-border/80">
+        <h3 className="font-bold text-lg text-foreground mb-1 flex items-center gap-2">
+          <Info className="w-5 h-5 text-primary" />
+          Preventive Longevity & Endocrine FAQ
+        </h3>
+        <p className="text-xs text-muted-foreground mb-6">Expert clinical guidance on hormone homeostasis, cardiac screenings, and daily resilience metrics.</p>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {[
+            {
+              q: "What is the difference between Total and Free Testosterone?",
+              a: "Total testosterone measures the total hormone content in your bloodstream. However, roughly 98% is bound to proteins (SHBG and albumin) and is biologically inactive. 'Free' testosterone represents the unbound, active fraction directly driving muscle synthesis, bone mineral density, and spatial cognitive focus. Always request a free testosterone assay for true evaluation."
+            },
+            {
+              q: "At what age should prostate screenings (PSA) begin?",
+              a: "Standard guidelines suggest discussing screening avenues starting at age 45-50. If you have immediate high-priority family history of prostate or colorectal anomalies, clinical recommendations suggest forming a personalized monitoring pathway with your general practitioner as early as age 40."
+            },
+            {
+              q: "Which lifestyle factors have the largest impact on male hormones?",
+              a: "Consistent sleep quality (7-8 hours) is the single most critical factor, as testosterone secretion peaks during deep/REM sleep cycles. Chronic high stress triggers cortisol spikes which directly downregulate the HPTA (Hypothalamic-Pituitary-Testicular Axis). Support with strength training, adequate zinc/magnesium, and healthy dietary fats."
+            },
+            {
+              q: "How does cardiovascular vascular stiffness relate to physical integrity?",
+              a: "Arterial performance is ultimately a hydraulic function. Early indicators of cardiovascular stress, endothelial weakness, or high blood pressure show up first in micro-capillaries. Maintaining rigid Zone 2 cardiovascular endurance and dynamic lipid profiles prevents passive cardiovascular stiffness."
+            }
+          ].map((faq, idx) => (
+            <div key={idx} className="bg-card p-5 rounded-2xl border border-border">
+              <span className="text-[10px] font-black tracking-widest text-primary uppercase">Topic 0{idx+1}</span>
+              <h4 className="font-bold text-sm text-foreground mt-1 mb-2">{faq.q}</h4>
+              <p className="text-xs text-muted-foreground leading-relaxed">{faq.a}</p>
+            </div>
+          ))}
+        </div>
+      </div>
 
       {guide && (
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="mt-12 p-8 bg-muted/50 rounded-[2rem] border border-border prose dark:prose-invert max-w-none"
+          className="mt-12 p-8 bg-muted/40 rounded-[2rem] border border-border/80"
         >
-          <Markdown>{guide}</Markdown>
+          <div className="flex items-center justify-between border-b border-border/80 pb-4 mb-6">
+            <span className="text-[10px] font-black uppercase tracking-widest text-primary">System Synthesized Guidance Report</span>
+            <button 
+              onClick={() => window.print()}
+              className="text-xs font-bold text-primary hover:underline flex items-center gap-1.5"
+            >
+              Print Document
+            </button>
+          </div>
+          <div className="prose dark:prose-invert max-w-none text-foreground/90 markdown-body leading-relaxed">
+            <Markdown>{guide}</Markdown>
+          </div>
         </motion.div>
       )}
+    </div>
+  );
+};
+
+const WorkoutTimer = () => {
+  const [timeLeft, setTimeLeft] = useState(60);
+  const [isRunning, setIsRunning] = useState(false);
+  const [totalSets, setTotalSets] = useState(4);
+  const [currentSet, setCurrentSet] = useState(1);
+  const [timerType, setTimerType] = useState<'work' | 'rest'>('work');
+
+  useEffect(() => {
+    let interval: NodeJS.Timeout | null = null;
+    if (isRunning && timeLeft > 0) {
+      interval = setInterval(() => {
+        setTimeLeft(prev => prev - 1);
+      }, 1000);
+    } else if (timeLeft === 0) {
+      if (timerType === 'work') {
+        setTimerType('rest');
+        setTimeLeft(45); // Rest period of 45 seconds
+      } else {
+        setTimerType('work');
+        setTimeLeft(60); // Work set period of 60 seconds
+        if (currentSet < totalSets) {
+          setCurrentSet(prev => prev + 1);
+        } else {
+          setIsRunning(false);
+          setCurrentSet(1);
+        }
+      }
+    }
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [isRunning, timeLeft, timerType, currentSet, totalSets]);
+
+  const handleReset = () => {
+    setIsRunning(false);
+    setTimeLeft(60);
+    setCurrentSet(1);
+    setTimerType('work');
+  };
+
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+  };
+
+  return (
+    <div className="bg-card border border-border p-6 rounded-3xl mt-8 flex flex-col md:flex-row items-center justify-between gap-6 shadow-sm select-none">
+      <div className="flex items-center gap-4">
+        <div className="w-12 h-12 bg-primary/10 rounded-2xl flex items-center justify-center">
+          <Activity className="w-6 h-6 text-primary animate-pulse" />
+        </div>
+        <div>
+          <h4 className="font-bold text-base text-foreground uppercase tracking-wider">Workout Interval Buddy</h4>
+          <p className="text-xs text-muted-foreground">Keep pace between your training sets to maximize hypertrophy and glycogen capacity.</p>
+        </div>
+      </div>
+
+      <div className="flex flex-col sm:flex-row items-center gap-6">
+        {/* Set Counter */}
+        <div className="flex flex-col items-center">
+          <span className="text-[10px] font-black text-muted-foreground uppercase tracking-widest leading-none mb-1">Set</span>
+          <span className="text-2xl font-black text-foreground leading-none">{currentSet} <span className="text-sm text-muted-foreground/60">/ {totalSets}</span></span>
+        </div>
+
+        {/* Timer display */}
+        <div className="flex flex-col items-center px-6 py-1 border-l border-r border-border min-w-[125px]">
+          <span className={cn(
+            "text-[9px] font-black uppercase tracking-widest px-2.5 py-0.5 rounded-full mb-1",
+            timerType === 'work' ? "bg-rose-500/10 text-rose-500" : "bg-emerald-500/10 text-emerald-500"
+          )}>
+            {timerType === 'work' ? "Lift Set" : "Rest Break"}
+          </span>
+          <span className="text-3xl font-black font-mono tracking-tighter text-foreground leading-none">{formatTime(timeLeft)}</span>
+        </div>
+
+        {/* Controls */}
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setIsRunning(!isRunning)}
+            className={cn(
+              "px-4 py-2 text-xs font-black uppercase tracking-wider transition-all rounded-xl",
+              isRunning ? "bg-amber-500 hover:bg-amber-600 text-white" : "bg-primary hover:bg-primary/90 text-primary-foreground"
+            )}
+          >
+            {isRunning ? "Pause" : "Start"}
+          </button>
+          <button
+            onClick={handleReset}
+            className="px-3 py-2 bg-muted hover:bg-muted/80 text-muted-foreground rounded-xl text-xs font-black uppercase tracking-wider transition-all"
+          >
+            Reset
+          </button>
+        </div>
+      </div>
     </div>
   );
 };
@@ -242,8 +539,17 @@ const FitnessWorkoutTool = () => {
   const [gender, setGender] = useState(profile?.gender || 'male');
   const [goal, setGoal] = useState('weight-loss');
   const [level, setLevel] = useState('beginner');
+  const [days, setDays] = useState('4');
+  const [equipment, setEquipment] = useState('gym');
   const [loading, setLoading] = useState(false);
   const [routine, setRoutine] = useState<string | null>(null);
+
+  // Success Logging System
+  const [completedWorkouts, setCompletedWorkouts] = useState<Record<string, boolean>>({});
+
+  const toggleWorkoutDay = (dayKey: string) => {
+    setCompletedWorkouts(prev => ({ ...prev, [dayKey]: !prev[dayKey] }));
+  };
 
   const generateWorkout = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -251,28 +557,43 @@ const FitnessWorkoutTool = () => {
     
     setLoading(true);
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+      const ai = new GoogleGenAI({ apiKey: "" });
       const response = await ai.models.generateContent({
         model: "gemini-3.5-flash",
-        contents: `As a professional fitness trainer, create a personalized weekly workout routine for a patient with the following details:
+        contents: `As an elite strength and conditioning specialist and expert sports nutritionist, create an outstanding, highly tailored weekly workout planner and nutritional roadmap for a client with the following metrics:
         
-        Details:
+        Client Details:
         - Age: ${age}
-        - Gender: ${gender}
+        - Biological Gender: ${gender}
         - Weight: ${weight} kg
         - Height: ${height} cm
-        - Fitness Goal: ${goal}
-        - Fitness Level: ${level}
+        - Core Fitness Goal: ${goal}
+        - Experience Level: ${level}
+        - Committed Days per Week: ${days} days
+        - Available Training Environment: ${equipment === 'gym' ? 'Fully equipped commercial gym' : equipment === 'home' ? 'Dumbbells and basic resistance bands' : 'No equipment / Pure bodyweight training'}
 
-        Provide a clear, structured weekly routine including:
-        1. Warm-up exercises.
-        2. Main workout exercises (sets, reps, and brief instructions).
-        3. Cool-down/Stretching.
-        4. Nutritional tips related to their goal.
+        Please construct a comprehensive and professional Markdown routine including:
         
-        Format the response using professional Markdown with clear headings and bullet points.`,
+        # ${goal.toUpperCase().replace('-', ' ')} WORKOUT PLATFORM
+        
+        ## 🗓️ Weekly Training Frequency Split (${days}-Day Split)
+        Provide a concise summary table or overview of what is trained on each active training day (e.g. Day 1: Upper Push, Day 2: Lower Body, Day 3: Active Rest etc.) based on their level (${level}) and equipment (${equipment}).
+        
+        ## 🏋️ Routine Step-by-Step Breakdown
+        For EACH active workout day, outline:
+        - **Warm-Up Protocol**: 3-5 minutes of specific dynamic mobility warm-ups to shield joints from injury.
+        - **Main Workout block**: Specific compound and isolation exercises detailing exact target Sets, Reps, Intensity (RPE), and 1-sentence execution instructions.
+        - **Cool-Down / Flexibility Plan**: 2-3 minutes of static stretches.
+        
+        ## 🥗 Nutrition & Fueling Protocols
+        Tailor a calorie-conscious nutrition guide specifically for the goal: ${goal}. Detail target macronutrient distributions, optimal hydration strategies (target fluid ounces), and ideal pre- and post-workout fuel examples.
+        
+        ## 📈 Progression & Recovery Philosophy
+        Scientific advice on progressive overload (how to build strength or stamina over weeks), required rest periods, and active recovery metrics.`,
       });
       setRoutine(response.text || "Unable to generate routine at this time.");
+      // Reset tracker
+      setCompletedWorkouts({});
     } catch (err) {
       console.error(err);
       setRoutine("Error connecting to fitness analysis service.");
@@ -281,85 +602,126 @@ const FitnessWorkoutTool = () => {
     }
   };
 
+  const parsedDaysNum = parseInt(days, 10) || 4;
+
   return (
     <div>
-      <h2 className="text-2xl font-bold text-foreground mb-2">Personalized Fitness Planner</h2>
-      <p className="text-muted-foreground mb-10">Get a custom workout routine tailored to your body metrics and fitness goals.</p>
+      <h2 className="text-3xl font-bold text-foreground mb-2 flex items-center gap-2.5">
+        <Activity className="w-8 h-8 text-primary" />
+        Personalized Fitness Planner
+      </h2>
+      <p className="text-muted-foreground mb-10 leading-relaxed max-w-2xl text-sm">
+        Generate custom splits, precise exercise programs, and elite nutritional guides matched directly to your biometrics.
+      </p>
       
-      <form onSubmit={generateWorkout} className="space-y-8">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <form onSubmit={generateWorkout} className="space-y-6 bg-muted/20 p-6 sm:p-8 rounded-3xl border border-border/80">
+        <h3 className="font-bold text-sm text-foreground uppercase tracking-widest pb-2 border-b border-border/60">1. Body Metrics & Variables</h3>
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
           <div>
-            <label className="block text-sm font-semibold text-foreground/70 mb-2">Age</label>
+            <label className="block text-xs font-bold text-foreground/85 uppercase tracking-widest mb-2">Age</label>
             <input
               type="number"
               value={age}
               onChange={(e) => setAge(e.target.value)}
-              className="w-full px-6 py-4 bg-muted/50 border border-border rounded-2xl focus:ring-2 focus:ring-primary outline-none transition-all text-foreground"
+              className="w-full px-5 py-3.5 bg-background border border-border rounded-xl focus:ring-2 focus:ring-primary outline-none transition-all text-foreground text-sm font-medium"
               placeholder="e.g. 25"
               required
+              min="1"
+              max="120"
             />
           </div>
           <div>
-            <label className="block text-sm font-semibold text-foreground/70 mb-2">Weight (kg)</label>
+            <label className="block text-xs font-bold text-foreground/85 uppercase tracking-widest mb-2">Weight (kg)</label>
             <input
               type="number"
               value={weight}
               onChange={(e) => setWeight(e.target.value)}
-              className="w-full px-6 py-4 bg-muted/50 border border-border rounded-2xl focus:ring-2 focus:ring-primary outline-none transition-all text-foreground"
+              className="w-full px-5 py-3.5 bg-background border border-border rounded-xl focus:ring-2 focus:ring-primary outline-none transition-all text-foreground text-sm font-medium"
               placeholder="e.g. 70"
               required
+              min="20"
+              max="300"
             />
           </div>
           <div>
-            <label className="block text-sm font-semibold text-foreground/70 mb-2">Height (cm)</label>
+            <label className="block text-xs font-bold text-foreground/85 uppercase tracking-widest mb-2">Height (cm)</label>
             <input
               type="number"
               value={height}
               onChange={(e) => setHeight(e.target.value)}
-              className="w-full px-6 py-4 bg-muted/50 border border-border rounded-2xl focus:ring-2 focus:ring-primary outline-none transition-all text-foreground"
+              className="w-full px-5 py-3.5 bg-background border border-border rounded-xl focus:ring-2 focus:ring-primary outline-none transition-all text-foreground text-sm font-medium"
               placeholder="e.g. 175"
               required
+              min="50"
+              max="250"
             />
           </div>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div>
-            <label className="block text-sm font-semibold text-foreground/70 mb-2">Gender</label>
+            <label className="block text-xs font-bold text-foreground/85 uppercase tracking-widest mb-2">Biological Gender</label>
             <select
               value={gender}
               onChange={(e) => setGender(e.target.value)}
-              className="w-full px-6 py-4 bg-muted/50 border border-border rounded-2xl focus:ring-2 focus:ring-primary outline-none transition-all text-foreground"
+              className="w-full px-5 py-3.5 bg-background border border-border rounded-xl focus:ring-2 focus:ring-primary outline-none transition-all text-foreground text-sm font-semibold"
             >
               <option value="male">Male</option>
               <option value="female">Female</option>
               <option value="other">Other</option>
             </select>
           </div>
+        </div>
+
+        <h3 className="font-bold text-sm text-foreground pt-4 pb-2 border-b border-border/60 uppercase tracking-widest">2. Training Design & Goal Setting</h3>
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
           <div>
-            <label className="block text-sm font-semibold text-foreground/70 mb-2">Fitness Goal</label>
+            <label className="block text-xs font-bold text-foreground/85 uppercase tracking-widest mb-2">Fitness Goal</label>
             <select
               value={goal}
               onChange={(e) => setGoal(e.target.value)}
-              className="w-full px-6 py-4 bg-muted/50 border border-border rounded-2xl focus:ring-2 focus:ring-primary outline-none transition-all text-foreground"
+              className="w-full px-5 py-3.5 bg-background border border-border rounded-xl focus:ring-2 focus:ring-primary outline-none transition-all text-foreground text-sm font-semibold"
             >
-              <option value="weight-loss">Weight Loss</option>
-              <option value="muscle-gain">Muscle Gain</option>
-              <option value="endurance">Endurance</option>
-              <option value="flexibility">Flexibility</option>
-              <option value="general-health">General Health</option>
+              <option value="weight-loss">Weight Loss & Fat Reduction</option>
+              <option value="muscle-gain">Muscle Hypertrophy & Strength</option>
+              <option value="endurance">Cardiovascular Endurance</option>
+              <option value="flexibility">Joint Mobility & Flexibility</option>
+              <option value="general-health">Overall Longevity & Health</option>
             </select>
           </div>
           <div>
-            <label className="block text-sm font-semibold text-foreground/70 mb-2">Fitness Level</label>
+            <label className="block text-xs font-bold text-foreground/85 uppercase tracking-widest mb-2">Fitness Experience</label>
             <select
               value={level}
               onChange={(e) => setLevel(e.target.value)}
-              className="w-full px-6 py-4 bg-muted/50 border border-border rounded-2xl focus:ring-2 focus:ring-primary outline-none transition-all text-foreground"
+              className="w-full px-5 py-3.5 bg-background border border-border rounded-xl focus:ring-2 focus:ring-primary outline-none transition-all text-foreground text-sm font-semibold"
             >
-              <option value="beginner">Beginner</option>
-              <option value="intermediate">Intermediate</option>
-              <option value="advanced">Advanced</option>
+              <option value="beginner">Beginner (under 6 months)</option>
+              <option value="intermediate">Intermediate (1-3 years)</option>
+              <option value="advanced">Advanced (highly consistent athlete)</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-foreground/85 uppercase tracking-widest mb-2">Active Workout Days</label>
+            <select
+              value={days}
+              onChange={(e) => setDays(e.target.value)}
+              className="w-full px-5 py-3.5 bg-background border border-border rounded-xl focus:ring-2 focus:ring-primary outline-none transition-all text-foreground text-sm font-semibold"
+            >
+              <option value="2">2 Days (Essential Balance)</option>
+              <option value="3">3 Days (Classic Push / Pull / Legs)</option>
+              <option value="4">4 Days (Efficient Routine)</option>
+              <option value="5">5 Days (Highly Commended Split)</option>
+              <option value="6">6 Days (Advanced High Volume)</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-foreground/85 uppercase tracking-widest mb-2">Training Environment</label>
+            <select
+              value={equipment}
+              onChange={(e) => setEquipment(e.target.value)}
+              className="w-full px-5 py-3.5 bg-background border border-border rounded-xl focus:ring-2 focus:ring-primary outline-none transition-all text-foreground text-sm font-semibold"
+            >
+              <option value="bodyweight">No Equipment (Pure Calisthenics)</option>
+              <option value="home">Home Setup (Dumbbells/Bands)</option>
+              <option value="gym">Commercial Gym (Full Equipment)</option>
             </select>
           </div>
         </div>
@@ -367,9 +729,9 @@ const FitnessWorkoutTool = () => {
         <button
           type="submit"
           disabled={loading}
-          className="w-full py-4 bg-primary text-primary-foreground rounded-2xl font-bold hover:bg-neon-blue-dark transition-all shadow-lg shadow-primary/20 disabled:opacity-50 neon-glow"
+          className="w-full py-4.5 bg-primary text-primary-foreground rounded-xl font-bold hover:bg-neon-blue-dark transition-all shadow-lg shadow-primary/20 disabled:opacity-50 neon-glow text-xs uppercase tracking-wider"
         >
-          {loading ? 'Generating Routine...' : 'Generate Workout Routine'}
+          {loading ? 'Assembling Weekly Program...' : 'Generate Workout Routine'}
         </button>
       </form>
 
@@ -377,14 +739,64 @@ const FitnessWorkoutTool = () => {
         <motion.div 
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="mt-12 p-8 bg-muted/50 rounded-3xl border border-border max-w-none"
+          className="mt-12 space-y-8"
         >
-          <div className="flex items-center gap-2 mb-6 text-primary">
-            <Activity className="w-5 h-5" />
-            <h3 className="text-lg font-bold m-0 neon-text">Your Personalized Routine</h3>
+          {/* Workout companion component */}
+          <div className="bg-muted/30 p-6 sm:p-8 rounded-[2rem] border border-border/80">
+            <h3 className="font-bold text-base text-foreground mb-1">Your Interactive Split Tracker</h3>
+            <p className="text-xs text-muted-foreground mb-6">Tick off training days as you complete them to record your weekly progression metrics:</p>
+            
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+              {Array.from({ length: parsedDaysNum }).map((_, idx) => {
+                const dayId = `day-${idx + 1}`;
+                return (
+                  <div
+                    key={dayId}
+                    onClick={() => toggleWorkoutDay(dayId)}
+                    className={cn(
+                      "p-4 rounded-xl border cursor-pointer select-none transition-all flex items-center justify-between",
+                      completedWorkouts[dayId]
+                        ? "bg-emerald-500/10 border-emerald-500/25 text-foreground"
+                        : "bg-background border-border hover:border-border-dark"
+                    )}
+                  >
+                    <div className="flex flex-col">
+                      <span className="text-xs font-bold text-muted-foreground">Session {idx + 1}</span>
+                      <span className="text-sm font-bold mt-0.5">Active Routine</span>
+                    </div>
+                    <div className={cn(
+                      "w-6 h-6 rounded-lg border flex items-center justify-center font-bold text-xs transition-all",
+                      completedWorkouts[dayId]
+                        ? "bg-emerald-500 border-emerald-500 text-white animate-bounce"
+                        : "border-muted-foreground/30 text-transparent"
+                    )}>
+                      ✓
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
-          <div className="markdown-body text-foreground/80 leading-relaxed">
-            <Markdown>{routine}</Markdown>
+
+          <WorkoutTimer />
+
+          {/* Core Plan text split */}
+          <div className="p-8 bg-muted/20 border border-border rounded-[2.5rem] max-w-none">
+            <div className="flex items-center justify-between mb-6 border-b border-border/80 pb-4 text-primary">
+              <div className="flex items-center gap-2">
+                <Activity className="w-5 h-5 animate-pulse" />
+                <h3 className="text-lg font-bold m-0 neon-text">Your Personalized Weekly Program</h3>
+              </div>
+              <button 
+                onClick={() => window.print()}
+                className="text-xs font-bold hover:underline flex items-center gap-1.5"
+              >
+                Print Schedule
+              </button>
+            </div>
+            <div className="markdown-body text-foreground/90 leading-relaxed prose dark:prose-invert max-w-none">
+              <Markdown>{routine}</Markdown>
+            </div>
           </div>
         </motion.div>
       )}

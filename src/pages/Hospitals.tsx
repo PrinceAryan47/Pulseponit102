@@ -405,6 +405,12 @@ const Hospitals: React.FC = () => {
                             {facility.distanceDisplay} Away
                           </div>
                         )}
+                        {facility.durationDisplay && (
+                          <div className="flex items-center gap-1.5 px-3 py-1 bg-amber-500 text-white rounded-full text-[10px] font-black uppercase tracking-widest shadow-lg shadow-amber-500/20">
+                            <Clock className="w-3 h-3 text-white" />
+                            Drive: {facility.durationDisplay}
+                          </div>
+                        )}
                       </div>
                       <span className="px-3 py-1 bg-muted rounded-full text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
                         {facility.type}
@@ -413,9 +419,18 @@ const Hospitals: React.FC = () => {
                     <h3 className="text-lg font-bold text-foreground mb-2 group-hover:text-primary transition-colors">
                       {facility.name}
                     </h3>
-                    <p className="text-sm text-muted-foreground mb-4 line-clamp-2">
+                    <p className="text-sm text-muted-foreground mb-3 line-clamp-2">
                       {facility.address}
                     </p>
+                    {facility.reviews && facility.reviews.length > 0 && (
+                      <div className="mb-4 flex flex-wrap gap-1">
+                        {facility.reviews.map((rev, rIdx) => (
+                          <span key={rIdx} className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded-lg">
+                            {rev}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                     <div className="flex gap-2">
                       <button 
                         onClick={() => handleLocateFacility(facility)}

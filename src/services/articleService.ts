@@ -46,6 +46,9 @@ export const cleanupOldArticles = async () => {
 };
 
 export const checkAndRefreshArticles = async () => {
+  if (typeof window !== 'undefined' && (window as any).firestoreQuotaExceeded) {
+    return;
+  }
   try {
     // 1. Run automatic cleanup of all articles older than two weeks
     await cleanupOldArticles();
@@ -89,7 +92,7 @@ const refreshArticles = async () => {
     // 2. Generate new articles using Gemini
     let newArticles: any[] = [];
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' });
+      const ai = new GoogleGenAI({ apiKey: '' });
       const response = await ai.models.generateContent({
         model: "gemini-3.5-flash",
         contents: "Generate 10 high-quality, evidence-based health and wellness articles for a digital health platform. Each article should include: 1. A catchy title. 2. A 2-sentence summary. 3. A detailed content body in Markdown (at least 600 words) with headings, lists, and professional advice. 4. A category (must be one of: Nutrition, Fitness, Mental Health, Prevention). 5. A reputable primary internet source name (e.g., 'World Health Organization (WHO)', 'Mayo Clinic', 'National Institutes of Health (NIH)', 'CDC Health Advisory', 'NHS Digital'). 6. A realistic reference URL from that source organization to clearly attribute the educational health content and show where readers can verify facts. Keep author/organization professional.",

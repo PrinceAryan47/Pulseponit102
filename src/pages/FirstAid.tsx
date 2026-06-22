@@ -30,193 +30,982 @@ import { useAuth } from '../context/AuthContext';
 import GuestOverlay from '../components/GuestOverlay';
 import { useSearchParams } from 'react-router-dom';
 
-// Visual Animation Component for CPR
-const CPRAnimation = () => (
-  <div className="relative w-full h-64 bg-muted rounded-[2.5rem] flex items-center justify-center overflow-hidden border-4 border-destructive/20 shadow-inner">
-    <motion.div 
-      className="absolute inset-0 bg-destructive/5"
-      animate={{ opacity: [0, 0.1, 0] }}
-      transition={{ duration: 0.6, repeat: Infinity }}
-    />
-    <div className="relative flex flex-col items-center">
-      {/* Human Figure (Lying Down) */}
-      <div className="relative w-56 h-28 bg-slate-300 dark:bg-slate-700 rounded-full flex items-center justify-center">
-        {/* Head */}
-        <div className="absolute -left-12 w-14 h-14 bg-slate-300 dark:bg-slate-700 rounded-full border-b-4 border-slate-400/30" />
-        {/* Chest Area */}
+// Visual Animation Component for CPR (Interactive)
+const CPRAnimation = () => {
+  const [compressions, setCompressions] = useState(0);
+  const [bpmFeedback, setBpmFeedback] = useState("Tap to match 100-120 BPM");
+  const [lastPress, setLastPress] = useState(0);
+  const [isPressing, setIsPressing] = useState(false);
+
+  const handleCompress = (e: React.MouseEvent) => {
+    e.stopPropagation(); // prevent card toggle click!
+    setIsPressing(true);
+    setTimeout(() => setIsPressing(false), 80);
+    
+    const now = Date.now();
+    setCompressions(prev => prev + 1);
+    
+    if (lastPress > 0) {
+      const interval = now - lastPress;
+      const bpm = Math.round(60000 / interval);
+      if (bpm >= 100 && bpm <= 120) {
+        setBpmFeedback("PERFECT TEMPO! (100-120 BPM)");
+      } else if (bpm < 100) {
+        setBpmFeedback("TOO SLOW! Push faster!");
+      } else {
+        setBpmFeedback("TOO FAST! Slow down slightly!");
+      }
+    }
+    setLastPress(now);
+  };
+
+  const handleReset = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setCompressions(0);
+    setBpmFeedback("Tap to start");
+    setLastPress(0);
+  };
+
+  return (
+    <div className="relative w-full h-80 bg-slate-900 rounded-[2.5rem] flex flex-col items-center justify-between p-6 overflow-hidden border-2 border-destructive/30 shadow-inner">
+      <div className="absolute top-4 left-4 flex gap-1.5 items-center">
+        <span className="w-2 h-2 rounded-full bg-destructive animate-pulse" />
+        <span className="text-[9px] font-black tracking-widest text-destructive-foreground/50 uppercase">CPR Interactive Training Stage</span>
+      </div>
+
+      <div className="flex-1 flex items-center justify-center relative w-full mt-4">
+        {/* Human Chest Lying Flat */}
+        <div className="relative w-64 h-32 bg-slate-800 rounded-2xl flex items-center justify-center border border-slate-700">
+          <div className="absolute -left-10 w-12 h-12 bg-slate-800 rounded-full border border-slate-700 flex items-center justify-center">
+            {/* Nose/mouth indicator */}
+            <div className="w-2 h-4 bg-slate-700/50 rounded-full mt-2" />
+          </div>
+          {/* Heart Area Target */}
+          <motion.div 
+            className="w-20 h-20 rounded-full flex items-center justify-center relative bg-destructive/10"
+            animate={{ 
+              scale: isPressing ? 0.82 : [1, 0.96, 1],
+              opacity: isPressing ? 0.9 : 0.6
+            }}
+            transition={{ duration: 0.5, repeat: isPressing ? 0 : Infinity }}
+          >
+            <div className="absolute inset-0 rounded-full border-2 border-dashed border-destructive/40 animate-spin" style={{ animationDuration: '8s' }} />
+            <span className="text-destructive font-black text-[10px]">TARGET AREA</span>
+          </motion.div>
+        </div>
+
+        {/* Rescuer Locking Hands */}
         <motion.div 
-          className="w-24 h-24 bg-slate-400 dark:bg-slate-600 rounded-full flex items-center justify-center"
-          animate={{ scale: [1, 0.85, 1] }}
-          transition={{ duration: 0.5, repeat: Infinity }}
+          className="absolute z-10 pointer-events-none"
+          animate={isPressing ? { y: 20 } : { y: [0, -8, 0] }}
+          transition={{ duration: 0.6, repeat: isPressing ? 0 : Infinity }}
         >
-          <div className="w-16 h-16 bg-destructive/10 rounded-full border-2 border-destructive/20" />
+          <div className="text-4xl filter drop-shadow-[0_10px_8px_rgba(0,0,0,0.5)]">🙌</div>
         </motion.div>
       </div>
-      
-      {/* Rescuer Hands */}
-      <motion.div
-        className="absolute top-0 z-10"
-        animate={{ y: [-30, 40, -30] }}
-        transition={{ duration: 0.5, repeat: Infinity, ease: "easeInOut" }}
-      >
-        <div className="flex flex-col items-center">
-          <div className="w-14 h-20 bg-primary rounded-full border-4 border-background shadow-2xl flex items-center justify-center">
-            <div className="w-1 h-10 bg-primary-foreground/30 rounded-full" />
-          </div>
-          <div className="w-20 h-10 bg-primary/80 rounded-full -mt-6 border-2 border-primary-foreground/20" />
+
+      {/* Control Overlay */}
+      <div className="w-full relative z-20 flex items-center justify-between gap-4 mt-2">
+        <div className="flex flex-col">
+          <div className="text-xs text-slate-400 font-bold uppercase tracking-tight">Compressions: <span className="text-destructive font-black text-sm">{compressions}</span></div>
+          <div className={cn(
+            "text-[10px] font-black uppercase tracking-tight",
+            bpmFeedback.includes("PERFECT") ? "text-emerald-400 font-black" : "text-amber-400"
+          )}>{bpmFeedback}</div>
         </div>
-      </motion.div>
-    </div>
-    <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-3 bg-background/80 backdrop-blur-md px-6 py-2 rounded-full border border-destructive/20 shadow-lg">
-      <div className="w-2 h-2 bg-destructive rounded-full animate-ping" />
-      <span className="text-[10px] font-black text-destructive uppercase tracking-[0.2em]">100-120 BPM</span>
-    </div>
-  </div>
-);
-
-// Visual Animation for Choking (Heimlich)
-const ChokingAnimation = () => (
-  <div className="relative w-full h-64 bg-muted rounded-[2.5rem] flex items-center justify-center overflow-hidden border-4 border-blue-500/20 shadow-inner">
-    <div className="relative flex items-center">
-      {/* Victim */}
-      <div className="relative">
-        <div className="w-16 h-16 bg-slate-300 dark:bg-slate-700 rounded-full mb-2" /> {/* Head */}
-        <div className="w-24 h-40 bg-slate-300 dark:bg-slate-700 rounded-t-3xl" /> {/* Body */}
+        <div className="flex gap-2">
+          {compressions > 0 && (
+            <button 
+              onClick={handleReset}
+              className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] font-black uppercase tracking-wider rounded-lg transition-all"
+            >
+              Reset
+            </button>
+          )}
+          <button 
+            onClick={handleCompress}
+            className="px-4 py-2 bg-destructive hover:bg-destructive/90 text-white text-[10px] font-black uppercase tracking-wider rounded-lg transition-all active:scale-95 shadow-lg shadow-destructive/30"
+          >
+            Compress
+          </button>
+        </div>
       </div>
-      
-      {/* Rescuer (Behind) */}
-      <div className="absolute -right-4 top-10">
-        <div className="w-14 h-14 bg-slate-400 dark:bg-slate-600 rounded-full mb-2 opacity-50" />
-        <div className="w-20 h-32 bg-slate-400 dark:bg-slate-600 rounded-t-3xl opacity-50" />
+    </div>
+  );
+};
+
+// Visual Animation for Choking (Heimlich Interactive)
+const ChokingAnimation = () => {
+  const [success, setSuccess] = useState(false);
+  const [thrusts, setThrusts] = useState(0);
+  const [isThrusting, setIsThrusting] = useState(false);
+
+  const handleThrust = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (success) return;
+    setIsThrusting(true);
+    setTimeout(() => setIsThrusting(false), 120);
+
+    const nextThrusts = thrusts + 1;
+    setThrusts(nextThrusts);
+
+    if (nextThrusts >= 5) {
+      setSuccess(true);
+    }
+  };
+
+  const handleReset = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setSuccess(false);
+    setThrusts(0);
+  };
+
+  return (
+    <div className="relative w-full h-80 bg-slate-900 rounded-[2.5rem] flex flex-col items-center justify-between p-6 overflow-hidden border-2 border-blue-500/30 shadow-inner">
+      <div className="absolute top-4 left-4 flex gap-1.5 items-center">
+        <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
+        <span className="text-[9px] font-black tracking-widest text-blue-400/70 uppercase">Heimlich Maneuver Trial</span>
       </div>
 
-      {/* Thrusting Arms */}
-      <motion.div
-        className="absolute right-0 top-32 z-10"
-        animate={{ x: [0, -30, 0], scale: [1, 1.1, 1] }}
-        transition={{ duration: 0.8, repeat: Infinity, ease: "anticipate" }}
-      >
-        <div className="flex items-center">
-          <div className="w-24 h-10 bg-primary rounded-full border-4 border-background shadow-2xl flex items-center justify-end pr-2">
-            <div className="w-8 h-8 bg-primary-foreground/20 rounded-full" />
+      <div className="flex-1 flex items-center justify-center relative w-full gap-4 mt-4">
+        {/* Victim Outline */}
+        <div className="relative flex flex-col items-center">
+          {/* Head & Neck */}
+          <div className="w-12 h-12 bg-slate-800 rounded-full border border-slate-700 relative">
+            {/* Blinking face */}
+            <div className="absolute top-4 left-2.5 flex gap-2">
+              <span className="w-1 h-1 bg-red-400 rounded-full animate-bounce" />
+              <span className="w-1 h-1 bg-red-400 rounded-full animate-bounce" />
+            </div>
+            {/* Blocked object */}
+            <AnimatePresence>
+              {!success && (
+                <motion.div 
+                  className="absolute bottom-1 right-3.5 w-3.5 h-3.5 bg-red-500 rounded-full border border-white flex items-center justify-center"
+                  animate={{ scale: [1, 1.2, 1] }}
+                  transition={{ duration: 0.6, repeat: Infinity }}
+                >
+                  <span className="text-[6px] text-white font-bold">☠️</span>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+          {/* Torso */}
+          <div className="w-20 h-28 bg-slate-800 rounded-t-2xl border-t border-slate-700 flex flex-col items-center justify-center overflow-hidden relative">
+            <motion.div 
+              className="absolute inset-x-0 bottom-0 bg-blue-500/10"
+              animate={isThrusting ? { height: '100%' } : { height: '20%' }}
+              transition={{ duration: 0.1 }}
+            />
+            <span className="text-[8px] font-black text-blue-400/50 uppercase tracking-wider">LUNGS</span>
           </div>
         </div>
-      </motion.div>
-    </div>
-    <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-3 bg-background/80 backdrop-blur-md px-4 py-2 rounded-full border border-blue-500/20">
-      <Wind className="w-4 h-4 text-blue-500" />
-      <span className="text-[10px] font-black text-blue-500 uppercase tracking-widest">Inward & Upward</span>
-    </div>
-  </div>
-);
 
-// Visual Animation for Bleeding
-const BleedingAnimation = () => (
-  <div className="relative w-full h-64 bg-muted rounded-[2.5rem] flex items-center justify-center overflow-hidden border-4 border-rose-500/20 shadow-inner">
-    <div className="relative flex flex-col items-center">
-      {/* Arm */}
-      <div className="w-48 h-16 bg-slate-300 dark:bg-slate-700 rounded-full relative overflow-hidden">
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-12 h-6 bg-rose-500 blur-md animate-pulse" />
-      </div>
-      
-      {/* Hand with Bandage */}
-      <motion.div
-        className="absolute -top-12"
-        animate={{ y: [0, 20, 0] }}
-        transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
-      >
-        <div className="flex flex-col items-center">
-          <div className="w-24 h-20 bg-background rounded-2xl border-4 border-rose-500 shadow-2xl flex items-center justify-center">
-            <div className="w-16 h-1 bg-rose-100 dark:bg-rose-900/30 rounded-full mb-1" />
-            <div className="w-16 h-1 bg-rose-100 dark:bg-rose-900/30 rounded-full" />
-          </div>
-          <div className="w-12 h-16 bg-slate-400 dark:bg-slate-600 rounded-full -mt-4 border-2 border-background/20" />
-        </div>
-      </motion.div>
-    </div>
-    <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-3 bg-background/80 backdrop-blur-md px-4 py-2 rounded-full border border-rose-500/20">
-      <Droplets className="w-4 h-4 text-rose-500" />
-      <span className="text-[10px] font-black text-rose-500 uppercase tracking-widest">Constant Pressure</span>
-    </div>
-  </div>
-);
+        {/* Flying blocked piece */}
+        <AnimatePresence>
+          {success && (
+            <motion.div 
+              initial={{ x: -25, y: -40, opacity: 1, scale: 1.5 }}
+              animate={{ x: -160, y: -120, opacity: 0, scale: 0.6, rotate: 360 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 1, ease: "easeOut" }}
+              className="absolute w-5 h-5 bg-red-500 rounded-full border-2 border-white flex items-center justify-center shadow-lg"
+            >
+              <span className="text-[10px]">🍎</span>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
-// Visual Animation for Burns
-const BurnsAnimation = () => (
-  <div className="relative w-full h-64 bg-muted rounded-[2.5rem] flex items-center justify-center overflow-hidden border-4 border-orange-500/20 shadow-inner">
-    <div className="relative flex flex-col items-center">
-      {/* Hand */}
-      <div className="w-32 h-40 bg-orange-100 dark:bg-orange-900/20 rounded-t-full relative">
-        <div className="absolute top-10 left-1/2 -translate-x-1/2 w-16 h-16 bg-orange-500/20 blur-xl animate-pulse" />
-      </div>
-      
-      {/* Running Water */}
-      <div className="absolute -top-10 flex flex-col items-center">
-        <motion.div
-          animate={{ height: [0, 120, 120], opacity: [0, 1, 0] }}
-          transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-          className="w-6 bg-blue-400/30 rounded-full"
-        />
-        <motion.div
-          animate={{ y: [0, 100], opacity: [1, 0] }}
-          transition={{ duration: 0.8, repeat: Infinity }}
+        {/* Rescuer Hands */}
+        <motion.div 
+          className="absolute right-12 z-10 pointer-events-none"
+          animate={isThrusting ? { x: -24, scale: 1.15 } : { x: [0, 5, 0] }}
+          transition={{ duration: 0.15 }}
         >
-          <Droplets className="w-8 h-8 text-blue-500" />
+          <div className="text-4xl filter drop-shadow-xl">👊</div>
         </motion.div>
       </div>
-    </div>
-    <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-3 bg-background/80 backdrop-blur-md px-4 py-2 rounded-full border border-orange-500/20">
-      <Flame className="w-4 h-4 text-orange-500" />
-      <span className="text-[10px] font-black text-orange-500 uppercase tracking-widest">Cool for 20 Mins</span>
-    </div>
-  </div>
-);
 
-// Visual Animation for Stroke
-const StrokeAnimation = () => (
-  <div className="relative w-full h-48 bg-muted rounded-3xl flex items-center justify-center overflow-hidden border-4 border-purple-500/20">
-    <div className="relative flex items-center gap-8">
-      <div className="relative">
-        <User className="w-24 h-24 text-slate-400" />
+      <div className="w-full relative z-20 flex items-center justify-between gap-4 mt-2">
+        <div className="flex flex-col">
+          <div className="text-xs text-slate-400 font-bold uppercase tracking-tight">Thrusts: <span className="text-blue-400 font-black text-sm">{thrusts}/5</span></div>
+          <div className={cn(
+            "text-[10px] font-black uppercase tracking-tight",
+            success ? "text-emerald-400 animate-pulse" : "text-blue-400"
+          )}>
+            {success ? "OBJECT EXPELLED! AIRWAY CLEAR!" : "Give 5 quick upward thrusts"}
+          </div>
+        </div>
+        <div className="flex gap-2">
+          {success && (
+            <button 
+              onClick={handleReset}
+              className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] font-black uppercase tracking-wider rounded-lg transition-all"
+            >
+              Reset
+            </button>
+          )}
+          <button 
+            onClick={handleThrust}
+            disabled={success}
+            className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white text-[10px] font-black uppercase tracking-wider rounded-lg transition-all active:scale-95 shadow-lg shadow-blue-500/30 disabled:opacity-30"
+          >
+            Thrust
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Visual Animation for Bleeding (Interactive Pressure)
+const BleedingAnimation = () => {
+  const [pressure, setPressure] = useState(0);
+  const [applied, setApplied] = useState(false);
+  const [isPressing, setIsPressing] = useState(false);
+
+  const handlePress = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (applied) return;
+    setIsPressing(true);
+    setPressure(prev => {
+      const next = prev + 20;
+      if (next >= 100) {
+        setApplied(true);
+        setIsPressing(false);
+        return 100;
+      }
+      return next;
+    });
+  };
+
+  const handleReset = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setPressure(0);
+    setApplied(false);
+  };
+
+  return (
+    <div className="relative w-full h-80 bg-slate-900 rounded-[2rem] flex flex-col items-center justify-between p-6 overflow-hidden border-2 border-rose-500/30 shadow-inner">
+      <div className="absolute top-4 left-4 flex gap-1.5 items-center">
+        <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse" />
+        <span className="text-[9px] font-black tracking-widest text-rose-400/70 uppercase">Vessel Wall Pressure Simulator</span>
+      </div>
+
+      <div className="flex-1 flex items-center justify-center relative w-full mt-4">
+        {/* Injured limb */}
+        <div className="relative w-56 h-14 bg-slate-800 rounded-full border border-slate-700 flex items-center justify-between px-6 shadow-inner">
+          {/* Bleeding cut */}
+          {!applied ? (
+            <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col items-center">
+              <div className="w-8 h-2.5 bg-rose-600 rounded-full blur-[1px] animate-pulse" />
+              {/* Splatters */}
+              <motion.div 
+                animate={{ 
+                  y: [-5, -20], 
+                  opacity: [1, 0], 
+                  scale: [1, 1.5]
+                }}
+                transition={{ duration: 0.8, repeat: Infinity }}
+                className="w-1.5 h-1.5 bg-rose-500 rounded-full mt-1"
+              />
+            </div>
+          ) : (
+            <motion.div 
+              initial={{ scale: 0.8 }}
+              animate={{ scale: 1 }}
+              className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 px-4 py-1.5 bg-amber-50 text-slate-900 text-[9px] font-black tracking-widest border border-amber-200 rounded-[0.5rem] uppercase flex items-center gap-1.5"
+            >
+              <span className="text-emerald-500">✓</span> Compressed Bandage Wrap
+            </motion.div>
+          )}
+        </div>
+
+        {/* Pressure Hands overlay */}
+        <motion.div 
+          className="absolute z-10 pointer-events-none"
+          animate={isPressing ? { y: 12, scale: 0.9 } : { y: [-24, -18, -24] }}
+          transition={isPressing ? { duration: 0.1 } : { duration: 1.5, repeat: Infinity }}
+        >
+          <div className="text-4xl filter drop-shadow-2xl">🩹</div>
+        </motion.div>
+      </div>
+
+      <div className="w-full relative z-20 flex items-center justify-between gap-4 mt-2" onMouseUp={() => setIsPressing(false)} onMouseLeave={() => setIsPressing(false)}>
+        <div className="flex flex-col">
+          <div className="text-xs text-slate-400 font-bold uppercase tracking-tight">Vessel Compression: <span className="text-rose-400 font-black text-sm">{pressure}%</span></div>
+          <div className={cn(
+            "text-[10px] font-black uppercase tracking-tight",
+            applied ? "text-emerald-400" : "text-rose-400"
+          )}>
+            {applied ? "BLEEDING CONTROLLED! SECURED." : "Press repeatedly to block arterial flow"}
+          </div>
+        </div>
+        <div className="flex gap-2">
+          {pressure > 0 && (
+            <button 
+              onClick={handleReset}
+              className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] font-black uppercase tracking-wider rounded-lg transition-all"
+            >
+              Reset
+            </button>
+          )}
+          <button 
+            onClick={handlePress}
+            disabled={applied}
+            className="px-4 py-2 bg-rose-500 hover:bg-rose-600 text-white text-[10px] font-black uppercase tracking-wider rounded-lg transition-all active:scale-95 shadow-lg shadow-rose-500/30 disabled:opacity-30"
+          >
+            Apply Pressure
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Visual Animation for Burns (Interactive Running Water)
+const BurnsAnimation = () => {
+  const [temperature, setTemperature] = useState(42);
+  const [cooled, setCooled] = useState(false);
+  const [isWaterActive, setIsWaterActive] = useState(false);
+
+  const handleWaterToggle = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setIsWaterActive(!isWaterActive);
+  };
+
+  useEffect(() => {
+    let timer: NodeJS.Timeout;
+    if (isWaterActive && temperature > 20) {
+      timer = setInterval(() => {
+        setTemperature(prev => {
+          const next = prev - 1;
+          if (next <= 20) {
+            setCooled(true);
+            setIsWaterActive(false);
+            return 20;
+          }
+          return next;
+        });
+      }, 300);
+    }
+    return () => clearInterval(timer);
+  }, [isWaterActive, temperature]);
+
+  const handleReset = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setTemperature(42);
+    setCooled(false);
+    setIsWaterActive(false);
+  };
+
+  return (
+    <div className="relative w-full h-80 bg-slate-900 rounded-[2rem] flex flex-col items-center justify-between p-6 overflow-hidden border-2 border-orange-500/30 shadow-inner">
+      <div className="absolute top-4 left-4 flex gap-1.5 items-center">
+        <span className="w-2 h-2 rounded-full bg-orange-500 animate-pulse" />
+        <span className="text-[9px] font-black tracking-widest text-orange-400/70 uppercase">Thermal De-escalation simulation</span>
+      </div>
+
+      <div className="flex-1 flex items-center justify-center relative w-full mt-4">
+        {/* Burned Arm area */}
+        <div className="relative w-48 h-12 bg-slate-800 rounded-full border border-slate-700 flex items-center justify-center overflow-hidden">
+          {/* Inflamed skin */}
+          <motion.div 
+            className="absolute inset-0 bg-red-600"
+            style={{ 
+              opacity: (temperature - 20) / 22 
+            }}
+          />
+          <span className="text-[10px] font-black z-10 text-white uppercase tracking-wider relative">
+            {temperature}°C - {cooled ? "COOLED & CLEAN" : "HIGH BURNING ENERGY"}
+          </span>
+        </div>
+
+        {/* Water Stream */}
+        <AnimatePresence>
+          {isWaterActive && (
+            <div className="absolute top-4 flex flex-col items-center pointer-events-none">
+              {[0, 1, 2].map(i => (
+                <motion.div 
+                  key={i}
+                  initial={{ y: -20, opacity: 0 }}
+                  animate={{ y: 80, opacity: [0, 0.8, 0] }}
+                  transition={{ duration: 0.6, repeat: Infinity, delay: i * 0.2 }}
+                  className="w-1 bg-blue-400 rounded-full h-12 mb-1 blur-[0.5px]"
+                />
+              ))}
+            </div>
+          )}
+        </AnimatePresence>
+      </div>
+
+      <div className="w-full relative z-20 flex items-center justify-between gap-4 mt-2">
+        <div className="flex flex-col">
+          <div className="text-xs text-slate-400 font-bold uppercase tracking-tight">Tissue Temp: <span className="text-orange-400 font-black text-sm">{temperature}°C</span></div>
+          <div className={cn(
+            "text-[10px] font-black uppercase tracking-tight",
+            cooled ? "text-emerald-400" : isWaterActive ? "text-sky-300 animate-pulse" : "text-orange-400 animate-pulse"
+          )}>
+            {cooled ? "BURN SAFELY DE-ESCALATED" : isWaterActive ? "COOLING IN PROGRESS (Hold 20m)" : "Activate cool running water source"}
+          </div>
+        </div>
+        <div className="flex gap-2">
+          {temperature !== 42 && (
+            <button 
+              onClick={handleReset}
+              className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] font-black uppercase tracking-wider rounded-lg transition-all"
+            >
+              Reset
+            </button>
+          )}
+          <button 
+            onClick={handleWaterToggle}
+            className={cn(
+              "px-4 py-2 text-white text-[10px] font-black uppercase tracking-wider rounded-lg transition-all active:scale-95 shadow-lg",
+              isWaterActive ? "bg-amber-600 hover:bg-amber-700 shadow-amber-600/30" : "bg-blue-500 hover:bg-blue-600 shadow-blue-500/30"
+            )}
+          >
+            {isWaterActive ? "Stop Water" : "Turn On Water"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Visual Animation for Stroke (F.A.S.T Diagnostic Dashboard)
+const StrokeAnimation = () => {
+  const [fastSelected, setFastSelected] = useState<string | null>(null);
+
+  const criteria = [
+    { key: 'F', label: 'Face Droop', desc: 'Is one side drooping or numb? Check if their smile looks uneven.' },
+    { key: 'A', label: 'Arm Drift', desc: 'Raise both arms. Does one side slide downwards?' },
+    { key: 'S', label: 'Speech Difficulty', desc: 'Is speaking slurred, scrambled, or hard to understand?' },
+    { key: 'T', label: 'Time is Tissue', desc: 'Any of these? Call 911 immediately. Every minute matters!' }
+  ];
+
+  return (
+    <div className="relative w-full h-80 bg-slate-900 rounded-[2.5rem] flex flex-col justify-between p-6 overflow-hidden border-2 border-purple-500/30 shadow-inner text-white">
+      <div className="flex justify-between items-center bg-purple-500/10 p-2 rounded-xl mb-2 w-full">
+        <span className="text-[10px] font-black uppercase tracking-wider text-purple-400">FAST Diagnostic Assistant</span>
+        <Clock className="w-4 h-4 text-purple-400 animate-spin" style={{ animationDuration: '40s' }} />
+      </div>
+
+      <div className="flex-1 grid grid-cols-4 gap-2 py-2 items-center w-full">
+        {criteria.map(c => (
+          <button
+            key={c.key}
+            onClick={(e) => {
+              e.stopPropagation(); // prevent card toggle click!
+              setFastSelected(fastSelected === c.key ? null : c.key);
+            }}
+            className={cn(
+              "flex flex-col items-center justify-center p-3 rounded-2xl border transition-all h-full",
+              fastSelected === c.key 
+                ? "bg-purple-500 border-white text-white shadow-lg" 
+                : "bg-slate-800 border-slate-700 hover:border-purple-400 text-purple-100"
+            )}
+          >
+            <span className="text-xl font-black">{c.key}</span>
+            <span className="text-[8px] font-black uppercase tracking-tight text-center">{c.label}</span>
+          </button>
+        ))}
+      </div>
+
+      <AnimatePresence mode="wait">
+        {fastSelected ? (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            className="bg-purple-950/40 p-3 rounded-xl border border-purple-500/20 text-[10px] leading-tight text-purple-200 mt-2 min-h-[50px] flex items-center justify-center text-center font-semibold"
+          >
+            {criteria.find(c => c.key === fastSelected)?.desc}
+          </motion.div>
+        ) : (
+          <div className="text-[10px] text-slate-400 text-center py-3 font-semibold">
+            Tap on any F-A-S-T letter above to understand diagnostic indicators
+          </div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+};
+
+// Visual Animation for Poisoning (Instant Hotlink Dialing)
+const PoisoningAnimation = () => {
+  const [dialed, setDialed] = useState(false);
+
+  const handleDial = (e: React.MouseEvent) => {
+    e.stopPropagation(); // prevent card toggle click!
+    setDialed(true);
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance("Connecting you to Poison Control hotline immediately on 1. 8 0 0. 2 2 2. 1 2 2 2");
+      window.speechSynthesis.speak(utterance);
+    }
+  };
+
+  return (
+    <div className="relative w-full h-80 bg-slate-900 rounded-[2.5rem] flex flex-col items-center justify-between p-6 overflow-hidden border-2 border-amber-500/30 shadow-inner">
+      <div className="absolute top-4 left-4 flex gap-1.5 items-center">
+        <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+        <span className="text-[9px] font-black tracking-widest text-amber-400/70 uppercase">Poisoning Hotlink Dispatch</span>
+      </div>
+
+      <div className="flex-1 flex items-center justify-center gap-6 w-full mt-4">
+        {/* Noxious toxic container */}
+        <div className="relative w-20 h-28 bg-slate-800 rounded-lg flex flex-col items-center justify-center border border-slate-700">
+          <div className="absolute top-0 inset-x-0 h-4 bg-amber-500/20 border-b border-slate-700 flex items-center justify-center">
+            <span className="text-[6px] font-black text-amber-400">HAZARD</span>
+          </div>
+          <AlertTriangle className="w-8 h-8 text-amber-500 animate-bounce mt-4" />
+          <span className="text-[8px] font-black text-amber-400/80 uppercase mt-1">TOXIC</span>
+        </div>
+
+        {/* Dial button */}
+        <motion.button 
+          onClick={handleDial}
+          animate={dialed ? { scale: [1, 1.05, 1] } : { scale: [1, 0.95, 1] }}
+          transition={{ duration: dialed ? 0.4 : 1.5, repeat: Infinity }}
+          className={cn(
+            "w-24 h-24 rounded-full border-4 flex flex-col items-center justify-center transition-all p-3 shadow-xl cursor-pointer",
+            dialed 
+              ? "bg-emerald-500 border-white text-white shadow-emerald-500/30" 
+              : "bg-amber-500/10 border-amber-500/30 text-amber-400 hover:border-amber-400 hover:bg-amber-500/20"
+          )}
+        >
+          <Phone className={cn("w-6 h-6 mb-1", dialed && "animate-ping")} />
+          <span className="text-[8px] font-black uppercase text-center tracking-tight leading-none">
+            {dialed ? "DIALED!" : "DIAL TOX"}
+          </span>
+          <span className="text-[6px] tracking-tighter opacity-80 mt-1">1-800-222-1222</span>
+        </motion.button>
+      </div>
+
+      <div className="text-center font-bold text-[10px] text-slate-400 mt-2">
+        {dialed ? "🚨 Calling national Poison Control database..." : "Do not wait for symptoms. Reach experts immediately."}
+      </div>
+    </div>
+  );
+};
+
+// Interactive Animation for Electric Shock
+const ElectricShockAnimation = () => {
+  const [powerOff, setPowerOff] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [broomThrust, setBroomThrust] = useState(false);
+
+  const handlePowerBreak = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setPowerOff(true);
+  };
+
+  const handleBroomThrust = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setBroomThrust(true);
+    setTimeout(() => {
+      setBroomThrust(false);
+      setSaved(true);
+    }, 450);
+  };
+
+  const handleReset = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setPowerOff(false);
+    setSaved(false);
+  };
+
+  return (
+    <div className="relative w-full h-80 bg-slate-900 rounded-[2.5rem] flex flex-col items-center justify-between p-6 overflow-hidden border-2 border-yellow-500/30 shadow-inner">
+      <div className="absolute top-4 left-4 flex gap-1.5 items-center">
+        <span className="w-2 h-2 rounded-full bg-yellow-400 animate-pulse" />
+        <span className="text-[9px] font-black tracking-widest text-yellow-400/70 uppercase">LIVE CURRENT SEPARATION ENGINE</span>
+      </div>
+
+      <div className="flex-1 flex items-center justify-center relative w-full gap-8 mt-4">
+        {/* Power switch terminal */}
+        <button
+          onClick={handlePowerBreak}
+          className={cn(
+            "p-3 rounded-2xl border flex flex-col items-center transition-all",
+            powerOff 
+              ? "bg-slate-800 border-slate-700 text-slate-500" 
+              : "bg-red-500/20 border-red-500 text-red-500 animate-pulse hover:bg-red-500 hover:text-white"
+          )}
+        >
+          <Zap className="w-6 h-6 mb-1" />
+          <span className="text-[8px] font-black uppercase text-center leading-none">
+            {powerOff ? "POWER OFF" : "SHUT POWER"}
+          </span>
+        </button>
+
+        {/* Human in shock */}
+        <div className="relative flex flex-col items-center">
+          <div className="w-14 h-14 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-xl">
+            {saved ? "😴" : "⚡🤕⚡"}
+          </div>
+          <div className="w-16 h-12 bg-slate-800 rounded-t-xl border-t border-slate-700 mt-1 flex flex-col items-center justify-center relative">
+            {!powerOff && !saved && (
+              <motion.div 
+                className="absolute inset-0 bg-yellow-400/20 animate-pulse"
+                animate={{ opacity: [0, 1, 0] }}
+                transition={{ duration: 0.1, repeat: Infinity }}
+              />
+            )}
+            <span className="text-[8px] font-bold text-slate-400 uppercase mt-1">VICTIM</span>
+          </div>
+        </div>
+
+        {/* Separator stick */}
         <motion.div
-          animate={{ opacity: [1, 0.3, 1] }}
-          transition={{ duration: 2, repeat: Infinity }}
-          className="absolute top-8 right-6 w-4 h-6 bg-purple-500/40 rounded-full blur-sm"
-        />
+          animate={broomThrust ? { x: -80, rotate: -45 } : { x: 0, rotate: 0 }}
+          className="absolute right-6 top-16 transition-all"
+        >
+          <span className="text-4xl" title="Wooden Broom Stick">🧹</span>
+        </motion.div>
       </div>
-      <motion.div
-        animate={{ rotate: 360 }}
-        transition={{ duration: 10, repeat: Infinity, ease: "linear" }}
-      >
-        <Clock className="w-16 h-16 text-purple-500" />
-      </motion.div>
-    </div>
-    <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-2">
-      <span className="text-[10px] font-black text-purple-500 uppercase tracking-widest">Act F.A.S.T.</span>
-    </div>
-  </div>
-);
 
-// Visual Animation for Poisoning
-const PoisoningAnimation = () => (
-  <div className="relative w-full h-48 bg-muted rounded-3xl flex items-center justify-center overflow-hidden border-4 border-amber-500/20">
-    <div className="relative flex items-center gap-6">
-      <div className="w-16 h-24 bg-slate-300 dark:bg-slate-700 rounded-lg relative flex items-center justify-center">
-        <AlertTriangle className="w-8 h-8 text-amber-500" />
-        <div className="absolute -top-2 left-1/2 -translate-x-1/2 w-8 h-4 bg-slate-400 dark:bg-slate-600 rounded-t-md" />
+      <div className="w-full relative z-20 flex items-center justify-between gap-4 mt-2">
+        <div className="flex flex-col">
+          <div className="text-xs text-slate-400 font-bold uppercase tracking-tight">Status: <span className="text-yellow-400 font-black text-sm">{powerOff ? "LINE DISCHARGED" : saved ? "SEPARATED" : "IN CONTACT"}</span></div>
+          <div className={cn(
+            "text-[10px] font-black uppercase tracking-tight",
+            saved || powerOff ? "text-emerald-400" : "text-yellow-400 animate-pulse"
+          )}>
+            {powerOff ? "ELECTRIC LINE CUT." : saved ? "Separated with wood broom!" : "ACTIVE SHOCK! Hit Switch/Lever Broom."}
+          </div>
+        </div>
+        <div className="flex gap-2">
+          {(powerOff || saved) && (
+            <button 
+              onClick={handleReset}
+              className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] font-black uppercase tracking-wider rounded-lg transition-all"
+            >
+              Reset
+            </button>
+          )}
+          <button 
+            onClick={handleBroomThrust}
+            disabled={saved}
+            className="px-4 py-2 bg-yellow-500 hover:bg-yellow-600 text-black text-[10px] font-black uppercase tracking-wider rounded-lg transition-all active:scale-95 shadow-lg shadow-yellow-500/20 disabled:opacity-30"
+          >
+            Lever Broom
+          </button>
+        </div>
       </div>
-      <motion.div
-        animate={{ scale: [1, 1.2, 1] }}
-        transition={{ duration: 1.5, repeat: Infinity }}
-      >
-        <Phone className="w-16 h-16 text-amber-500" />
-      </motion.div>
     </div>
-    <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-2">
-      <span className="text-[10px] font-black text-amber-500 uppercase tracking-widest">Call Poison Control</span>
+  );
+};
+
+// Spine Injury / Fracture Stabilizer Animation
+const SpineInjuryAnimation = () => {
+  const [stabilized, setStabilized] = useState(false);
+  const [timerLeft, setTimerLeft] = useState(100);
+  const [isHolding, setIsHolding] = useState(false);
+
+  useEffect(() => {
+    let timer: NodeJS.Timeout;
+    if (isHolding && timerLeft > 0) {
+      timer = setInterval(() => {
+        setTimerLeft(prev => {
+          if (prev <= 0) {
+            setStabilized(true);
+            setIsHolding(false);
+            return 0;
+          }
+          return prev - 10;
+        });
+      }, 150);
+    }
+    return () => clearInterval(timer);
+  }, [isHolding, timerLeft]);
+
+  const handleReset = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setStabilized(false);
+    setTimerLeft(100);
+    setIsHolding(false);
+  };
+
+  return (
+    <div className="relative w-full h-80 bg-slate-900 rounded-[2.5rem] flex flex-col items-center justify-between p-6 overflow-hidden border-2 border-teal-500/30 shadow-inner">
+      <div className="absolute top-4 left-4 flex gap-1.5 items-center">
+        <span className="w-2 h-2 rounded-full bg-teal-400 animate-pulse" />
+        <span className="text-[9px] font-black tracking-widest text-teal-400/70 uppercase">Cervical Spine Stabilization trainer</span>
+      </div>
+
+      <div className="flex-1 flex items-center justify-center relative w-full mt-4">
+        {/* Neck spine column line */}
+        <div className="relative flex flex-col items-center">
+          {/* Head */}
+          <div className="w-14 h-14 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-xl">
+            🤕
+          </div>
+          {/* Spine vertebrae connection */}
+          <div className="w-4 h-10 flex flex-col gap-1 my-1">
+            {[0, 1, 2].map(i => (
+              <motion.div 
+                key={i}
+                className={cn(
+                  "w-full h-2 rounded-[2px] transition-colors",
+                  stabilized ? "bg-teal-400 animate-pulse" : isHolding ? "bg-yellow-400 animate-ping" : "bg-red-500 animate-bounce"
+                )}
+              />
+            ))}
+          </div>
+          {/* Upper chest */}
+          <div className="w-24 h-10 bg-slate-800 border-t border-slate-700 rounded-t-xl text-[7px] text-center text-slate-500 font-extrabold pt-2">
+            THORACIC STATE
+          </div>
+        </div>
+
+        {/* Glowing stabilizing braces */}
+        <AnimatePresence>
+          {stabilized && (
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.5 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="absolute w-20 h-10 border-2 border-teal-400 bg-teal-500/10 rounded-lg flex items-center justify-center text-[8px] font-bold text-teal-300 uppercase tracking-widest"
+              style={{ y: -5 }}
+            >
+              🔒 Collar Secured
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+
+      <div className="w-full relative z-20 flex items-center justify-between gap-4 mt-2">
+        <div className="flex flex-col">
+          <div className="text-xs text-slate-400 font-bold uppercase tracking-tight">Stabilization: <span className="text-teal-400 font-black text-sm">{100 - timerLeft}%</span></div>
+          <div className={cn(
+            "text-[10px] font-black uppercase tracking-tight",
+            stabilized ? "text-emerald-400 font-black" : isHolding ? "text-yellow-400" : "text-amber-400 animate-pulse"
+          )}>
+            {stabilized ? "SPINE SECURED!" : isHolding ? "Stabilizing head. Stand steady..." : "CRITICAL RISK: Tap and hold stabilizer."}
+          </div>
+        </div>
+        <div className="flex gap-2">
+          {timerLeft === 0 && (
+            <button 
+              onClick={handleReset}
+              className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] font-black uppercase tracking-wider rounded-lg transition-all"
+            >
+              Reset
+            </button>
+          )}
+          <button 
+            onMouseDown={() => setIsHolding(true)}
+            onMouseUp={() => setIsHolding(false)}
+            onMouseLeave={() => setIsHolding(false)}
+            onTouchStart={() => setIsHolding(true)}
+            onTouchEnd={() => setIsHolding(false)}
+            disabled={stabilized}
+            className="px-4 py-2 bg-teal-500 hover:bg-teal-600 text-white text-[10px] font-black uppercase tracking-wider rounded-lg transition-all active:scale-95 shadow-lg shadow-teal-500/20 disabled:opacity-30 select-none"
+          >
+            {isHolding ? "HOLDING STILL..." : "Hold to Stabilize"}
+          </button>
+        </div>
+      </div>
     </div>
-  </div>
-);
+  );
+};
+
+// Corneal Ocular Chemical Splash Flush Simulator
+const ChemicalEyeAnimation = () => {
+  const [splashCleaned, setSplashCleaned] = useState(false);
+  const [flushSec, setFlushSec] = useState(15);
+  const [isFlushing, setIsFlushing] = useState(false);
+
+  useEffect(() => {
+    let timer: NodeJS.Timeout;
+    if (isFlushing && flushSec > 0) {
+      timer = setInterval(() => {
+        setFlushSec(prev => {
+          if (prev <= 1) {
+            setSplashCleaned(true);
+            setIsFlushing(false);
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 400);
+    }
+    return () => clearInterval(timer);
+  }, [isFlushing, flushSec]);
+
+  const handleReset = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setSplashCleaned(false);
+    setFlushSec(15);
+    setIsFlushing(false);
+  };
+
+  return (
+    <div className="relative w-full h-80 bg-slate-900 rounded-[2rem] flex flex-col items-center justify-between p-6 overflow-hidden border-2 border-emerald-500/30 shadow-inner">
+      <div className="absolute top-4 left-4 flex gap-1.5 items-center">
+        <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+        <span className="text-[9px] font-black tracking-widest text-emerald-400/70 uppercase">Corneal Contaminant Outflow Simulator</span>
+      </div>
+
+      <div className="flex-1 flex items-center justify-center relative w-full gap-4 mt-4">
+        {/* Head tilted sideways */}
+        <div className="relative flex flex-col items-center rotate-[45deg] transition-all">
+          <div className="w-24 h-24 rounded-full bg-slate-800 border-2 border-slate-700 flex flex-col items-center justify-center relative">
+            <div className="flex justify-around w-full px-4 mb-2">
+              {/* Splashed Eye - LOWER */}
+              <div className="relative w-6 h-4 bg-slate-100 rounded-full flex items-center justify-center border border-slate-900">
+                <div className="w-3.5 h-3.5 bg-sky-500 rounded-full flex items-center justify-center">
+                  <div className="w-1.5 h-1.5 bg-black rounded-full" />
+                </div>
+                {!splashCleaned && (
+                  <motion.div 
+                    animate={{ scale: [1, 1.4, 1] }}
+                    transition={{ duration: 0.5, repeat: Infinity }}
+                    className="absolute inset-0 bg-yellow-400/50 rounded-full border border-yellow-500"
+                  />
+                )}
+              </div>
+              {/* Healthy Eye - HIGHER */}
+              <div className="w-6 h-4 bg-slate-100 rounded-full flex items-center justify-center border border-slate-900">
+                <div className="w-3.5 h-3.5 bg-green-500 rounded-full flex items-center justify-center">
+                  <div className="w-1.5 h-1.5 bg-black rounded-full" />
+                </div>
+              </div>
+            </div>
+            <span className="text-[6px] font-bold text-slate-500 uppercase tracking-tight">FLUSH OUTWARDS</span>
+          </div>
+        </div>
+
+        {/* Flush Cascade Water */}
+        <AnimatePresence>
+          {isFlushing && (
+            <div className="absolute top-10 left-[42%] pointer-events-none flex flex-col items-center">
+              <motion.div
+                animate={{ y: [0, 80], opacity: [0, 1, 0] }}
+                transition={{ duration: 0.5, repeat: Infinity }}
+                className="w-1.5 bg-sky-300 rounded-full h-16 blur-[0.5px]"
+              />
+            </div>
+          )}
+        </AnimatePresence>
+
+        {/* Flowing Out contaminant indicator */}
+        <AnimatePresence>
+          {isFlushing && !splashCleaned && (
+            <motion.div
+              initial={{ x: -20, y: 10, opacity: 0.8 }}
+              animate={{ x: -60, y: 50, opacity: 0 }}
+              transition={{ duration: 0.8, repeat: Infinity }}
+              className="absolute w-3 h-3 bg-yellow-400 rounded-full blur-[1px]"
+            />
+          )}
+        </AnimatePresence>
+      </div>
+
+      <div className="w-full relative z-20 flex items-center justify-between gap-4 mt-2">
+        <div className="flex flex-col">
+          <div className="text-xs text-slate-400 font-bold uppercase tracking-tight">Flush Time: <span className="text-emerald-400 font-black text-sm">{flushSec}s</span></div>
+          <div className={cn(
+            "text-[10px] font-black uppercase tracking-tight",
+            splashCleaned ? "text-emerald-400 font-black" : isFlushing ? "text-sky-300 animate-pulse" : "text-amber-400 animate-pulse"
+          )}>
+            {splashCleaned ? "CORNEAL RECOVERY OK" : isFlushing ? "Flushing inwards-outwards..." : "CRITICAL: Flush from nose bridge OUT."}
+          </div>
+        </div>
+        <div className="flex gap-2">
+          {flushSec !== 15 && (
+            <button 
+              onClick={handleReset}
+              className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] font-black uppercase tracking-wider rounded-lg transition-all"
+            >
+              Reset
+            </button>
+          )}
+          <button 
+            onClick={() => setIsFlushing(!isFlushing)}
+            disabled={splashCleaned}
+            className={cn(
+              "px-4 py-2 text-white text-[10px] font-black uppercase tracking-wider rounded-lg transition-all active:scale-95 shadow-lg",
+              isFlushing ? "bg-amber-600 hover:bg-amber-700 shadow-amber-600/30" : "bg-emerald-500 hover:bg-emerald-600 shadow-emerald-500/30"
+            )}
+          >
+            {isFlushing ? "Pause" : "Flush Eye"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Common Accidents & Interactive Handling Scenarios
+const COMMON_ACCIDENTS = [
+  {
+    id: 'cooking_scald',
+    title: 'Hot Oil Splatters & Cooking Scalds',
+    scenario: 'Kitchen and roasting incidents',
+    danger: 'Corrosive thermal energy damaging epidermal dermal skin membranes, risking severe infection.',
+    animation: <BurnsAnimation />,
+    doThis: [
+      'De-escalate power/heat and move the patient safely away.',
+      'Place injury under cool, flowing clean water immediately for 20 minutes.',
+      'Carefully slip off any jewelry, watches, or restrictive rings around the swollen area.',
+      'Gently wrap the dry skin using non-stick clean plastic kitchen cling-wrap.'
+    ],
+    neverDo: [
+      'Never rub ice cubes, frozen butter, toothpaste, or grease (these lock thermal heat in and feed bacteria).',
+      'Never puncture formed blisters (blisters act as a natural, perfectly sterile, biological membrane shield).'
+    ]
+  },
+  {
+    id: 'electric_outlet',
+    title: 'High Voltage Shock (Outlet / Wire)',
+    scenario: 'Home utility appliance and cord short circuits',
+    danger: 'Current disrupts nervous rhythms, threatening heart arrest or heavy interior muscle burns.',
+    animation: <ElectricShockAnimation />,
+    doThis: [
+      'SHUT down power at main breaker before approaching. Do not touch them while live current flows!',
+      'If switch is too far, safely push the wire/victim away using a dry wooden broom, paper rolls, or heavy wood piece.',
+      'Once safely separate, search for responsive breathing; immediately call 911 if they are unconscious.'
+    ],
+    neverDo: [
+      'Never touch a live shock victim with bare hands or metal elements.',
+      'Never throw buckets of water or apply cold metal wraps directly onto live electric shock regions.'
+    ]
+  },
+  {
+    id: 'ladder_fall',
+    title: 'High Falls & Complex Fractures',
+    scenario: 'Falls from ladder, roof, or steep staircases',
+    danger: 'Cervical spine disk dislocation, compound open fractures, or interior spinal cord strain.',
+    animation: <SpineInjuryAnimation />,
+    doThis: [
+      'Hold head and neck completely still to lock spine alignment. Do not permit neck twisting or rolling!',
+      'Apply solid direct dressing around bleeding points adjacent to a broken bone, avoid applying bone pressure.',
+      'Create a temporary secure splint (with rigid magazines, timber, or cardboard straps) to immobilize joints above and below fracture.'
+    ],
+    neverDo: [
+      'Never pull or try to reset a deformed bone limb or pop a displaced joint back into socket manually.',
+      'Never transport or move any patient when neck, hip, spine, or pelvis fractures are suspected.'
+    ]
+  },
+  {
+    id: 'chemical_eye',
+    title: 'Chemical Solution Splash in Eyes',
+    scenario: 'Bleach spray, acid cleanser, or paint splash incidents',
+    danger: 'Rapid corneal membrane corrosion risking instant sight impairment.',
+    animation: <ChemicalEyeAnimation />,
+    doThis: [
+      'Hold face sideways under a steady stream of clean lukewarm tap water.',
+      'Flush inwards-outwards (pour water from nose bridge outwards over the eye so it does not infect the other eye).',
+      'Flush continuously for at least 15-20 minutes, then head to emergency room instantly carrying the chemical bottle.'
+    ],
+    neverDo: [
+      'Never scrub or touch the eyes with a dry towel or tissue.',
+      'Never drop commercial medicine or neutralizing chemicals into the eyes without physician order.'
+    ]
+  }
+];
 
 const COMMON_EMERGENCIES = [
   { id: 'heart_attack', name: 'Heart Attack / Cardiac Arrest', query: 'Heart Attack (Chest Pain / Cardiac Arrest)' },
@@ -238,6 +1027,8 @@ const COMMON_EMERGENCIES = [
 const FirstAid: React.FC = () => {
   const [searchParams] = useSearchParams();
   const [searchTerm, setSearchTerm] = useState('');
+  const [activeTab, setActiveTab] = useState<'critical' | 'accidents'>('critical');
+  const [selectedAccident, setSelectedAccident] = useState<string | null>(null);
   const [aiQuery, setAiQuery] = useState('');
   const [aiResponse, setAiResponse] = useState<string | null>(null);
   const [isAiLoading, setIsAiLoading] = useState(false);
@@ -291,7 +1082,7 @@ const FirstAid: React.FC = () => {
     }
 
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+      const ai = new GoogleGenAI({ apiKey: "" });
       const response = await ai.models.generateContent({
         model: "gemini-3.5-flash",
         contents: `You are an expert emergency medical consultant. Provide high-priority, bullet-pointed, step-by-step first aid instructions for a life-threatening or urgent crisis query of: "${queryText}".
@@ -423,7 +1214,7 @@ Format your response using Markdown:
     setIsAiLoading(true);
     setAiResponse(null);
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+      const ai = new GoogleGenAI({ apiKey: "" });
       const response = await ai.models.generateContent({
         model: "gemini-3.5-flash",
         contents: `You are a professional emergency first aid assistant. Provide immediate, step-by-step first aid instructions for the following situation: "${aiQuery}". 
@@ -471,6 +1262,11 @@ Format your response using Markdown:
 
   const filteredGuides = emergencyGuides.filter(guide => 
     guide.title.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  const filteredAccidents = COMMON_ACCIDENTS.filter(accident =>
+    accident.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    accident.scenario.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   return (
@@ -914,111 +1710,257 @@ Format your response using Markdown:
 
           {/* Right Column: Visual Emergency Guides */}
           <div className="lg:col-span-2 space-y-8">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6">
-              <h2 className="text-4xl font-black uppercase tracking-tighter text-foreground">Visual Guides</h2>
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+              <div className="flex flex-col gap-2">
+                <h2 className="text-4xl font-black uppercase tracking-tighter text-foreground">Visual Guides</h2>
+                <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">
+                  Select a practice module to load the interactive training simulator
+                </p>
+              </div>
               <div className="relative w-full sm:w-80">
                 <Search className="absolute left-6 top-1/2 -translate-y-1/2 w-6 h-6 text-muted-foreground" />
                 <input
                   type="text"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  placeholder="Search..."
+                  placeholder="Search visual list..."
                   className="w-full pl-16 pr-6 py-4 bg-card border-2 border-border rounded-2xl focus:ring-4 focus:ring-primary/20 outline-none transition-all text-lg font-bold"
                 />
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-              {filteredGuides.map((guide) => (
-                <motion.div
-                  key={guide.id}
-                  layoutId={guide.id}
-                  onClick={() => setSelectedGuide(selectedGuide === guide.id ? null : guide.id)}
-                  className={cn(
-                    "bg-card rounded-[3rem] border-4 transition-all cursor-pointer group overflow-hidden flex flex-col",
-                    selectedGuide === guide.id 
-                      ? "border-primary shadow-2xl scale-[1.02]" 
-                      : "border-border shadow-xl hover:border-primary/30"
-                  )}
-                >
-                  {/* Animation Preview */}
-                  {guide.animation && (
-                    <div className="p-4 bg-muted/50">
-                      {guide.animation}
-                    </div>
-                  )}
-
-                  <div className="p-8 flex-grow">
-                    <div className="flex items-center justify-between mb-6">
-                      <div className={cn("p-4 rounded-2xl transition-transform group-hover:scale-110", guide.color)}>
-                        <guide.icon className="w-8 h-8" />
-                      </div>
-                      <div className={cn(
-                        "w-12 h-12 rounded-full flex items-center justify-center transition-all",
-                        selectedGuide === guide.id ? "bg-primary text-primary-foreground rotate-90" : "bg-muted text-muted-foreground"
-                      )}>
-                        <ChevronRight className="w-6 h-6" />
-                      </div>
-                    </div>
-                    <h3 className="text-3xl font-black text-foreground uppercase tracking-tighter mb-4 leading-none">{guide.title}</h3>
-                    
-                    <AnimatePresence>
-                      {selectedGuide === guide.id && (
-                        <motion.div
-                          initial={{ opacity: 0, height: 0 }}
-                          animate={{ opacity: 1, height: 'auto' }}
-                          exit={{ opacity: 0, height: 0 }}
-                          className="space-y-6"
-                        >
-                          <div className="h-1 w-full bg-border rounded-full" />
-                          <div className="flex items-center gap-4">
-                            <button 
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                speakInstructions(guide.steps.join('. '));
-                              }}
-                              className="flex-1 py-4 bg-primary/20 text-primary rounded-2xl font-black uppercase tracking-tighter hover:bg-primary/30 transition-all flex items-center justify-center gap-3 border-2 border-primary/30"
-                            >
-                              <Volume2 className="w-6 h-6" />
-                              Listen to Steps
-                            </button>
-                            <button 
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                stopSpeaking();
-                              }}
-                              className="p-4 bg-muted text-muted-foreground rounded-2xl hover:bg-muted/80 transition-all"
-                            >
-                              <Pause className="w-6 h-6" />
-                            </button>
-                          </div>
-                          {guide.steps.map((step, i) => (
-                            <div key={i} className="flex gap-6 items-start">
-                              <div className="flex-shrink-0 w-10 h-10 bg-primary text-primary-foreground rounded-2xl flex items-center justify-center text-xl font-black">
-                                {i + 1}
-                              </div>
-                              <p className="text-xl text-foreground/80 font-bold leading-tight pt-1">
-                                {step}
-                              </p>
-                            </div>
-                          ))}
-                          <div className="pt-8 grid grid-cols-2 gap-4">
-                            <button className="py-5 bg-destructive text-destructive-foreground rounded-[1.5rem] text-lg font-black uppercase tracking-tighter hover:bg-destructive/90 transition-all shadow-xl shadow-destructive/20 flex items-center justify-center gap-3">
-                              <Phone className="w-6 h-6" />
-                              Call 911
-                            </button>
-                            <button className="py-5 bg-muted text-muted-foreground rounded-[1.5rem] text-lg font-black uppercase tracking-tighter hover:bg-muted/80 transition-all flex items-center justify-center gap-3">
-                              <Info className="w-6 h-6" />
-                              More
-                            </button>
-                          </div>
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
-                  </div>
-                </motion.div>
-              ))}
+            {/* Tab Swapping Header */}
+            <div className="flex bg-muted p-2 rounded-[2rem] gap-2 w-full max-w-lg border border-border shadow-inner">
+              <button
+                onClick={() => {
+                  setActiveTab('critical');
+                  setSelectedAccident(null);
+                }}
+                className={cn(
+                  "flex-1 py-4 text-center font-black uppercase tracking-tight rounded-2xl text-xs transition-all flex items-center justify-center gap-2",
+                  activeTab === 'critical'
+                    ? "bg-primary text-primary-foreground shadow-lg scale-[1.02]"
+                    : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                <div className="w-2 h-2 rounded-full bg-destructive animate-pulse" />
+                Life Protocols
+              </button>
+              <button
+                onClick={() => {
+                  setActiveTab('accidents');
+                  setSelectedGuide(null);
+                }}
+                className={cn(
+                  "flex-1 py-4 text-center font-black uppercase tracking-tight rounded-2xl text-xs transition-all flex items-center justify-center gap-2",
+                  activeTab === 'accidents'
+                    ? "bg-primary text-primary-foreground shadow-lg scale-[1.02]"
+                    : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                Accident Handling
+              </button>
             </div>
+
+            {activeTab === 'critical' ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                {filteredGuides.map((guide) => (
+                  <motion.div
+                    key={guide.id}
+                    layoutId={guide.id}
+                    onClick={() => setSelectedGuide(selectedGuide === guide.id ? null : guide.id)}
+                    className={cn(
+                      "bg-card rounded-[3rem] border-4 transition-all cursor-pointer group overflow-hidden flex flex-col",
+                      selectedGuide === guide.id 
+                        ? "border-primary shadow-2xl scale-[1.02]" 
+                        : "border-border shadow-xl hover:border-primary/30"
+                    )}
+                  >
+                    {/* Animation Preview */}
+                    {guide.animation && (
+                      <div className="p-4 bg-muted/50">
+                        {guide.animation}
+                      </div>
+                    )}
+
+                    <div className="p-8 flex-grow">
+                      <div className="flex items-center justify-between mb-6">
+                        <div className={cn("p-4 rounded-2xl transition-transform group-hover:scale-110", guide.color)}>
+                          <guide.icon className="w-8 h-8" />
+                        </div>
+                        <div className={cn(
+                          "w-12 h-12 rounded-full flex items-center justify-center transition-all",
+                          selectedGuide === guide.id ? "bg-primary text-primary-foreground rotate-90" : "bg-muted text-muted-foreground"
+                        )}>
+                          <ChevronRight className="w-6 h-6" />
+                        </div>
+                      </div>
+                      <h3 className="text-3xl font-black text-foreground uppercase tracking-tighter mb-4 leading-none">{guide.title}</h3>
+                      
+                      <AnimatePresence>
+                        {selectedGuide === guide.id && (
+                          <motion.div
+                            initial={{ opacity: 0, height: 0 }}
+                            animate={{ opacity: 1, height: 'auto' }}
+                            exit={{ opacity: 0, height: 0 }}
+                            className="space-y-6"
+                          >
+                            <div className="h-1 w-full bg-border rounded-full" />
+                            <div className="flex items-center gap-4">
+                              <button 
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  speakInstructions(guide.steps.join('. '));
+                                }}
+                                className="flex-1 py-4 bg-primary/20 text-primary rounded-2xl font-black uppercase tracking-tighter hover:bg-primary/30 transition-all flex items-center justify-center gap-3 border-2 border-primary/30"
+                              >
+                                <Volume2 className="w-6 h-6" />
+                                Listen to Steps
+                              </button>
+                              <button 
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  stopSpeaking();
+                                }}
+                                className="p-4 bg-muted text-muted-foreground rounded-2xl hover:bg-muted/80 transition-all"
+                              >
+                                <Pause className="w-6 h-6" />
+                              </button>
+                            </div>
+                            {guide.steps.map((step, i) => (
+                              <div key={i} className="flex gap-6 items-start">
+                                <div className="flex-shrink-0 w-10 h-10 bg-primary text-primary-foreground rounded-2xl flex items-center justify-center text-xl font-black">
+                                  {i + 1}
+                                </div>
+                                <p className="text-xl text-foreground/80 font-bold leading-tight pt-1">
+                                  {step}
+                                </p>
+                              </div>
+                            ))}
+                            <div className="pt-8 grid grid-cols-2 gap-4">
+                              <button className="py-5 bg-destructive text-destructive-foreground rounded-[1.5rem] text-lg font-black uppercase tracking-tighter hover:bg-destructive/90 transition-all shadow-xl shadow-destructive/20 flex items-center justify-center gap-3">
+                                <Phone className="w-6 h-6" />
+                                Call 911
+                              </button>
+                              <button className="py-5 bg-muted text-muted-foreground rounded-[1.5rem] text-lg font-black uppercase tracking-tighter hover:bg-muted/80 transition-all flex items-center justify-center gap-3">
+                                <Info className="w-6 h-6" />
+                                More
+                              </button>
+                            </div>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </div>
+                  </motion.div>
+                ))}
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                {filteredAccidents.map((accident) => (
+                  <motion.div
+                    key={accident.id}
+                    layoutId={accident.id}
+                    onClick={() => setSelectedAccident(selectedAccident === accident.id ? null : accident.id)}
+                    className={cn(
+                      "bg-card rounded-[3rem] border-4 transition-all cursor-pointer group overflow-hidden flex flex-col",
+                      selectedAccident === accident.id 
+                        ? "border-primary shadow-2xl scale-[1.02]" 
+                        : "border-border shadow-xl hover:border-primary/30"
+                    )}
+                  >
+                    {/* Animation Preview */}
+                    {accident.animation && (
+                      <div className="p-4 bg-muted/50">
+                        {accident.animation}
+                      </div>
+                    )}
+
+                    <div className="p-8 flex-grow">
+                      <div className="flex items-center justify-between mb-4">
+                        <span className="text-[10px] font-black text-primary bg-primary/10 px-4 py-1.5 rounded-full uppercase tracking-wider">{accident.scenario}</span>
+                        <div className={cn(
+                          "w-12 h-12 rounded-full flex items-center justify-center transition-all",
+                          selectedAccident === accident.id ? "bg-primary text-primary-foreground rotate-90" : "bg-muted text-muted-foreground"
+                        )}>
+                          <ChevronRight className="w-6 h-6" />
+                        </div>
+                      </div>
+                      <h3 className="text-2xl font-black text-foreground uppercase tracking-tighter mb-2 leading-none">{accident.title}</h3>
+                      <p className="text-xs font-semibold text-rose-500 uppercase leading-normal mb-4">Danger: {accident.danger}</p>
+                      
+                      <AnimatePresence>
+                        {selectedAccident === accident.id && (
+                          <motion.div
+                            initial={{ opacity: 0, height: 0 }}
+                            animate={{ opacity: 1, height: 'auto' }}
+                            exit={{ opacity: 0, height: 0 }}
+                            className="space-y-6 mt-4"
+                          >
+                            <div className="h-1 w-full bg-border rounded-full" />
+                            
+                            {/* Actions to Do */}
+                            <div>
+                              <h4 className="text-xs font-black uppercase tracking-widest text-emerald-500 mb-3">✓ DO THIS IMMEDIATELY</h4>
+                              <div className="space-y-3">
+                                {accident.doThis.map((step, i) => (
+                                  <div key={i} className="flex gap-4 items-start bg-emerald-500/5 p-4 rounded-2xl border border-emerald-500/10">
+                                    <div className="flex-shrink-0 w-8 h-8 bg-emerald-500 text-white rounded-xl flex items-center justify-center text-sm font-black">
+                                      {i + 1}
+                                    </div>
+                                    <p className="text-sm text-foreground/80 font-bold leading-tight pt-1.5">
+                                      {step}
+                                    </p>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+
+                            {/* Critical Warnings */}
+                            <div>
+                              <h4 className="text-xs font-black uppercase tracking-widest text-destructive mb-3">⚠️ NEVER DO THIS</h4>
+                              <div className="space-y-3">
+                                {accident.neverDo.map((warn, i) => (
+                                  <div key={i} className="flex gap-4 items-start bg-destructive/5 p-4 rounded-2xl border border-destructive/10">
+                                    <div className="flex-shrink-0 w-8 h-8 bg-destructive text-white rounded-xl flex items-center justify-center text-sm font-black">
+                                      !
+                                    </div>
+                                    <p className="text-sm text-destructive font-bold leading-normal pt-1">
+                                      {warn}
+                                    </p>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+
+                            <div className="pt-6 grid grid-cols-2 gap-4">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  speakInstructions("Immediate actions for " + accident.title + ". " + accident.doThis.join(". ") + " Warnings: " + accident.neverDo.join(". "));
+                                }}
+                                className="py-4 bg-muted hover:bg-muted/80 text-foreground font-black uppercase tracking-wider rounded-2xl text-xs flex items-center justify-center gap-2 transition-all border border-border"
+                              >
+                                <Volume2 className="w-5 h-5" />
+                                Listen Guide
+                              </button>
+                              <a 
+                                href="tel:911"
+                                className="py-4 bg-destructive hover:bg-destructive/95 text-white font-black uppercase tracking-wider rounded-2xl text-[10px] flex items-center justify-center gap-2 transition-all"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <Phone className="w-5 h-5 animate-bounce" />
+                                911 Emergency
+                              </a>
+                            </div>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </div>
+                  </motion.div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </GuestOverlay>

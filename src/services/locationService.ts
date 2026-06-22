@@ -7,6 +7,7 @@ export interface NearbyFacility {
   lng?: number;
   distanceMeter?: number;
   distanceDisplay?: string;
+  durationDisplay?: string;
   reviews?: string[];
 }
 

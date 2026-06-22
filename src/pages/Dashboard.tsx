@@ -165,26 +165,21 @@ const Dashboard: React.FC = () => {
           setHealthTip(cachedTip);
         } else {
           // Attempt to extract a short, ultra-compelling action tip from the article's text using Gemini!
-          if (process.env.GEMINI_API_KEY) {
-            try {
-              const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-              const response = await ai.models.generateContent({
-                model: "gemini-3.5-flash",
-                contents: `Extract or formulate a compelling, single-sentence action-oriented daily health tip (max 25 words) from the following health article content:
+          try {
+            const ai = new GoogleGenAI({ apiKey: "" });
+            const response = await ai.models.generateContent({
+              model: "gemini-3.5-flash",
+              contents: `Extract or formulate a compelling, single-sentence action-oriented daily health tip (max 25 words) from the following health article content:
 Category: ${selectedArticle.category}
 Title: ${selectedArticle.title}
 Summary/Content: ${selectedArticle.summary || selectedArticle.content}
 Make it highly direct, inspiring, and actionable. Do not wrap it in quotes.`,
-              });
-              const newTip = response.text.trim().replace(/^["']|["']$/g, '');
-              setHealthTip(newTip);
-              localStorage.setItem(localCacheKey, newTip);
-            } catch (aiErr) {
-              console.error("Gemini tip extraction failed, using summary:", aiErr);
-              const fallback = selectedArticle.summary.split('.')[0] + '.';
-              setHealthTip(fallback);
-            }
-          } else {
+            });
+            const newTip = response.text.trim().replace(/^["']|["']$/g, '');
+            setHealthTip(newTip);
+            localStorage.setItem(localCacheKey, newTip);
+          } catch (aiErr) {
+            console.error("Gemini tip extraction failed, using summary:", aiErr);
             const fallback = selectedArticle.summary.split('.')[0] + '.';
             setHealthTip(fallback);
           }
@@ -213,7 +208,7 @@ Make it highly direct, inspiring, and actionable. Do not wrap it in quotes.`,
           setHealthTipSource(cachedSource);
           setHealthTipUrl(cachedUrl || 'https://www.who.int');
         } else {
-          const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' });
+          const ai = new GoogleGenAI({ apiKey: '' });
           const response = await ai.models.generateContent({
             model: "gemini-3.5-flash",
             contents: "Generate a short, inspiring, and evidence-based daily health tip (max 30 words) for a wellness app. Ensure it has an authoritative credit. Return a JSON object with fields: 'tip' (the single-sentence tip) and 'source' (reputable source name, e.g., 'Mayo Clinic', 'Harvard T.H. Chan School of Public Health', or 'World Health Organization') and 'sourceUrl' (e.g., 'https://www.mayoclinic.org').",
