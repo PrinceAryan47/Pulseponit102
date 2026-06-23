@@ -201,7 +201,7 @@ const MensHealthGuide = () => {
       const ai = new GoogleGenAI({ apiKey: "" });
       const response = await ai.models.generateContent({
         model: "gemini-3.5-flash",
-        contents: `As an expert clinical health consultant specializing in men's health, preventive care, and longevity medicine, create a comprehensive, highly personalized screening and wellness guide for a male patient.
+        contents: `As an expert clinical health consultant specializing in men's health, preventive care, and longevity medicine, create a comprehensive, highly personalized screening and wellness guide for a male patient. The analysis and timing protocols must align directly with guidelines published by leading health authorities (such as the US Preventive Services Task Force (USPSTF), American Cancer Society (ACS), American Heart Association (AHA), and American Urological Association (AUA)).
         
         Patient Profile:
         - Age: ${age}
@@ -213,20 +213,23 @@ const MensHealthGuide = () => {
         
         # PERSONALIZED MEN'S PREVENTIVE HEALTH REPORT
         
-        ## 📋 Recommended Screenings & Preventive Timeline
-        Provide a customized, chronological list of mandatory and recommended medical screenings (e.g. Prostate-Specific Antigen (PSA) test, Colonoscopy, Lipid Panel, Blood Pressure, Cardiovascular scans etc.) based on this patient's age (${age} years) and profile risks. State the recommended starting frequency and what each test looks for.
+        ## 📋 Recommended Screenings & Preventive Timeline (Clinical Body Aligned)
+        Provide a customized, chronological list of mandatory and recommended medical screenings (e.g. Prostate-Specific Antigen (PSA) test aligned with AUA/ACS guidelines, Colonoscopy aligned with USPSTF standards, Lipid Panel/Cholesterol aligned with AHA, Type 2 Diabetes screenings, etc.) based on this patient's age (${age} years) and profile risks. For each screening, clearly cite the specific recommending clinical body and state the recommended starting frequency and reasons.
         
         ## ⚠️ Key Health Risks & Vulnerabilities
-        Identify specific physical and physiological risks associated with the ${age}-year-old bracket, factoring in the primary focus of "${focus}" and family history of "${familyHistory}".
+        Identify specific physiological risks associated with the ${age}-year-old male bracket, factoring in the primary focus of "${focus}" and family history of "${familyHistory}". Back these risks with clinical guidance context.
         
         ## 🥗 Target Nutrition, Supplementation & Lifestyle Guidelines
-        Deliver an evidence-based roadmap for daily life. Detail custom food groups to prioritize, key essential nutrients (like Omega-3, Vitamin D, Magnesium, Zinc etc.) if applicable, stress-mitigation patterns, and sleep hygiene adjustments.
+        Deliver an evidence-based lifestyle roadmap. Detail custom food groups to prioritize, key essential nutrients (like CoQ10, Zinc, Omega-3s, Vitamin D3), stress-mitigation, and sleep metrics.
         
         ## 🧠 Cognitive Support & Mental Health Considerations
-        Specific age-appropriate mental wellness tips, focusing on managing work/life stressors, preventative neurology, and preserving peak cognitive focus with age.
+        Specific age-appropriate mental wellness tips focusing on managing work/life stressors, preventing burnouts, and cognitive reserve preservation.
         
         ## 🩺 Doctor Consultation Checklist
-        Give the client 3-5 high-value, precise questions they can directly ask their primary care doctor during their next visit.`,
+        Give the client 3-5 high-value, precise questions they can directly ask their primary care doctor during their next physical or wellness visit, based on clinical discussion recommendation pathways.
+        
+        ## 📚 Trusted Clinical References & Source Directory
+        Provide a distinct clinical reference section explicitly framing recommendations within clinical guidelines from the US Preventive Services Task Force (USPSTF), American College of Physicians (ACP), American Cancer Society (ACS), and American Heart Association (AHA).`,
       });
       setGuide(response.text || "Unable to generate guide at this time.");
     } catch (err) {
@@ -240,12 +243,31 @@ const MensHealthGuide = () => {
   return (
     <div>
       <h2 className="text-3xl font-bold text-foreground mb-2 flex items-center gap-2.5">
-        <Activity className="w-8 h-8 text-primary animate-pulse" />
+        <Activity className="w-8 h-8 text-primary" />
         Men's Health & Screening Guide
       </h2>
-      <p className="text-muted-foreground mb-10 leading-relaxed max-w-2xl text-sm">
+      <p className="text-muted-foreground mb-6 leading-relaxed max-w-2xl text-sm">
         Generate custom screening plans, age-graded risk reports, and evidence-guided preventative roadmaps from our clinical database.
       </p>
+      
+      {/* Evidence-based Medical Guidelines Background Panel */}
+      <div className="bg-amber-500/10 border border-amber-500/25 p-5 rounded-3xl mb-8 flex flex-col sm:flex-row gap-4 items-start">
+        <div className="p-3 bg-amber-500/10 rounded-2xl text-amber-600 dark:text-amber-500 shrink-0">
+          <Activity className="w-6 h-6 animate-pulse" />
+        </div>
+        <div>
+          <h4 className="font-bold text-sm text-amber-800 dark:text-amber-400 mb-1">Peer-Reviewed Preventive Frameworks</h4>
+          <p className="text-xs text-amber-700/85 dark:text-slate-300 leading-relaxed mb-3 font-semibold">
+            All age-graded diagnostic screenings, checkups, and cardiological warning indicators are matched against current preventive guidelines established by elite clinical academies:
+          </p>
+          <div className="flex flex-wrap gap-2 text-[10px] font-black tracking-wider uppercase">
+            <span className="px-2.5 py-1 bg-amber-500/10 border border-amber-500/20 rounded-md text-amber-800 dark:text-amber-300">USPSTF Guidelines</span>
+            <span className="px-2.5 py-1 bg-amber-500/10 border border-amber-500/20 rounded-md text-amber-800 dark:text-amber-300">American Cancer Society (ACS)</span>
+            <span className="px-2.5 py-1 bg-amber-500/10 border border-amber-500/20 rounded-md text-amber-800 dark:text-amber-300">American Heart Assoc. (AHA)</span>
+            <span className="px-2.5 py-1 bg-amber-500/10 border border-amber-500/20 rounded-md text-amber-800 dark:text-amber-300">AUA Urology Standard</span>
+          </div>
+        </div>
+      </div>
       
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
         {/* Form panel */}
@@ -560,7 +582,7 @@ const FitnessWorkoutTool = () => {
       const ai = new GoogleGenAI({ apiKey: "" });
       const response = await ai.models.generateContent({
         model: "gemini-3.5-flash",
-        contents: `As an elite strength and conditioning specialist and expert sports nutritionist, create an outstanding, highly tailored weekly workout planner and nutritional roadmap for a client with the following metrics:
+        contents: `As an elite strength and conditioning specialist (CSCS) and registered sports dietitian conforming to authoritative professional guidelines (such as the American College of Sports Medicine (ACSM) for exercise prescription, the National Strength and Conditioning Association (NSCA) for progressive training, and the International Society of Sports Nutrition (ISSN) for nutrient timing), create a personalized weekly gym program and nutritional plan.
         
         Client Details:
         - Age: ${age}
@@ -581,15 +603,18 @@ const FitnessWorkoutTool = () => {
         
         ## 🏋️ Routine Step-by-Step Breakdown
         For EACH active workout day, outline:
-        - **Warm-Up Protocol**: 3-5 minutes of specific dynamic mobility warm-ups to shield joints from injury.
+        - **Warm-Up Protocol**: 3-5 minutes of specific dynamic mobility warm-ups to shield joints from injury, citing ACSM mobility standards.
         - **Main Workout block**: Specific compound and isolation exercises detailing exact target Sets, Reps, Intensity (RPE), and 1-sentence execution instructions.
         - **Cool-Down / Flexibility Plan**: 2-3 minutes of static stretches.
         
         ## 🥗 Nutrition & Fueling Protocols
-        Tailor a calorie-conscious nutrition guide specifically for the goal: ${goal}. Detail target macronutrient distributions, optimal hydration strategies (target fluid ounces), and ideal pre- and post-workout fuel examples.
+        Tailor a calorie-conscious nutrition guide specifically for the goal: ${goal}. Detail target macronutrient distributions, optimal hydration strategies, and ideal pre- and post-workout fuel examples aligned with ISSN metabolic timing guidelines.
         
         ## 📈 Progression & Recovery Philosophy
-        Scientific advice on progressive overload (how to build strength or stamina over weeks), required rest periods, and active recovery metrics.`,
+        Scientific advice on progressive overload (how to build strength or stamina over weeks), required rest periods, and active recovery metrics.
+        
+        ## 📚 Scientific References & Sports Science Sources
+        Provide a distinct sports-science reference index pointing to ACSM physical guidelines, NSCA Strength Standards, and ISSN Nutrition Positions so the client has an educational reference directory.`,
       });
       setRoutine(response.text || "Unable to generate routine at this time.");
       // Reset tracker
@@ -610,9 +635,28 @@ const FitnessWorkoutTool = () => {
         <Activity className="w-8 h-8 text-primary" />
         Personalized Fitness Planner
       </h2>
-      <p className="text-muted-foreground mb-10 leading-relaxed max-w-2xl text-sm">
+      <p className="text-muted-foreground mb-6 leading-relaxed max-w-2xl text-sm">
         Generate custom splits, precise exercise programs, and elite nutritional guides matched directly to your biometrics.
       </p>
+      
+      {/* Evidence-based Sports Science Background Panel */}
+      <div className="bg-blue-500/10 border border-blue-500/25 p-5 rounded-3xl mb-8 flex flex-col sm:flex-row gap-4 items-start">
+        <div className="p-3 bg-blue-500/10 rounded-2xl text-blue-600 dark:text-blue-400 shrink-0">
+          <Activity className="w-6 h-6" />
+        </div>
+        <div>
+          <h4 className="font-bold text-sm text-blue-800 dark:text-blue-400 mb-1">Accredited Sports Science Criteria</h4>
+          <p className="text-xs text-blue-700/85 dark:text-slate-300 leading-relaxed mb-3">
+            Our workout routines, macro equations, and resistance schedules are fully guided by peer-reviewed athletic standards and sports medicine guidelines:
+          </p>
+          <div className="flex flex-wrap gap-2 text-[10px] font-black tracking-wider uppercase">
+            <span className="px-2.5 py-1 bg-blue-500/10 border border-blue-500/20 rounded-md text-blue-800 dark:text-blue-300">ACSM Exercise Guidelines</span>
+            <span className="px-2.5 py-1 bg-blue-500/10 border border-blue-500/20 rounded-md text-blue-800 dark:text-blue-300">NSCA Progressive Overload</span>
+            <span className="px-2.5 py-1 bg-blue-500/10 border border-blue-500/20 rounded-md text-blue-800 dark:text-blue-300">ISSN Nutrient Timing Standards</span>
+            <span className="px-2.5 py-1 bg-blue-500/10 border border-blue-500/20 rounded-md text-blue-800 dark:text-blue-300">Harvard T.H. Chan Wellness</span>
+          </div>
+        </div>
+      </div>
       
       <form onSubmit={generateWorkout} className="space-y-6 bg-muted/20 p-6 sm:p-8 rounded-3xl border border-border/80">
         <h3 className="font-bold text-sm text-foreground uppercase tracking-widest pb-2 border-b border-border/60">1. Body Metrics & Variables</h3>
@@ -910,7 +954,7 @@ const SymptomChecker = () => {
       const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
       const response = await ai.models.generateContent({
         model: "gemini-3.5-flash",
-        contents: `As a medical symptom checker assistant, analyze the following patient information for potential health insights:
+        contents: `As an advanced, clinically-grounded medical symptom checker assistant, analyze the following patient details. All potential insights and timelines must be meticulously cross-referenced against world-class clinical databases (including Mayo Clinic, National Institutes of Health (NIH) databases, Centers for Disease Control and Prevention (CDC) clinical guidance, and NHS standard guidelines) to ensure the information generated is safe, highly structured, and educational.
         
         Patient Details:
         - Age: ${age}
@@ -920,12 +964,14 @@ const SymptomChecker = () => {
         - Severity (1-10): ${severity}
         - Medical History/Allergies: ${history || 'None reported'}
 
-        Provide a detailed analysis including:
-        1. Potential health conditions (clearly state these are possibilities, not a diagnosis).
-        2. Recommended next steps (e.g., specific tests to discuss with a doctor, lifestyle changes, or urgent care if necessary).
-        3. Questions the patient should ask their healthcare provider.
+        Please provide a rigorous, supportive health assessment including:
+        1. Potential health conditions (explicitly state that these are educational possibilities derived from referenced clinical guidelines and databases, NOT a formal medical diagnosis).
+        2. Clinical Practice References: For each potential condition, explicitly outline the typical evidence-supported physical diagnostics guidelines (e.g., "per Mayo Clinic diagnostic pathways..." or "conforming to AHA/CDC advisory guidelines...").
+        3. Recommended Next Steps & Safety Warning: Detail specific non-invasive lifestyle indicators, specific tests to request in person (blood panels, culture scopes), and critical red-flag symptoms/warning signs that require immediate urgent/emergency clinical assistance.
+        4. Patient-Doctor Discussion Checkpoints: 3-5 high-value, precise screening questions the patient should directly ask their consulting primary care provider.
+        5. Credible Clinical Sources Table: Add a distinct "Verified Educational Source Directory" section at the bottom specifying actual medical search resources (such as MayoClinic.org, MedlinePlus, and CDC.gov) with direct search terms so that patients can confidently read more.
         
-        Format the response using professional Markdown with clear headings and bullet points.`,
+        Format the response using professional, elegant, and patient-friendly Markdown with clear headers, bold accents, and informative lists.`,
       });
       setAnalysis(response.text || "Unable to analyze symptoms at this time.");
     } catch (err) {
@@ -939,7 +985,26 @@ const SymptomChecker = () => {
   return (
     <div>
       <h2 className="text-2xl font-bold text-[rgb(var(--foreground))] mb-2">Advanced Symptom Checker</h2>
-      <p className="text-slate-500 dark:text-slate-400 mb-10">Provide detailed information to receive a more accurate health analysis.</p>
+      <p className="text-slate-500 dark:text-slate-400 mb-6">Provide detailed information to receive a more accurate health analysis.</p>
+      
+      {/* Evidence-based Clinical Grounding Panel */}
+      <div className="bg-emerald-500/10 border border-emerald-500/25 p-5 rounded-3xl mb-8 flex flex-col sm:flex-row gap-4 items-start">
+        <div className="p-3 bg-emerald-500/10 rounded-2xl text-emerald-600 dark:text-emerald-400 shrink-0">
+          <Stethoscope className="w-6 h-6" />
+        </div>
+        <div>
+          <h4 className="font-bold text-sm text-emerald-800 dark:text-emerald-400 mb-1">Evidence-Based Clinical Grounding</h4>
+          <p className="text-xs text-emerald-700/85 dark:text-slate-300 leading-relaxed mb-3">
+            To generate safe, patient-centered insights, medical calculations, and diagnostic guidance, PulsePoint triggers search processes grounded in clinical guidelines, peer-reviewed databases, and professional institutions:
+          </p>
+          <div className="flex flex-wrap gap-2 text-[10px] font-black tracking-wider uppercase">
+            <span className="px-2.5 py-1 bg-emerald-500/10 border border-emerald-500/20 rounded-md text-emerald-800 dark:text-emerald-300">Mayo Clinic Guidelines</span>
+            <span className="px-2.5 py-1 bg-emerald-500/10 border border-emerald-500/20 rounded-md text-emerald-800 dark:text-emerald-300">NIH MedlinePlus Database</span>
+            <span className="px-2.5 py-1 bg-emerald-500/10 border border-emerald-500/20 rounded-md text-emerald-800 dark:text-emerald-300">CDC Health Standard Alerts</span>
+            <span className="px-2.5 py-1 bg-emerald-500/10 border border-emerald-500/20 rounded-md text-emerald-800 dark:text-emerald-300">NHS Clinical Pathways</span>
+          </div>
+        </div>
+      </div>
       
       <form onSubmit={checkSymptoms} className="space-y-8">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

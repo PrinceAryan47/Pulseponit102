@@ -23,11 +23,38 @@
     </script>
     <script>
       if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => {
-          navigator.serviceWorker.register('/sw.js')
-            .then(reg => console.log('Service Worker registered'))
-            .catch(err => console.log('Service Worker registration failed', err));
-        });
+        const isDev = window.location.hostname.includes('localhost') || 
+                      window.location.hostname.includes('127.0.0.1') || 
+                      window.location.hostname.includes('-dev-') || 
+                      window.location.hostname.includes('-pre-');
+        
+        if (isDev) {
+          // Unregister any active service worker to prevent stale bundler caches in dev
+          navigator.serviceWorker.getRegistrations().then(registrations => {
+            for (let registration of registrations) {
+              registration.unregister().then(() => {
+                console.log('[Service Worker] Unregistered active worker in dev mode:', registration);
+              });
+            }
+          });
+          // Also clear all cache storage
+          if ('caches' in window) {
+            caches.keys().then(names => {
+              for (let name of names) {
+                caches.delete(name).then(() => {
+                  console.log('[Service Worker] Deleted dev cache storage:', name);
+                });
+              }
+            });
+          }
+        } else {
+          // Production registration
+          window.addEventListener('load', () => {
+            navigator.serviceWorker.register('/sw.js')
+              .then(reg => console.log('Service Worker registered'))
+              .catch(err => console.log('Service Worker registration failed', err));
+          });
+        }
       }
     </script>
   </head>
