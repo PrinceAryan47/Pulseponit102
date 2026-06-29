@@ -1,3 +1,4 @@
+// Force Vite re-transpile cache invalidation
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { 

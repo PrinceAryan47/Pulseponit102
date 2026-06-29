@@ -723,12 +723,18 @@ Our backend clinical intelligence network is presently experiencing a massive sp
 
       res.json({ text: response.text });
     } catch (error: any) {
-      console.warn("AI Generation error on server proxy, utilizing robust clinical-grade fallback generator:", error);
+      const errMsg = error?.message || String(error);
+      const isQuota = errMsg.includes("quota") || errMsg.includes("429") || errMsg.includes("RESOURCE_EXHAUSTED") || error?.status === "RESOURCE_EXHAUSTED" || error?.status === 429;
+      if (isQuota) {
+        console.warn("AI Generation server proxy: Quota/Rate Limit Exceeded (RESOURCE_EXHAUSTED). Utilizing robust local clinical fallback generator.");
+      } else {
+        console.warn(`AI Generation error on server proxy: ${errMsg}`);
+      }
       try {
         const fallbackText = getAIGenerationFallback(contents);
         res.json({ text: fallbackText });
       } catch (fallbackError: any) {
-        console.error("Fallback generation also failed:", fallbackError);
+        console.warn("Local fallback generation failed:", fallbackError?.message || fallbackError);
         res.status(500).json({ error: error.message || "Failed to generate AI content" });
       }
     }
@@ -897,8 +903,14 @@ Our backend clinical intelligence network is presently experiencing a massive sp
 
         return res.json(mapped);
       }
-    } catch (fallbackError) {
-      console.error("Gemini fallback also failed. Shifting to high-fidelity static Uganda Kampala fallback.", fallbackError);
+    } catch (fallbackError: any) {
+      const errMsg = fallbackError?.message || String(fallbackError);
+      const isQuota = errMsg.includes("quota") || errMsg.includes("429") || errMsg.includes("RESOURCE_EXHAUSTED") || fallbackError?.status === "RESOURCE_EXHAUSTED" || fallbackError?.status === 429;
+      if (isQuota) {
+        console.warn("[Google Maps Fallback] Gemini search also rate limited/quota exceeded. Shifting cleanly to high-fidelity static Uganda Kampala fallback.");
+      } else {
+        console.warn(`[Google Maps Fallback] Gemini search failed: ${errMsg}. Shifting cleanly to high-fidelity static Uganda Kampala fallback.`);
+      }
     }
 
     // 3. Fallback B: Fully authentic, located medical facilities in Kampala, Uganda
