@@ -2,7 +2,7 @@ import { GoogleGenAI, Type } from "./aiService";
 import { collection, addDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "../firebase";
 
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' });
+const ai = new GoogleGenAI({ apiKey: '' });
 
 export interface GeneratedArticle {
   title: string;

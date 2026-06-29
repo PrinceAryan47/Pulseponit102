@@ -1600,7 +1600,7 @@ const SymptomChecker = () => {
     setAnalysis(null);
     setParsedResult(null);
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+      const ai = new GoogleGenAI({ apiKey: "" });
       const response = await ai.models.generateContent({
         model: "gemini-3.5-flash",
         contents: `As an advanced, clinically-grounded medical symptom checker assistant, analyze the following patient details. All potential insights and timelines must be meticulously cross-referenced against world-class clinical databases (including Mayo Clinic, National Institutes of Health (NIH) databases, Centers for Disease Control and Prevention (CDC) clinical guidance, and NHS standard guidelines) to ensure the safe, highly structured, and educational nature of the generated information.
