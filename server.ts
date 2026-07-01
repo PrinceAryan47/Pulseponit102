@@ -943,11 +943,17 @@ Our backend clinical intelligence network is temporarily offline. Please contact
       }
 
       console.log(`Backend proxy: Generating content using model ${targetModel}`);
-      const response = await ai.models.generateContent({
+      const apiCallPromise = ai.models.generateContent({
         model: targetModel,
         contents,
         config,
       });
+
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error("Timeout: Gemini API request timed out after 45000ms")), 45000);
+      });
+
+      const response = await Promise.race([apiCallPromise, timeoutPromise]);
 
       res.json({ 
         text: response.text,
@@ -986,7 +992,7 @@ Our backend clinical intelligence network is temporarily offline. Please contact
     try {
       console.log(`[Google Maps Grounding] Requesting Gemini maps grounding search near coordinates: ${userLat}, ${userLng}`);
       const ai = getAIClient();
-      const response = await ai.models.generateContent({
+      const apiCallPromise = ai.models.generateContent({
         model: "gemini-3.5-flash",
         contents: `Find real medical facilities (hospitals, clinics, pharmacies) near coordinates ${userLat}, ${userLng}. 
         Prioritize hospitals and clinics with 24/7 service if available.
@@ -1012,6 +1018,12 @@ Our backend clinical intelligence network is temporarily offline. Please contact
           }
         },
       });
+
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error("Timeout: Gemini Maps Grounding request timed out after 45000ms")), 45000);
+      });
+
+      const response = await Promise.race([apiCallPromise, timeoutPromise]);
 
       let text = response.text || "";
       let facilities = [];

@@ -84,8 +84,8 @@ export class GoogleGenAI {
                 model: params.model,
                 contents: contents,
                 config: params.config,
-                tools: params.config?.tools,
-                toolConfig: params.config?.toolConfig
+                tools: (params.config as any)?.tools,
+                toolConfig: (params.config as any)?.toolConfig
               }),
             });
 

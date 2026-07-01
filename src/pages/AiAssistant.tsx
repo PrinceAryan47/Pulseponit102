@@ -21,6 +21,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { GoogleGenAI } from '../services/aiService';
 import Markdown from 'react-markdown';
 import GuestOverlay from '../components/GuestOverlay';
+import { useAuth } from '../context/AuthContext';
 
 interface ChatMessage {
   id: string;
@@ -91,6 +92,7 @@ const SUGGESTED_PROMPTS: Record<string, string[]> = {
 };
 
 const AiAssistant: React.FC = () => {
+  const { profile } = useAuth();
   const [selectedRole, setSelectedRole] = useState(ROLES[0]);
   const [selectedModel, setSelectedModel] = useState(MODELS[0].id);
   const [messages, setMessages] = useState<ChatMessage[]>([
@@ -115,6 +117,14 @@ const AiAssistant: React.FC = () => {
 
   // Fetch location on load for Maps Grounding
   useEffect(() => {
+    if (profile?.simulatedLocationEnabled && profile?.simulatedLatitude && profile?.simulatedLongitude) {
+      setUserLocation({
+        latitude: profile.simulatedLatitude,
+        longitude: profile.simulatedLongitude
+      });
+      return;
+    }
+
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (pos) => {
@@ -123,11 +133,11 @@ const AiAssistant: React.FC = () => {
             longitude: pos.coords.longitude
           });
         },
-        (err) => console.log("Location not granted for chatbot:", err),
-        { enableHighAccuracy: true, timeout: 10000 }
+        (err) => console.log("Location not granted for chatbot (expected in sandbox):", err),
+        { enableHighAccuracy: false, timeout: 15000, maximumAge: 60000 }
       );
     }
-  }, []);
+  }, [profile?.simulatedLocationEnabled, profile?.simulatedLatitude, profile?.simulatedLongitude]);
 
   // Text to Speech
   const speakText = (text: string) => {

@@ -43,6 +43,19 @@ export interface UserProfile {
     workingHoursWeekday?: string;
     workingHoursSaturday?: string;
   };
+  medicationRemindersSubscribed?: boolean;
+  appointmentAlertsSubscribed?: boolean;
+  twoFactorEnabled?: boolean;
+  sharingMedicalHistory?: boolean;
+  locationSearchEnabled?: boolean;
+  anonymizeAnalytics?: boolean;
+  symptomCheckReporting?: boolean;
+  simulatedLocationEnabled?: boolean;
+  simulatedLocationPreset?: string;
+  simulatedLatitude?: number;
+  simulatedLongitude?: number;
+  loginHistory?: Array<{ ip: string; timestamp: string; device: string; location: string }>;
+  activeSessions?: Array<{ id: string; device: string; lastActive: string; location: string; isCurrent: boolean }>;
 }
 
 export interface Hospital {

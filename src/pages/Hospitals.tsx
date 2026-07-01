@@ -20,8 +20,10 @@ import { motion } from 'framer-motion';
 import { findNearbyFacilities, NearbyFacility } from '../services/locationService';
 import VoiceSearch from '../components/VoiceSearch';
 import GuestOverlay from '../components/GuestOverlay';
+import { useAuth } from '../context/AuthContext';
 
 const Hospitals: React.FC = () => {
+  const { profile } = useAuth();
   const [hospitals, setHospitals] = useState<HospitalType[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
@@ -48,6 +50,19 @@ const Hospitals: React.FC = () => {
 
   // Automatically fetch user location on mount
   useEffect(() => {
+    if (profile?.simulatedLocationEnabled && profile?.simulatedLatitude && profile?.simulatedLongitude) {
+      const lat = profile.simulatedLatitude;
+      const lng = profile.simulatedLongitude;
+      setUserLocation([lat, lng]);
+      findNearbyFacilities(lat, lng).then(results => {
+        setNearbyFacilities(results.facilities || []);
+        setGroundingSources(results.groundingSources || []);
+      }).catch(err => {
+        console.warn("Failed to fetch facilities with simulated location on mount:", err);
+      });
+      return;
+    }
+
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         async (position) => {
@@ -58,18 +73,35 @@ const Hospitals: React.FC = () => {
             setNearbyFacilities(results.facilities || []);
             setGroundingSources(results.groundingSources || []);
           } catch (err) {
-            console.error("Failed to fetch facilities on mount:", err);
+            console.warn("Failed to fetch facilities on mount:", err);
           }
         },
         (err) => {
-          console.warn("Location access not granted on load:", err);
+          console.warn("Location access not granted on load (expected inside sandbox):", err);
         },
-        { enableHighAccuracy: true, timeout: 10000 }
+        { enableHighAccuracy: false, timeout: 15000, maximumAge: 60000 }
       );
     }
-  }, []);
+  }, [profile?.simulatedLocationEnabled, profile?.simulatedLatitude, profile?.simulatedLongitude]);
 
   const handleLocateNearby = () => {
+    if (profile?.simulatedLocationEnabled && profile?.simulatedLatitude && profile?.simulatedLongitude) {
+      setLocating(true);
+      setError(null);
+      const lat = profile.simulatedLatitude;
+      const lng = profile.simulatedLongitude;
+      setUserLocation([lat, lng]);
+      findNearbyFacilities(lat, lng).then(results => {
+        setNearbyFacilities(results.facilities || []);
+        setGroundingSources(results.groundingSources || []);
+      }).catch(err => {
+        setError("Failed to find nearby facilities. Please try again.");
+      }).finally(() => {
+        setLocating(false);
+      });
+      return;
+    }
+
     if (!navigator.geolocation) {
       setError("Geolocation is not supported by your browser.");
       return;
@@ -94,9 +126,9 @@ const Hospitals: React.FC = () => {
       },
       (err) => {
         setLocating(false);
-        setError("Location access denied. Please enable location permissions in your browser to calculate distance.");
+        setError("Location access denied or timed out. Feel free to enable Simulated Location in your Profile settings to test this feature instantly!");
       },
-      { enableHighAccuracy: true, timeout: 10000 }
+      { enableHighAccuracy: false, timeout: 15000, maximumAge: 60000 }
     );
   };
 
@@ -145,19 +177,27 @@ const Hospitals: React.FC = () => {
   );
 
   const handleRedirectToMaps = (facility: NearbyFacility | HospitalType) => {
-    let mapsUrl = '';
+    let origin = '';
+    if (userLocation) {
+      origin = `${userLocation[0]},${userLocation[1]}`;
+    }
     
-    if ('mapsUrl' in facility && facility.mapsUrl) {
-      mapsUrl = facility.mapsUrl;
+    let destination = '';
+    if ('location' in facility && facility.location?.lat && facility.location?.lng) {
+      destination = `${facility.location.lat},${facility.location.lng}`;
+    } else if ('lat' in facility && facility.lat && facility.lng) {
+      destination = `${facility.lat},${facility.lng}`;
     } else {
-      mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(facility.name + ' ' + facility.address)}`;
+      destination = `${facility.name}, ${facility.address}`;
     }
 
-    if (mapsUrl) {
-      window.open(mapsUrl, '_blank', 'noopener,noreferrer');
-    } else {
-      setError("Google Maps link is not available for this facility.");
-    }
+    const originParam = origin ? `&origin=${encodeURIComponent(origin)}` : '';
+    const destParam = `destination=${encodeURIComponent(destination)}`;
+    
+    // Using Google Maps Directions API URL format for direct navigation
+    const mapsUrl = `https://www.google.com/maps/dir/?api=1&${destParam}${originParam}&travelmode=driving`;
+    
+    window.open(mapsUrl, '_blank', 'noopener,noreferrer');
   };
 
   if (loading) {
