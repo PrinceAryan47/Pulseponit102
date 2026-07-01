@@ -11,7 +11,12 @@ export interface NearbyFacility {
   reviews?: string[];
 }
 
-export const findNearbyFacilities = async (lat: number, lng: number): Promise<NearbyFacility[]> => {
+export interface NearbyFacilitiesResponse {
+  facilities: NearbyFacility[];
+  groundingSources: any[];
+}
+
+export const findNearbyFacilities = async (lat: number, lng: number): Promise<NearbyFacilitiesResponse> => {
   try {
     const response = await fetch("/api/facilities", {
       method: "POST",
@@ -26,9 +31,16 @@ export const findNearbyFacilities = async (lat: number, lng: number): Promise<Ne
     }
     
     const data = await response.json();
-    return data as NearbyFacility[];
+    if (data && typeof data === 'object' && 'facilities' in data) {
+      return data as NearbyFacilitiesResponse;
+    }
+    
+    return {
+      facilities: Array.isArray(data) ? data : [],
+      groundingSources: []
+    };
   } catch (error) {
     console.error("Error fetching nearby facilities via client proxy:", error);
-    return [];
+    return { facilities: [], groundingSources: [] };
   }
 };

@@ -30,7 +30,8 @@ import {
   Download,
   Search,
   CloudOff,
-  Wifi
+  Wifi,
+  Bot
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useTheme } from '../context/ThemeContext';
@@ -192,6 +193,7 @@ const Layout: React.FC = () => {
     location.pathname === '/medical-records' ||
     location.pathname === '/prescriptions' ||
     location.pathname === '/profile' ||
+    location.pathname === '/ai-assistant' ||
     location.pathname.startsWith('/chat') ||
     location.pathname.startsWith('/meeting')
   );
@@ -208,6 +210,7 @@ const Layout: React.FC = () => {
 
   const patientNavItems = [
     { label: 'Overview', path: '/dashboard', icon: LayoutDashboard },
+    { label: 'AI Health Assistant', path: '/ai-assistant', icon: Bot },
     { label: 'Appointments', path: '/appointments', icon: Calendar },
     { label: 'Messages', path: '/messages', icon: MessageSquare },
     { label: 'Medical Records', path: '/medical-records', icon: FileText },
@@ -221,6 +224,7 @@ const Layout: React.FC = () => {
 
   const doctorNavItems = [
     { label: 'Overview', path: '/doctor-dashboard?tab=overview', icon: LayoutDashboard },
+    { label: 'AI Assistant', path: '/ai-assistant', icon: Bot },
     { label: 'Appointments', path: '/doctor-dashboard?tab=appointments', icon: Calendar },
     { label: 'Patients', path: '/doctor-dashboard?tab=patients', icon: Users },
     { label: 'Consultations', path: '/doctor-dashboard?tab=consultations', icon: Stethoscope },

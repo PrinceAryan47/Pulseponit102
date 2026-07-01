@@ -447,83 +447,279 @@ async function startServer() {
 
   // Helper for medical and wellness generation fallbacks in case of Gemini rate limiting/unavailability
   function getAIGenerationFallback(contents: any): string {
-    let promptText = "";
-    if (typeof contents === "string") {
-      promptText = contents;
-    } else if (Array.isArray(contents)) {
-      const lastItem = contents[contents.length - 1];
-      if (lastItem && lastItem.parts && Array.isArray(lastItem.parts)) {
-        promptText = lastItem.parts.map((p: any) => p.text || "").join(" ");
-      } else {
-        promptText = JSON.stringify(contents);
-      }
-    } else {
-      promptText = String(contents);
-    }
-
-    const normalized = promptText.toLowerCase();
-
-    // 1. Daily Health Tips / Insights
-    if (normalized.includes("daily health tip") || normalized.includes("single-sentence action-oriented") || normalized.includes("evidence-based daily health tip")) {
-      const tips = [
-        {
-          tip: "Prioritizing 7.5 to 8 hours of quality sleep directly optimizes cellular self-repair and mental focus.",
-          source: "Harvard T.H. Chan School of Public Health",
-          sourceUrl: "https://www.hsph.harvard.edu"
-        },
-        {
-          tip: "Brisk morning walking for just 15 minutes reduces cardiovascular risks and regulates metabolic markers significantly.",
-          source: "Mayo Clinic",
-          sourceUrl: "https://www.mayoclinic.org"
-        },
-        {
-          tip: "Keep active hydration targets near half your body weight in fluid ounces to sustain peak daily cognitive endurance.",
-          source: "World Health Organization",
-          sourceUrl: "https://www.who.int"
-        },
-        {
-          tip: "Injecting high-fiber plant proteins and minimizing overly refined sugars stabilizes metabolic blood sugar trends.",
-          source: "Cleveland Clinic",
-          sourceUrl: "https://my.clevelandclinic.org"
+    try {
+      let promptText = "";
+      if (typeof contents === "string") {
+        promptText = contents;
+      } else if (Array.isArray(contents)) {
+        const lastItem = contents[contents.length - 1];
+        if (lastItem && lastItem.parts && Array.isArray(lastItem.parts)) {
+          promptText = lastItem.parts.map((p: any) => p.text || "").join(" ");
+        } else {
+          promptText = JSON.stringify(contents);
         }
-      ];
-
-      const chosen = tips[Math.floor(Math.random() * tips.length)];
-
-      if (normalized.includes("json") || normalized.includes("fields:")) {
-        return JSON.stringify(chosen);
       } else {
-        return `"${chosen.tip}" — ${chosen.source}`;
+        promptText = String(contents || "");
       }
-    }
 
-    // 2. Men's Health & Preventive Screening Guides
-    if (normalized.includes("men's health") || normalized.includes("screening and wellness guide") || normalized.includes("male patient")) {
-      const ageMatch = promptText.match(/(?:Age|aged)\s*[:]?\s*(\d+)/i);
-      const age = ageMatch ? parseInt(ageMatch[1], 10) : 45;
+      const normalized = promptText.toLowerCase();
 
-      const focusMatch = promptText.match(/(?:Primary Wellness Focus|Focus Area|focus)\s*[:]?\s*([a-zA-Z\s&-]+)/i);
-      const focus = focusMatch ? focusMatch[1].trim() : "Overall Longevity";
+      // 1. Daily Health Tips / Insights
+      if (normalized.includes("daily health tip") || normalized.includes("single-sentence action-oriented") || normalized.includes("evidence-based daily health tip")) {
+        const tips = [
+          {
+            tip: "Prioritizing 7.5 to 8 hours of quality sleep directly optimizes cellular self-repair and mental focus.",
+            source: "Harvard T.H. Chan School of Public Health",
+            sourceUrl: "https://www.hsph.harvard.edu"
+          },
+          {
+            tip: "Brisk morning walking for just 15 minutes reduces cardiovascular risks and regulates metabolic markers significantly.",
+            source: "Mayo Clinic",
+            sourceUrl: "https://www.mayoclinic.org"
+          },
+          {
+            tip: "Keep active hydration targets near half your body weight in fluid ounces to sustain peak daily cognitive endurance.",
+            source: "World Health Organization",
+            sourceUrl: "https://www.who.int"
+          },
+          {
+            tip: "Injecting high-fiber plant proteins and minimizing overly refined sugars stabilizes metabolic blood sugar trends.",
+            source: "Cleveland Clinic",
+            sourceUrl: "https://my.clevelandclinic.org"
+          }
+        ];
 
-      const activityMatch = promptText.match(/(?:Activity State|Activity Level|activity)\s*[:]?\s*([a-zA-Z\s-]+)/i);
-      const activity = activityMatch ? activityMatch[1].trim() : "Moderately Active";
+        const chosen = tips[Math.floor(Math.random() * tips.length)];
 
-      const historyMatch = promptText.match(/(?:Hereditary History|Family History|history)\s*[:]?\s*([a-zA-Z\s-]+)/i);
-      const history = historyMatch ? historyMatch[1].trim() : "No known hereditary family history";
-
-      // Build age-graded screening recommendations
-      const screenTimeline = [];
-      if (age >= 18) screenTimeline.push(`*   **Blood Pressure Assessment**: Recommended to check annually (Ideal target: below 120/80 mmHg). Essential to track cardiovascular resistance.`);
-      if (age >= 20) screenTimeline.push(`*   **Lipid Panel / Cholesterol Test**: Every 4-6 years starting at age 20 to determine risk profiles for coronary atherosclerosis.`);
-      if (age >= 35) screenTimeline.push(`*   **Type 2 Diabetes HbA1c Screening**: Every 3 years starting at age 35 to map fasting blood sugar trends and address prediabetic markers.`);
-      if (age >= 45) {
-        screenTimeline.push(`*   **Colorectal Cancer Screening**: Colonoscopy or home stool kits are standard starting at age 45. Essential for early precancerous polyp detection.`);
-        screenTimeline.push(`*   **Prostate-Specific PSA Test**: Consult with your physician starting at age 45-50 to design an individual screening pathway.`);
+        if (normalized.includes("json") || normalized.includes("fields:")) {
+          return JSON.stringify(chosen);
+        } else {
+          return `"${chosen.tip}" — ${chosen.source}`;
+        }
       }
-      if (age >= 50) screenTimeline.push(`*   **Shingles (Zoster) Vaccination**: Typically 2 doses starting at age 50 to maintain solid immune protection against viral nerve pain.`);
-      if (age >= 65) screenTimeline.push(`*   **Pneumococcal Immunization**: Guidance recommends immunization at age 65 as an effective barrier against bacterial pneumonia.`);
 
-      return `# PERSONALIZED MEN'S PREVENTIVE HEALTH REPORT
+      // 2. Symptom Checker (Section-based, highly customized clinical fallback)
+      if (
+        normalized.includes("symptom checker") || 
+        normalized.includes("symptoms") || 
+        normalized.includes("medical symptom") || 
+        normalized.includes("patient configuration details") || 
+        normalized.includes("section_1") || 
+        normalized.includes("potential_causes")
+      ) {
+        const ageMatch = promptText.match(/(?:Age|aged)\s*[:]?\s*(\d+)/i);
+        const age = ageMatch ? parseInt(ageMatch[1], 10) : 35;
+
+        const genderMatch = promptText.match(/(?:Biological Gender|Gender|gender)\s*[:]?\s*(\w+)/i);
+        const gender = genderMatch && genderMatch[1] ? genderMatch[1].trim() : "Unspecified";
+
+        const symptomMatch = promptText.match(/(?:Primary Symptoms|Symptoms)\s*[:]?\s*([^\n]+)/i);
+        const symptoms = symptomMatch && symptomMatch[1] ? symptomMatch[1].trim() : "general physical discomfort";
+
+        const severityMatch = promptText.match(/(?:Severity)\s*[:]?\s*(\d+)/i);
+        const severity = severityMatch ? parseInt(severityMatch[1], 10) : 5;
+
+        const symptomsLower = symptoms.toLowerCase();
+        let causes = "";
+        let treatments = "";
+        let prevention = "";
+        let firstaid = "";
+        let resources = "";
+
+        if (
+          symptomsLower.includes("fever") || 
+          symptomsLower.includes("cough") || 
+          symptomsLower.includes("flu") || 
+          symptomsLower.includes("cold") || 
+          symptomsLower.includes("throat")
+        ) {
+          causes = `## Possible Causes & Pathology
+- **Viral Upper Respiratory Infection (Common Cold)**: Highly likely given standard respiratory symptom onset. Corresponds to mild self-limiting bronchial inflammation.
+- **Influenza (Seasonal Flu)**: Suggested if onset was sudden and accompanied by moderate systemic body aches or chills.
+- **Acute Bronchitis**: Mild airway passage congestion often trailing common viral profiles (as documented in CDC clinical guidelines).`;
+          
+          treatments = `## Evidence-Based Treatment Pathways
+- **Symptomatic Relief**: Keep fever and aches low with over-the-counter paracetamol (acetaminophen) or ibuprofen, checking appropriate dosages with a pharmacist.
+- **Supportive Therapies**: Warm water saline gargles (1/2 tsp salt in warm water) to soothe throat irritation, and steam inhalation or humidifiers to loosen nasal secretions.
+- **Rest & Hydration**: Prioritize sleep and clear fluids (water, herbal tea) to keep mucous membranes moist and help the immune system filter pathogens.`;
+
+          prevention = `## Preventive Care & Lifestyle Adjustments
+- **Hygiene Measures**: Frequent hand-washing with soap for 20 seconds, or using an alcohol-based sanitizer, particularly before meals.
+- **Vaccination Timing**: Schedule annual influenza vaccine and relevant pneumococcal or booster shots.
+- **Airway Support**: Clean indoor air filters regularly and maintain hydration to preserve your respiratory tract's natural mucosal barrier.`;
+
+          firstaid = `## First Aid & Critical Warning Red Flags
+- **Difficulty Breathing**: Immediate medical attention is required if there is shortness of breath, wheezing, or feelings of chest tightness.
+- **Persistent High Fever**: Fever above 103°F (39.4°C) that does not reduce with medication.
+- **Emergency Indicators**: Bluish lips or face, confusion, or inability to stay awake are critical emergency indicators. Call emergency services (911/112) immediately.`;
+
+          resources = `## Doctor Screening Checkpoints & Verified Sources
+### Questions for Your Doctor:
+1. "Given my respiratory symptoms, is a diagnostic throat swab or PCR panel indicated?"
+2. "Are there underlying asthma or airway considerations we should review?"
+3. "At what point should we evaluate for potential secondary bacterial infection?"
+
+### Trustworthy Medical Directories:
+| Platform | Search Reference Term | Clinical Scope |
+| :--- | :--- | :--- |
+| **Mayo Clinic** | Influenza & Common Cold | Clinical pathways, symptom relief, and home recovery |
+| **CDC.gov** | Preventive Respiratory Guidance | Seasonal vaccination schedules and hygiene guidelines |
+| **NHS UK** | Cough and Fever Care | Standard triage protocols and recovery timelines |`;
+        } else if (symptomsLower.includes("headache") || symptomsLower.includes("migraine")) {
+          causes = `## Possible Causes & Pathology
+- **Tension Headache**: The most common primary headache type, typically presenting as a tight band of pressure around the head, often related to stress or posture.
+- **Migraine Episode**: Indicated if the pain is unilateral, throbbing, or accompanied by sensory sensitivities (photophobia, phonophobia).
+- **Dehydration Headache**: Triggered by systemic fluid deficits which affect intracranial vascular dynamics.`;
+
+          treatments = `## Evidence-Based Treatment Pathways
+- **Dark, Quiet Rest**: Seek absolute sensory decompression in a cooled, darkened room to down-regulate over-stimulated neural pathways.
+- **Hydration Protocols**: Drink a large glass of water or electrolyte-balanced fluid slowly.
+- **OTC Pharmacotherapy**: Administer non-steroidal anti-inflammatory drugs (NSAIDs) or paracetamol according to package guidelines, avoiding overuse to prevent medication-overuse headaches.`;
+
+          prevention = `## Preventive Care & Lifestyle Adjustments
+- **Symptom Diary**: Keep a precise diary recording sleep, food triggers (aged cheeses, processed meats), and caffeine intake to identify patterns.
+- **Sleep Architecture**: Maintain a rigid, consistent sleep schedule, waking and resting at identical times daily.
+- **Ergonomic Support**: Ensure correct neck alignment and computer screen height at work to minimize muscular tension.`;
+
+          firstaid = `## First Aid & Critical Warning Red Flags
+- **Thunderclap Onset**: Headaches that peak in intensity within seconds (sudden, explosive pain) require immediate emergency department evaluation.
+- **Neurological Deficits**: Accompanying confusion, visual loss, double vision, speech difficulty, or weakness on one side of the body.
+- **Meningeal Signs**: High fever accompanied by a rigid neck, nausea, and severe light sensitivity require urgent screening for meningitis.`;
+
+          resources = `## Doctor Screening Checkpoints & Verified Sources
+### Questions for Your Doctor:
+1. "Does my headache profile suggest a primary migraine disorder?"
+2. "Are preventive prescription therapies appropriate for my frequency?"
+3. "Could my headaches be associated with medication overuse or neck strain?"
+
+### Trustworthy Medical Directories:
+| Platform | Search Reference Term | Clinical Scope |
+| :--- | :--- | :--- |
+| **Mayo Clinic** | Migraine & Tension Headaches | Diagnostic criteria, acute therapies, and lifestyle habits |
+| **MedlinePlus** | Headache Management | Patient guides, trigger checklists, and warning signs |
+| **NIH NINDS** | Headache Information Page | Comprehensive research-backed neurological explanations |`;
+        } else if (
+          symptomsLower.includes("pain") || 
+          symptomsLower.includes("stomach") || 
+          symptomsLower.includes("abdomen") || 
+          symptomsLower.includes("nausea") || 
+          symptomsLower.includes("diarrhea") || 
+          symptomsLower.includes("vomit")
+        ) {
+          causes = `## Possible Causes & Pathology
+- **Acute Gastroenteritis (Stomach Flu)**: Often viral or mild foodborne irritation, causing temporary bowel tract inflammation.
+- **Dietary Indiscretion**: Gastrointestinal distress from food sensitivities, overly rich foods, or temporary digestive disruption.
+- **Gastroesophageal Reflux (GERD)**: Acid backflow causing localized burning sensation in the upper epigastrium.`;
+
+          treatments = `## Evidence-Based Treatment Pathways
+- **Oral Rehydration**: Sip Oral Rehydration Salts (ORS) or water with electrolytes frequently in small quantities to offset fluid loss.
+- **BRAT Diet Transition**: Once nausea subsides, introduce gentle foods like bananas, rice, applesauce, and plain toast.
+- **Acid Buffering**: Utilize over-the-counter antacids or H2 blockers for localized upper stomach burning, following clinical instructions.`;
+
+          prevention = `## Preventive Care & Lifestyle Adjustments
+- **Food Hygiene**: Maintain sanitary food preparation surfaces, cook poultry thoroughly, and store perishables at proper cool temperatures.
+- **Probiotic Support**: Consume fermented whole foods (yogurt, kefir) or high-quality dietary fibers to rebuild gut biome resilience.
+- **Trigger Avoidance**: Eliminate carbonated drinks, excess caffeine, and spicy or greasy meals.`;
+
+          firstaid = `## First Aid & Critical Warning Red Flags
+- **Acute Localized Pain**: Severe, sharp, localized pain (such as the lower right quadrant, indicative of appendicitis) requires urgent evaluation.
+- **Dehydration Indicators**: Inability to keep fluids down for over 24 hours, extreme thirst, dry mouth, or dark/infrequent urine.
+- **Systemic Alarms**: Presence of blood in vomit or stools, or high fever with severe abdominal rigidity. Go to the ER immediately.`;
+
+          resources = `## Doctor Screening Checkpoints & Verified Sources
+### Questions for Your Doctor:
+1. "Could my abdominal symptoms indicate a specific food intolerance or IBS?"
+2. "Is a stool panel or diagnostic breath test indicated for persistent symptoms?"
+3. "What specific hydration markers should we track in my blood work?"
+
+### Trustworthy Medical Directories:
+| Platform | Search Reference Term | Clinical Scope |
+| :--- | :--- | :--- |
+| **NIDDK NIH** | Gastroenteritis & Acid Reflux | Detailed physiological guides on digestion and stomach conditions |
+| **Mayo Clinic** | Abdominal Pain Guide | Categorized pain mapping, home care, and warning signs |
+| **CDC.gov** | Food Safety and Hygiene | Guidelines to prevent foodborne pathogens and stomach flu |`;
+        } else {
+          causes = `## Possible Causes & Pathology
+- **Mild Physical Exertion Fatigue**: Temporary muscular or metabolic recovery response following exertion or systemic stress.
+- **Minor Localized Irritation**: Non-specific tissue, dermatological, or muscular irritation, often self-limiting in nature.
+- **Dehydration or Sleep Deficit**: Minor homeostatic imbalances that trigger general physical discomfort or fatigue.`;
+
+          treatments = `## Evidence-Based Treatment Pathways
+- **Relative Rest**: Allow the body a 24-48 hour window of lower physical demand to stimulate cellular self-repair.
+- **Thermodynamics**: Apply cool compress packs for acute swelling, or warm packs to soothe stiff, tense muscles.
+- **Sustained Hydration**: Drink pure water or electrolyte-fortified fluids to stabilize cellular fluid balances.`;
+
+          prevention = `## Preventive Care & Lifestyle Adjustments
+- **Sustained Sleep Quality**: Maintain a 7.5 to 8.5 hour nocturnal sleep window to maximize growth hormone release and nervous system repair.
+- **Micro-Nutrient Stability**: Consume a balanced whole-foods diet rich in magnesium, leafy greens, and lean proteins.
+- **Daily Recovery Routines**: Include active stretching, joint mobility routines, and 10 minutes of controlled diaphragmatic breathing daily.`;
+
+          firstaid = `## First Aid & Critical Warning Red Flags
+- **Acute Systemic Signs**: Sudden facial drooping, unilateral limb weakness, or severe speech difficulty require calling 911/112 immediately.
+- **Unexplained Shortness of Breath**: Sudden onset of breathing difficulty or crushing chest pain radiating to the neck, jaw, or arm.
+- **Loss of Orientation**: Feeling faint, sudden confusion, visual gaps, or inability to stand.`;
+
+          resources = `## Doctor Screening Checkpoints & Verified Sources
+### Questions for Your Doctor:
+1. "What baseline blood markers (CBC, Vitamin D, Thyroid) should we screen?"
+2. "How might my daily stress levels or sleep quality be impacting these symptoms?"
+3. "Are there any physical activity limitations I should follow?"
+
+### Trustworthy Medical Directories:
+| Platform | Search Reference Term | Clinical Scope |
+| :--- | :--- | :--- |
+| **Mayo Clinic** | Symptom Assessment & Care | Clinical home care strategies, diagnostics, and prevention |
+| **MedlinePlus** | General Wellness & Symptoms | Comprehensive, patient-friendly medical dictionaries and search |
+| **NIH.gov** | Preventive Health Guidelines | Evidence-backed guides for daily longevity and disease prevention |`;
+        }
+
+        return `[SECTION_1: POTENTIAL_CAUSES]
+${causes}
+
+[SECTION_2: TREATMENT_PATHWAYS]
+${treatments}
+
+[SECTION_3: PREVENTION_STRATEGIES]
+${prevention}
+
+[SECTION_4: FIRST_AID_PROTOCOLS]
+${firstaid}
+
+[SECTION_5: CLINICAL_RESOURCES]
+${resources}`;
+      }
+
+      // 3. Men's Health & Preventive Screening Guides
+      if (
+        normalized.includes("men's health") || 
+        normalized.includes("screening and wellness guide") || 
+        normalized.includes("male patient")
+      ) {
+        const ageMatch = promptText.match(/(?:Age|aged)\s*[:]?\s*(\d+)/i);
+        const age = ageMatch ? parseInt(ageMatch[1], 10) : 45;
+
+        const focusMatch = promptText.match(/(?:Primary Wellness Focus|Focus Area|focus)\s*[:]?\s*([a-zA-Z\s&-]+)/i);
+        const focus = focusMatch && focusMatch[1] ? focusMatch[1].trim() : "Overall Longevity";
+
+        const activityMatch = promptText.match(/(?:Activity State|Activity Level|activity)\s*[:]?\s*([a-zA-Z\s-]+)/i);
+        const activity = activityMatch && activityMatch[1] ? activityMatch[1].trim() : "Moderately Active";
+
+        const historyMatch = promptText.match(/(?:Hereditary History|Family History|history)\s*[:]?\s*([a-zA-Z\s-]+)/i);
+        const history = historyMatch && historyMatch[1] ? historyMatch[1].trim() : "No known hereditary family history";
+
+        // Build age-graded screening recommendations
+        const screenTimeline = [];
+        if (age >= 18) screenTimeline.push(`*   **Blood Pressure Assessment**: Recommended to check annually (Ideal target: below 120/80 mmHg). Essential to track cardiovascular resistance.`);
+        if (age >= 20) screenTimeline.push(`*   **Lipid Panel / Cholesterol Test**: Every 4-6 years starting at age 20 to determine risk profiles for coronary atherosclerosis.`);
+        if (age >= 35) screenTimeline.push(`*   **Type 2 Diabetes HbA1c Screening**: Every 3 years starting at age 35 to map fasting blood sugar trends and address prediabetic markers.`);
+        if (age >= 45) {
+          screenTimeline.push(`*   **Colorectal Cancer Screening**: Colonoscopy or home stool kits are standard starting at age 45. Essential for early precancerous polyp detection.`);
+          screenTimeline.push(`*   **Prostate-Specific PSA Test**: Consult with your physician starting at age 45-50 to design an individual screening pathway.`);
+        }
+        if (age >= 50) screenTimeline.push(`*   **Shingles (Zoster) Vaccination**: Typically 2 doses starting at age 50 to maintain solid immune protection against viral nerve pain.`);
+        if (age >= 65) screenTimeline.push(`*   **Pneumococcal Immunization**: Guidance recommends immunization at age 65 as an effective barrier against bacterial pneumonia.`);
+
+        return `# PERSONALIZED MEN'S PREVENTIVE HEALTH REPORT
 
 ## 📋 Recommended Screenings & Preventive Timeline (Aged ${age})
 ${screenTimeline.length > 0 ? screenTimeline.join("\n") : "*   No explicit diagnostics triggered for this range. Consult with your practitioner."}
@@ -546,35 +742,41 @@ ${screenTimeline.length > 0 ? screenTimeline.join("\n") : "*   No explicit diagn
 1. "Should we check my baseline high-sensitivity C-reactive protein (hs-CRP) to evaluate cardiac inflammation levels?"
 2. "Are physical risk markers triggering the need for a comprehensive metabolic panel or vitamin markers review?"
 3. "Is a preventive colonoscopy or PSA baseline test recommended for my specific lifestyle and family background?"`;
-    }
+      }
 
-    // 3. Personalized Workout Planners
-    if (normalized.includes("workout routine") || normalized.includes("weekly workout planner") || normalized.includes("fitness planner") || normalized.includes("strength and conditioning") || normalized.includes("training frequency")) {
-      const ageMatch = promptText.match(/(?:Age|aged)\s*[:]?\s*(\d+)/i);
-      const age = ageMatch ? parseInt(ageMatch[1], 10) : 28;
+      // 4. Personalized Workout Planners
+      if (
+        normalized.includes("workout routine") || 
+        normalized.includes("weekly workout planner") || 
+        normalized.includes("fitness planner") || 
+        normalized.includes("strength and conditioning") || 
+        normalized.includes("training frequency")
+      ) {
+        const ageMatch = promptText.match(/(?:Age|aged)\s*[:]?\s*(\d+)/i);
+        const age = ageMatch ? parseInt(ageMatch[1], 10) : 28;
 
-      const genderMatch = promptText.match(/(?:Biological Gender|Gender|gender)\s*[:]?\s*(\w+)/i);
-      const gender = genderMatch ? genderMatch[1].trim() : "Male";
+        const genderMatch = promptText.match(/(?:Biological Gender|Gender|gender)\s*[:]?\s*(\w+)/i);
+        const gender = genderMatch && genderMatch[1] ? genderMatch[1].trim() : "Male";
 
-      const weightMatch = promptText.match(/(?:Weight|weight)\s*[:]?\s*(\d+)/i);
-      const weight = weightMatch ? parseInt(weightMatch[1], 10) : 75;
+        const weightMatch = promptText.match(/(?:Weight|weight)\s*[:]?\s*(\d+)/i);
+        const weight = weightMatch ? parseInt(weightMatch[1], 10) : 75;
 
-      const heightMatch = promptText.match(/(?:Height|height)\s*[:]?\s*(\d+)/i);
-      const height = heightMatch ? parseInt(heightMatch[1], 10) : 178;
+        const heightMatch = promptText.match(/(?:Height|height)\s*[:]?\s*(\d+)/i);
+        const height = heightMatch ? parseInt(heightMatch[1], 10) : 178;
 
-      const goalMatch = promptText.match(/(?:Fitness Goal|Goal|goal)\s*[:]?\s*([a-zA-Z\s-]+)/i);
-      const goal = goalMatch ? goalMatch[1].trim() : "Muscle Gain";
+        const goalMatch = promptText.match(/(?:Fitness Goal|Goal|goal)\s*[:]?\s*([a-zA-Z\s-]+)/i);
+        const goal = goalMatch && goalMatch[1] ? goalMatch[1].trim() : "Muscle Gain";
 
-      const levelMatch = promptText.match(/(?:Experience Level|Level|level)\s*[:]?\s*(\w+)/i);
-      const level = levelMatch ? levelMatch[1].trim() : "Intermediate";
+        const levelMatch = promptText.match(/(?:Experience Level|Level|level)\s*[:]?\s*(\w+)/i);
+        const level = levelMatch && levelMatch[1] ? levelMatch[1].trim() : "Intermediate";
 
-      const daysMatch = promptText.match(/(?:Days per Week|Days|days)\s*[:]?\s*(\d+)/i);
-      const days = daysMatch ? parseInt(daysMatch[1], 10) : 4;
+        const daysMatch = promptText.match(/(?:Days per Week|Days|days)\s*[:]?\s*(\d+)/i);
+        const days = daysMatch ? parseInt(daysMatch[1], 10) : 4;
 
-      const envMatch = promptText.match(/(?:Environment|equipment|training environment)\s*[:]?\s*([a-zA-Z\s/]+)/i);
-      const env = envMatch ? envMatch[1].trim() : "Commercial Gym";
+        const envMatch = promptText.match(/(?:Environment|equipment|training environment)\s*[:]?\s*([a-zA-Z\s/]+)/i);
+        const env = envMatch && envMatch[1] ? envMatch[1].trim() : "Commercial Gym";
 
-      return `# ${goal.toUpperCase()} FITNESS AND WORKOUT ROUTINE
+        return `# ${goal.toUpperCase()} FITNESS AND WORKOUT ROUTINE
 *Targeted Athlete Profile: ${age}-year-old ${gender} | Weight: ${weight}kg, Height: ${height}cm | Level: ${level}*
 
 ## 🗓️ Weekly Training Frequency Split (${days}-Day Split)
@@ -639,11 +841,19 @@ ${screenTimeline.length > 0 ? screenTimeline.join("\n") : "*   No explicit diagn
 ## 📈 Progression & Recovery Philosophy
 *   **Progressive Overload**: Aim to add one additional repetition or a small mass load to each movement set weekly.
 *   **Systemic Rest**: Rest is where muscle grows. Prioritize 8 full hours of sleep to amplify growth hormone release and central nervous system repair.`;
-    }
+      }
 
-    // 4. Emergency & First Aid instructions
-    if (normalized.includes("emergency") || normalized.includes("first aid") || normalized.includes("bite") || normalized.includes("burn") || normalized.includes("bite") || normalized.includes("choking") || normalized.includes("cpr")) {
-      return `# IMMEDIATE FIRST AID CARE EMERGENCY PROTOCOLS
+      // 5. Emergency & First Aid instructions
+      if (
+        normalized.includes("emergency") || 
+        normalized.includes("first aid") || 
+        normalized.includes("bite") || 
+        normalized.includes("burn") || 
+        normalized.includes("bite") || 
+        normalized.includes("choking") || 
+        normalized.includes("cpr")
+      ) {
+        return `# IMMEDIATE FIRST AID CARE EMERGENCY PROTOCOLS
 *Disclaimer: This is preventative education context. If you are experiencing a life-threatening crisis, call emergency medical services immediately.*
 
 ## 🚨 Essential Scene Assessment Actions
@@ -672,15 +882,21 @@ ${screenTimeline.length > 0 ? screenTimeline.join("\n") : "*   No explicit diagn
 ### 4. Insect Stings and Animal Bites
 *   Wash the bite site with soap and flowing water. Use a flat card to slide and detach stingers. Do not squeeze with tweezers.
 *   Apply cold compress packs to mitigate swelling. Monitor close for systemic allergy symptoms.`;
-    }
+      }
 
-    // 5. General AI Assistant response
-    return `### PulsePoint Healthcare Support Agent
+      // 6. Default Fallback
+      return `### PulsePoint Healthcare Support Agent
 Our backend clinical intelligence network is presently experiencing a massive spike in requests (rate limit/service high demand). Standard services remain operational. Here is helpful, foundational health advice for your reference:
 
 - **Wellness Targets**: Maintain 150 minutes of moderate aerobic workouts weekly, limit processed simple sugars, and aim for 7.5 to 8.5 hours of solid rest nightly.
 - **Physical Safety**: If you are dealing with critical signs such as heavy chest compression pain, unexplained short breath, sudden facial drop, or limb numbness, contact emergency responders immediately.
 - **Health Tools**: Utilize our offline-capable BMI, Heart Rate, pregnancy trackers, or water loggers on this platform. Please submit your exact query once network demand levels stabilize!`;
+
+    } catch (err: any) {
+      console.warn("Exception in getAIGenerationFallback:", err);
+      return `### PulsePoint Healthcare Support Agent
+Our backend clinical intelligence network is temporarily offline. Please contact local clinical providers or emergency responders (911) if you are experiencing an urgent physical crisis. For general wellness tracking, you can use our built-in offline-capable water logs, activity logs, and calculators safely.`;
+    }
   }
 
   // API routes
@@ -693,6 +909,18 @@ Our backend clinical intelligence network is presently experiencing a massive sp
     const { model, contents, config } = req.body;
     if (!contents) {
       return res.status(400).json({ error: "contents is a required field" });
+    }
+
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      console.warn("GEMINI_API_KEY environment variable is not defined. Using robust local fallback generator.");
+      try {
+        const fallbackText = getAIGenerationFallback(contents);
+        return res.json({ text: fallbackText });
+      } catch (fallbackError: any) {
+        console.warn("Local fallback generation failed:", fallbackError?.message || fallbackError);
+        return res.status(500).json({ error: "Failed to generate local content" });
+      }
     }
 
     try {
@@ -721,7 +949,10 @@ Our backend clinical intelligence network is presently experiencing a massive sp
         config,
       });
 
-      res.json({ text: response.text });
+      res.json({ 
+        text: response.text,
+        groundingMetadata: response.candidates?.[0]?.groundingMetadata
+      });
     } catch (error: any) {
       const errMsg = error?.message || String(error);
       const isQuota = errMsg.includes("quota") || errMsg.includes("429") || errMsg.includes("RESOURCE_EXHAUSTED") || error?.status === "RESOURCE_EXHAUSTED" || error?.status === 429;
@@ -751,7 +982,118 @@ Our backend clinical intelligence network is presently experiencing a massive sp
     const userLng = parseFloat(lng);
     const apiKey = process.env.GOOGLE_MAPS_PLATFORM_KEY || "";
 
-    // 1. If API Key is present, attempt live Google Maps Platform Nearby Search + Distance Matrix
+    // 1. Primary: Use gemini-3.5-flash with the googleMaps tool for high-fidelity maps grounding
+    try {
+      console.log(`[Google Maps Grounding] Requesting Gemini maps grounding search near coordinates: ${userLat}, ${userLng}`);
+      const ai = getAIClient();
+      const response = await ai.models.generateContent({
+        model: "gemini-3.5-flash",
+        contents: `Find real medical facilities (hospitals, clinics, pharmacies) near coordinates ${userLat}, ${userLng}. 
+        Prioritize hospitals and clinics with 24/7 service if available.
+        Please return the list as a JSON array of objects inside a \`\`\`json markdown block. Each object must have these fields:
+        - name: string (the exact full name)
+        - address: string (full street address)
+        - type: "hospital" | "clinic" | "pharmacy"
+        - mapsUrl: string (direct Google Maps link)
+        - lat: number (latitude of the facility)
+        - lng: number (longitude of the facility)
+        - reviews: array of strings (Google rating or helpful snippet, e.g. ["Google Rating: 4.6 ⭐ (120 reviews)", "Highly responsive emergency desk."])
+        
+        Do not add any conversational intro or outro text, only output the JSON array inside the \`\`\`json markdown block.`,
+        config: {
+          tools: [{ googleMaps: {} }],
+          toolConfig: {
+            retrievalConfig: {
+              latLng: {
+                latitude: userLat,
+                longitude: userLng
+              }
+            }
+          }
+        },
+      });
+
+      let text = response.text || "";
+      let facilities = [];
+      const jsonMatch = text.match(/```json\s*([\s\S]*?)\s*```/) || text.match(/```\s*([\s\S]*?)\s*```/);
+      const jsonStr = jsonMatch ? jsonMatch[1].trim() : text.trim();
+      try {
+        facilities = JSON.parse(jsonStr);
+      } catch (parseErr) {
+        console.warn("Failed to parse Gemini output as JSON, trying more permissive extraction:", parseErr);
+        const startIdx = jsonStr.indexOf("[");
+        const endIdx = jsonStr.lastIndexOf("]");
+        if (startIdx !== -1 && endIdx !== -1) {
+          try {
+            facilities = JSON.parse(jsonStr.substring(startIdx, endIdx + 1));
+          } catch (e) {
+            console.error("Permissive extraction failed:", e);
+          }
+        }
+      }
+
+      const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
+      const groundingSources = chunks
+        .map((chunk: any) => {
+          if (chunk.maps) {
+            return {
+              title: chunk.maps.title || "",
+              uri: chunk.maps.uri || "",
+              reviewSnippets: chunk.maps.placeAnswerSources?.map((source: any) => source.reviewSnippets).flat().filter(Boolean) || []
+            };
+          }
+          return null;
+        })
+        .filter(Boolean);
+
+      if (Array.isArray(facilities) && facilities.length > 0) {
+        const mapped = facilities.map((f: any) => {
+          const fLat = f.lat || userLat;
+          const fLng = f.lng || userLng;
+          const distanceMeter = calculateDistance(userLat, userLng, fLat, fLng);
+          
+          let facilityType: 'hospital' | 'clinic' | 'pharmacy' = 'hospital';
+          const t = String(f.type || '').toLowerCase();
+          if (t.includes('pharmacy') || t.includes('chemist') || t.includes('drugstore')) {
+            facilityType = 'pharmacy';
+          } else if (t.includes('clinic') || t.includes('medical') || t.includes('health') || t.includes('urgent')) {
+            facilityType = 'clinic';
+          }
+
+          // Try to find matching grounding chunk for mapsUrl or reviews fallback
+          let mapsUrl = f.mapsUrl || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent((f.name || '') + ' ' + (f.address || ''))}`;
+          const matchingChunk = groundingSources.find((src: any) => 
+            (src.title && f.name && (src.title.toLowerCase().includes(f.name.toLowerCase()) || f.name.toLowerCase().includes(src.title.toLowerCase())))
+          );
+          if (matchingChunk && matchingChunk.uri) {
+            mapsUrl = matchingChunk.uri;
+          }
+
+          return {
+            name: f.name || "Unknown Facility",
+            address: f.address || "Address not available",
+            type: facilityType,
+            mapsUrl: mapsUrl,
+            lat: fLat,
+            lng: fLng,
+            distanceMeter,
+            distanceDisplay: distanceMeter > 1000 
+              ? `${(distanceMeter / 1000).toFixed(1)} km` 
+              : `${Math.round(distanceMeter)} m`,
+            reviews: Array.isArray(f.reviews) ? f.reviews : []
+          };
+        }).sort((a: any, b: any) => (a.distanceMeter || 0) - (b.distanceMeter || 0));
+
+        return res.json({
+          facilities: mapped,
+          groundingSources: groundingSources
+        });
+      }
+    } catch (geminiMapsError) {
+      console.error("[Google Maps Grounding] Gemini Maps Grounding tool failed on backend. Shifting to Place API.", geminiMapsError);
+    }
+
+    // 2. Fallback A: If API Key is present, attempt live Google Maps Platform Nearby Search + Distance Matrix
     if (apiKey && apiKey !== "YOUR_API_KEY") {
       try {
         console.log(`[Google Maps Integration] Finding facilities near ${userLat}, ${userLng}`);
@@ -824,92 +1166,15 @@ Our backend clinical intelligence network is presently experiencing a massive sp
 
           // Rank sorted by distance
           mapped.sort((a: any, b: any) => (a.distanceMeter || 0) - (b.distanceMeter || 0));
-          return res.json(mapped);
+          return res.json({
+            facilities: mapped,
+            groundingSources: []
+          });
         } else {
           console.warn(`[Google Maps Integration] Places Search returned status: ${placesData.status}. Shifting to fallback.`);
         }
       } catch (gmpError) {
         console.error("Error using Google Maps APIs on backend:", gmpError);
-      }
-    }
-
-    // 2. Fallback A: Gemini grounding search if API key fails or is absent
-    try {
-      console.log(`[Google Maps Fallback] Requesting Gemini ground search near coordinates: ${userLat}, ${userLng}`);
-      const ai = getAIClient();
-      const response = await ai.models.generateContent({
-        model: "gemini-3.5-flash",
-        contents: `Find real medical facilities (hospitals, clinics, pharmacies) near coordinates ${userLat}, ${userLng}. 
-        Return a list of real facilities with their exact names, full addresses, and types. 
-        Prioritize hospitals and clinics with 24/7 service if available.`,
-        config: {
-          tools: [{ googleSearch: {} }],
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: "ARRAY",
-            items: {
-              type: "OBJECT",
-              properties: {
-                name: { type: "STRING" },
-                address: { type: "STRING" },
-                type: { type: "STRING" },
-                mapsUrl: { type: "STRING" },
-                lat: { type: "NUMBER" },
-                lng: { type: "NUMBER" },
-                reviews: {
-                  type: "ARRAY",
-                  items: { type: "STRING" }
-                }
-              },
-              required: ["name", "address", "type", "lat", "lng"]
-            }
-          }
-        },
-      });
-
-      let facilities = [];
-      if (response.text) {
-        facilities = JSON.parse(response.text.trim());
-      }
-
-      if (Array.isArray(facilities) && facilities.length > 0) {
-        const mapped = facilities.map((f: any) => {
-          const fLat = f.lat || userLat;
-          const fLng = f.lng || userLng;
-          const distanceMeter = calculateDistance(userLat, userLng, fLat, fLng);
-          
-          let facilityType: 'hospital' | 'clinic' | 'pharmacy' = 'hospital';
-          const t = String(f.type).toLowerCase();
-          if (t.includes('pharmacy') || t.includes('chemist') || t.includes('drugstore')) {
-            facilityType = 'pharmacy';
-          } else if (t.includes('clinic') || t.includes('medical') || t.includes('health') || t.includes('urgent')) {
-            facilityType = 'clinic';
-          }
-
-          return {
-            name: f.name || "Unknown Facility",
-            address: f.address || "Address not available",
-            type: facilityType,
-            mapsUrl: f.mapsUrl || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent((f.name || '') + ' ' + (f.address || ''))}`,
-            lat: fLat,
-            lng: fLng,
-            distanceMeter,
-            distanceDisplay: distanceMeter > 1000 
-              ? `${(distanceMeter / 1000).toFixed(1)} km` 
-              : `${Math.round(distanceMeter)} m`,
-            reviews: Array.isArray(f.reviews) ? f.reviews : []
-          };
-        }).sort((a: any, b: any) => (a.distanceMeter || 0) - (b.distanceMeter || 0));
-
-        return res.json(mapped);
-      }
-    } catch (fallbackError: any) {
-      const errMsg = fallbackError?.message || String(fallbackError);
-      const isQuota = errMsg.includes("quota") || errMsg.includes("429") || errMsg.includes("RESOURCE_EXHAUSTED") || fallbackError?.status === "RESOURCE_EXHAUSTED" || fallbackError?.status === 429;
-      if (isQuota) {
-        console.warn("[Google Maps Fallback] Gemini search also rate limited/quota exceeded. Shifting cleanly to high-fidelity static Uganda Kampala fallback.");
-      } else {
-        console.warn(`[Google Maps Fallback] Gemini search failed: ${errMsg}. Shifting cleanly to high-fidelity static Uganda Kampala fallback.`);
       }
     }
 
@@ -982,7 +1247,10 @@ Our backend clinical intelligence network is presently experiencing a massive sp
       };
     }).sort((a, b) => a.distanceMeter - b.distanceMeter);
 
-    res.json(mapped);
+    res.json({
+      facilities: mapped,
+      groundingSources: []
+    });
   });
 
   // Admin API (Mocked for now as we don't have service account, but centralized here)

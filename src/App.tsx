@@ -32,6 +32,7 @@ const Messages = React.lazy(() => import('./pages/Messages'));
 
 const Chat = React.lazy(() => import('./pages/Chat'));
 const Meeting = React.lazy(() => import('./pages/Meeting'));
+const AiAssistant = React.lazy(() => import('./pages/AiAssistant'));
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, loading } = useAuth();
@@ -130,6 +131,11 @@ export default function App() {
                   <Route path="profile" element={
                     <ProtectedRoute>
                       <Profile />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="ai-assistant" element={
+                    <ProtectedRoute>
+                      <AiAssistant />
                     </ProtectedRoute>
                   } />
                   <Route path="chat/:roomId" element={

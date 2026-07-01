@@ -43,6 +43,7 @@ export class GoogleGenAI {
           const data = await response.json();
           return {
             text: data.text || "",
+            groundingMetadata: data.groundingMetadata
           };
         } catch (error) {
           console.error("Client proxy request failed:", error);
@@ -83,6 +84,8 @@ export class GoogleGenAI {
                 model: params.model,
                 contents: contents,
                 config: params.config,
+                tools: params.config?.tools,
+                toolConfig: params.config?.toolConfig
               }),
             });
 
@@ -94,6 +97,7 @@ export class GoogleGenAI {
             const data = await response.json();
             return {
               text: data.text || "",
+              groundingMetadata: data.groundingMetadata
             };
           }
         };

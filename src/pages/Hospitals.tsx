@@ -13,7 +13,8 @@ import {
   PlusCircle,
   Activity,
   AlertTriangle,
-  Info
+  Info,
+  ExternalLink
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { findNearbyFacilities, NearbyFacility } from '../services/locationService';
@@ -26,6 +27,7 @@ const Hospitals: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [locating, setLocating] = useState(false);
   const [nearbyFacilities, setNearbyFacilities] = useState<NearbyFacility[]>([]);
+  const [groundingSources, setGroundingSources] = useState<any[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [filterType, setFilterType] = useState<'all' | 'hospital' | 'clinic' | 'pharmacy'>('all');
   const [userLocation, setUserLocation] = useState<[number, number] | null>(null);
@@ -53,7 +55,8 @@ const Hospitals: React.FC = () => {
           setUserLocation([latitude, longitude]);
           try {
             const results = await findNearbyFacilities(latitude, longitude);
-            setNearbyFacilities(results);
+            setNearbyFacilities(results.facilities || []);
+            setGroundingSources(results.groundingSources || []);
           } catch (err) {
             console.error("Failed to fetch facilities on mount:", err);
           }
@@ -81,7 +84,8 @@ const Hospitals: React.FC = () => {
         setUserLocation([latitude, longitude]);
         try {
           const results = await findNearbyFacilities(latitude, longitude);
-          setNearbyFacilities(results);
+          setNearbyFacilities(results.facilities || []);
+          setGroundingSources(results.groundingSources || []);
         } catch (err) {
           setError("Failed to find nearby facilities. Please try again.");
         } finally {
@@ -385,6 +389,46 @@ const Hospitals: React.FC = () => {
                 ))}
               </div>
             </div>
+
+            {groundingSources && groundingSources.length > 0 && (
+              <div className="bg-card p-8 rounded-[2.5rem] border border-emerald-500/20 shadow-sm">
+                <h2 className="text-xl font-bold mb-6 flex items-center gap-2 text-emerald-600 dark:text-emerald-400">
+                  <MapPin className="w-5 h-5" />
+                  Verified Google Maps Sources
+                </h2>
+                <div className="space-y-6">
+                  {groundingSources.map((source, sIdx) => (
+                    <div key={sIdx} className="group">
+                      <div className="flex flex-col">
+                        <div className="flex items-center justify-between mb-1 gap-2">
+                          <h3 className="font-bold text-sm text-foreground group-hover:text-primary transition-colors">
+                            {source.title}
+                          </h3>
+                          <a 
+                            href={source.uri} 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="text-primary hover:underline text-xs flex items-center gap-1 shrink-0 font-bold"
+                          >
+                            Map <ExternalLink className="w-3.5 h-3.5" />
+                          </a>
+                        </div>
+                        {source.reviewSnippets && source.reviewSnippets.length > 0 && (
+                          <div className="mt-2 space-y-2 bg-slate-50 dark:bg-slate-900 p-3 rounded-2xl border border-border/60">
+                            {source.reviewSnippets.map((snippet: string, snIdx: number) => (
+                              <p key={snIdx} className="text-xs text-muted-foreground italic leading-relaxed">
+                                "{snippet}"
+                              </p>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      <div className="mt-4 h-px bg-border group-last:hidden animate-pulse"></div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             <div className="bg-primary/5 p-8 rounded-[2.5rem] border border-primary/10">
               <div className="w-12 h-12 bg-primary/10 rounded-2xl flex items-center justify-center mb-6">
