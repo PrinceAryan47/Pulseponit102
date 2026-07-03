@@ -994,12 +994,12 @@ Our backend clinical intelligence network is temporarily offline. Please contact
       const ai = getAIClient();
       const apiCallPromise = ai.models.generateContent({
         model: "gemini-3.5-flash",
-        contents: `Find real medical facilities (hospitals, clinics, pharmacies) near coordinates ${userLat}, ${userLng}. 
-        Prioritize hospitals and clinics with 24/7 service if available.
+        contents: `Find real medical facilities (including general hospitals, urgent clinics, pharmacies/chemists, dental clinics, specialty doctor offices like pediatrics/cardiology, and diagnostic imaging/laboratory centers) near coordinates ${userLat}, ${userLng}. 
+        Prioritize facilities with active ratings or 24/7 service if available, offering a diverse list representing all these types if they exist near the location.
         Please return the list as a JSON array of objects inside a \`\`\`json markdown block. Each object must have these fields:
         - name: string (the exact full name)
         - address: string (full street address)
-        - type: "hospital" | "clinic" | "pharmacy"
+        - type: "hospital" | "clinic" | "pharmacy" | "dental" | "specialty" | "diagnostic"
         - mapsUrl: string (direct Google Maps link)
         - lat: number (latitude of the facility)
         - lng: number (longitude of the facility)
@@ -1064,11 +1064,18 @@ Our backend clinical intelligence network is temporarily offline. Please contact
           const fLng = f.lng || userLng;
           const distanceMeter = calculateDistance(userLat, userLng, fLat, fLng);
           
-          let facilityType: 'hospital' | 'clinic' | 'pharmacy' = 'hospital';
+          let facilityType: string = 'hospital';
           const t = String(f.type || '').toLowerCase();
-          if (t.includes('pharmacy') || t.includes('chemist') || t.includes('drugstore')) {
+          const n = String(f.name || '').toLowerCase();
+          if (t.includes('pharmacy') || t.includes('chemist') || t.includes('drugstore') || n.includes('pharmacy')) {
             facilityType = 'pharmacy';
-          } else if (t.includes('clinic') || t.includes('medical') || t.includes('health') || t.includes('urgent')) {
+          } else if (t.includes('dental') || t.includes('dentist') || t.includes('orthodont') || n.includes('dental') || n.includes('dentist')) {
+            facilityType = 'dental';
+          } else if (t.includes('diagnostic') || t.includes('lab') || t.includes('scan') || t.includes('imaging') || t.includes('pathology') || n.includes('diagnostic') || n.includes('lab') || n.includes('scan') || n.includes('imaging') || n.includes('pathology') || n.includes('x-ray') || n.includes('xray')) {
+            facilityType = 'diagnostic';
+          } else if (t.includes('special') || t.includes('cardio') || t.includes('pediatric') || t.includes('maternity') || t.includes('eye') || t.includes('oncology') || n.includes('special') || n.includes('cardio') || n.includes('pediatric') || n.includes('maternity') || n.includes('eye') || n.includes('heart') || n.includes('skin') || n.includes('derma')) {
+            facilityType = 'specialty';
+          } else if (t.includes('clinic') || t.includes('medical center') || t.includes('medical centre') || t.includes('health') || t.includes('urgent') || n.includes('clinic') || n.includes('health centre') || n.includes('health center')) {
             facilityType = 'clinic';
           }
 
@@ -1154,10 +1161,16 @@ Our backend clinical intelligence network is temporarily offline. Please contact
               }
             }
 
-            let facilityType: "hospital" | "clinic" | "pharmacy" = "hospital";
+            let facilityType: string = 'hospital';
             const nameLower = p.name.toLowerCase();
             if (nameLower.includes("pharmacy") || nameLower.includes("chemist") || nameLower.includes("drugstore")) {
               facilityType = "pharmacy";
+            } else if (nameLower.includes("dental") || nameLower.includes("dentist") || nameLower.includes("orthodont")) {
+              facilityType = "dental";
+            } else if (nameLower.includes("diagnostic") || nameLower.includes("lab") || nameLower.includes("scan") || nameLower.includes("imaging") || nameLower.includes("pathology") || nameLower.includes("x-ray") || nameLower.includes("xray")) {
+              facilityType = "diagnostic";
+            } else if (nameLower.includes("specialist") || nameLower.includes("cardio") || nameLower.includes("pediatric") || nameLower.includes("maternity") || nameLower.includes("eye") || nameLower.includes("heart") || nameLower.includes("skin") || nameLower.includes("derma") || nameLower.includes("oncology")) {
+              facilityType = "specialty";
             } else if (nameLower.includes("clinic") || nameLower.includes("medical centre") || nameLower.includes("health") || nameLower.includes("dispensary") || nameLower.includes("medical center")) {
               facilityType = "clinic";
             }
@@ -1190,7 +1203,7 @@ Our backend clinical intelligence network is temporarily offline. Please contact
       }
     }
 
-    // 3. Fallback B: Fully authentic, located medical facilities in Kampala, Uganda
+    // 3. Fallback B: Fully authentic, located medical facilities in Kampala, Uganda with rich diversity
     const fallbackFacilities = [
       {
         name: "Mulago National Referral Hospital",
@@ -1211,6 +1224,24 @@ Our backend clinical intelligence network is temporarily offline. Please contact
         reviews: ["Highly rated premium private health facility.", "Very clean, professional doctors and brief wait times."]
       },
       {
+        name: "Jubilee Dental Clinic",
+        address: "Plot 30, Jinja Road, Kampala, Uganda",
+        type: "dental" as const,
+        mapsUrl: `https://www.google.com/maps/search/?api=1&query=Jubilee+Dental+Clinic+Kampala`,
+        lat: 0.3155,
+        lng: 32.5892,
+        reviews: ["State of the art dental implants & orthodontics.", "Highly rated patient care and hygiene standards."]
+      },
+      {
+        name: "Kampala Imaging Centre (KIC)",
+        address: "Plot 12, George Street, Kampala, Uganda",
+        type: "diagnostic" as const,
+        mapsUrl: `https://www.google.com/maps/search/?api=1&query=Kampala+Imaging+Centre+George+Street`,
+        lat: 0.3204,
+        lng: 32.5755,
+        reviews: ["Advanced MRI, 3D/4D Ultrasound, and CT Scan diagnostics.", "Prompt lab results and digital reporting."]
+      },
+      {
         name: "The Surgery Uganda",
         address: "21 Luthuli Avenue, Bugolobi, Kampala, Uganda",
         type: "clinic" as const,
@@ -1220,13 +1251,31 @@ Our backend clinical intelligence network is temporarily offline. Please contact
         reviews: ["Excellent 24-hour emergency response and ambulance services.", "Highly professional and experienced crew."]
       },
       {
-        name: "Kampala Hospital",
+        name: "Kampala Hospital Kololo",
         address: "6 Shimon Road, Kololo, Kampala, Uganda",
         type: "hospital" as const,
         mapsUrl: `https://www.google.com/maps/search/?api=1&query=Kampala+Hospital+Kololo`,
         lat: 0.3315,
         lng: 32.5912,
         reviews: ["Conveniently situated in quiet Kololo.", "Equipped with state-of-the-art diagnostic imaging scanners."]
+      },
+      {
+        name: "Children's Clinic Kampala",
+        address: "Plot 15, Yusuf Lule Road, Kampala, Uganda",
+        type: "specialty" as const,
+        mapsUrl: `https://www.google.com/maps/search/?api=1&query=Childrens+Clinic+Yusuf+Lule+Kampala`,
+        lat: 0.3290,
+        lng: 32.5855,
+        reviews: ["Specialized pediatric doctors & newborn wellness programs.", "Friendly environment for young patients."]
+      },
+      {
+        name: "Lancet Laboratories Uganda",
+        address: "Plot 61-67, Buganda Road, Kampala, Uganda",
+        type: "diagnostic" as const,
+        mapsUrl: `https://www.google.com/maps/search/?api=1&query=Lancet+Laboratories+Buganda+Road+Kampala`,
+        lat: 0.3238,
+        lng: 32.5790,
+        reviews: ["ISO certified diagnostic medical laboratory.", "Online results retrieval with accurate path analysis."]
       },
       {
         name: "Case Medical Centre",
@@ -1236,6 +1285,15 @@ Our backend clinical intelligence network is temporarily offline. Please contact
         lat: 0.3242,
         lng: 32.5786,
         reviews: ["Clean clinics, reliable full lab and pharmacy services."]
+      },
+      {
+        name: "Pan Dental Surgery Kololo",
+        address: "Plot 4, Acacia Avenue, Kololo, Kampala, Uganda",
+        type: "dental" as const,
+        mapsUrl: `https://www.google.com/maps/search/?api=1&query=Pan+Dental+Surgery+Acacia+Avenue+Kampala`,
+        lat: 0.3352,
+        lng: 32.5878,
+        reviews: ["Leading dental care provider with specialists in cosmetic dentistry.", "Very friendly staff and clean private rooms."]
       },
       {
         name: "First Pharmacy Wandegeya",

@@ -14,7 +14,9 @@ import {
   Activity,
   AlertTriangle,
   Info,
-  ExternalLink
+  ExternalLink,
+  Smile,
+  FlaskConical
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { findNearbyFacilities, NearbyFacility } from '../services/locationService';
@@ -31,7 +33,7 @@ const Hospitals: React.FC = () => {
   const [nearbyFacilities, setNearbyFacilities] = useState<NearbyFacility[]>([]);
   const [groundingSources, setGroundingSources] = useState<any[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const [filterType, setFilterType] = useState<'all' | 'hospital' | 'clinic' | 'pharmacy'>('all');
+  const [filterType, setFilterType] = useState<string>('all');
   const [userLocation, setUserLocation] = useState<[number, number] | null>(null);
 
   // Fetch hospitals from database
@@ -268,8 +270,8 @@ const Hospitals: React.FC = () => {
           )}
         </div>
 
-        <div className="flex flex-col lg:flex-row gap-6 mb-12">
-          <div className="flex-grow flex flex-col sm:flex-row gap-3">
+        <div className="flex flex-col gap-6 mb-8">
+          <div className="flex flex-col sm:flex-row gap-3">
             <div className="relative flex-grow flex gap-2">
               <div className="relative flex-grow">
                 <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground/60" />
@@ -277,22 +279,62 @@ const Hospitals: React.FC = () => {
                   type="text"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  placeholder="Search by name or location..."
+                  placeholder="Search by facility name, address, or medical specialization..."
                   className="w-full pl-12 pr-4 py-3 bg-card border border-border rounded-2xl focus:ring-2 focus:ring-primary outline-none transition-all text-foreground"
                 />
               </div>
               <VoiceSearch onResult={(text) => setSearchTerm(text)} />
             </div>
+            
+            {/* Native Select fallback for quick accessibility/mobile screen-readers */}
             <select
               value={filterType}
-              onChange={(e) => setFilterType(e.target.value as any)}
-              className="px-6 py-3 bg-card border border-border rounded-2xl text-muted-foreground font-medium focus:ring-2 focus:ring-primary outline-none transition-all appearance-none"
+              onChange={(e) => setFilterType(e.target.value)}
+              className="sm:hidden px-6 py-3 bg-card border border-border rounded-2xl text-muted-foreground font-medium focus:ring-2 focus:ring-primary outline-none transition-all"
             >
-              <option value="all">All Types</option>
-              <option value="hospital">Hospitals</option>
-              <option value="clinic">Clinics</option>
-              <option value="pharmacy">Pharmacies</option>
+              <option value="all">All Facility Types ({nearbyFacilities.length})</option>
+              <option value="hospital">Hospitals ({nearbyFacilities.filter(f => f.type === 'hospital').length})</option>
+              <option value="clinic">Emergency Clinics ({nearbyFacilities.filter(f => f.type === 'clinic').length})</option>
+              <option value="pharmacy">Pharmacies & Chemists ({nearbyFacilities.filter(f => f.type === 'pharmacy').length})</option>
+              <option value="dental">Dental Clinics ({nearbyFacilities.filter(f => f.type === 'dental').length})</option>
+              <option value="specialty">Specialist Centers ({nearbyFacilities.filter(f => f.type === 'specialty').length})</option>
+              <option value="diagnostic">Diagnostics & Labs ({nearbyFacilities.filter(f => f.type === 'diagnostic').length})</option>
             </select>
+          </div>
+
+          {/* Gorgeous Category Select Badges with Real Counts */}
+          <div className="overflow-x-auto pb-2 -mx-4 px-4 sm:mx-0 sm:px-0 scrollbar-none">
+            <div className="flex gap-3 min-w-max">
+              {[
+                { id: 'all', label: 'All Providers', count: nearbyFacilities.length, icon: Activity, color: 'border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 bg-slate-50 dark:bg-slate-900', activeColor: 'bg-primary text-primary-foreground border-primary shadow-lg shadow-primary/25' },
+                { id: 'hospital', label: 'Hospitals', count: nearbyFacilities.filter(f => f.type === 'hospital').length, icon: Hospital, color: 'border-rose-100 dark:border-rose-950/40 text-rose-700 dark:text-rose-400 bg-rose-500/5', activeColor: 'bg-rose-500 text-white border-rose-500 shadow-lg shadow-rose-500/20' },
+                { id: 'clinic', label: 'Emergency Clinics', count: nearbyFacilities.filter(f => f.type === 'clinic').length, icon: Activity, color: 'border-emerald-100 dark:border-emerald-950/40 text-emerald-700 dark:text-emerald-400 bg-emerald-500/5', activeColor: 'bg-emerald-500 text-white border-emerald-500 shadow-lg shadow-emerald-500/20' },
+                { id: 'pharmacy', label: 'Pharmacies & Chemists', count: nearbyFacilities.filter(f => f.type === 'pharmacy').length, icon: PlusCircle, color: 'border-teal-100 dark:border-teal-950/40 text-teal-700 dark:text-teal-400 bg-teal-500/5', activeColor: 'bg-teal-500 text-white border-teal-500 shadow-lg shadow-teal-500/20' },
+                { id: 'dental', label: 'Dental Clinics', count: nearbyFacilities.filter(f => f.type === 'dental').length, icon: Smile, color: 'border-blue-100 dark:border-blue-950/40 text-blue-700 dark:text-blue-400 bg-blue-500/5', activeColor: 'bg-blue-500 text-white border-blue-500 shadow-lg shadow-blue-500/20' },
+                { id: 'specialty', label: 'Specialist Centers', count: nearbyFacilities.filter(f => f.type === 'specialty').length, icon: Stethoscope, color: 'border-purple-100 dark:border-purple-950/40 text-purple-700 dark:text-purple-400 bg-purple-500/5', activeColor: 'bg-purple-500 text-white border-purple-500 shadow-lg shadow-purple-500/20' },
+                { id: 'diagnostic', label: 'Diagnostics & Labs', count: nearbyFacilities.filter(f => f.type === 'diagnostic').length, icon: FlaskConical, color: 'border-amber-100 dark:border-amber-950/40 text-amber-700 dark:text-amber-400 bg-amber-500/5', activeColor: 'bg-amber-500 text-white border-amber-500 shadow-lg shadow-amber-500/20' },
+              ].map((cat) => {
+                const Icon = cat.icon;
+                const isActive = filterType === cat.id;
+                return (
+                  <button
+                    key={cat.id}
+                    onClick={() => setFilterType(cat.id)}
+                    className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl border font-bold text-xs transition-all duration-300 ${
+                      isActive ? cat.activeColor : `${cat.color} hover:border-slate-300 dark:hover:border-slate-700 hover:scale-[1.01]`
+                    }`}
+                  >
+                    <Icon className="w-4 h-4 shrink-0" />
+                    <span>{cat.label}</span>
+                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
+                      isActive ? 'bg-white/20 text-white' : 'bg-slate-500/10 text-slate-500 dark:text-slate-400'
+                    }`}>
+                      {cat.count}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </div>
 
@@ -321,13 +363,26 @@ const Hospitals: React.FC = () => {
                   <div>
                     <div className="flex items-start justify-between mb-4 gap-2">
                       <div className="flex flex-wrap items-center gap-2">
-                        <div className="p-3 bg-primary/10 rounded-2xl">
+                        <div className={`p-3 rounded-2xl ${
+                          facility.type === 'pharmacy' ? 'bg-teal-500/10 text-teal-600 dark:text-teal-400' :
+                          facility.type === 'clinic' ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' :
+                          facility.type === 'dental' ? 'bg-blue-500/10 text-blue-600 dark:text-blue-400' :
+                          facility.type === 'specialty' ? 'bg-purple-500/10 text-purple-600 dark:text-purple-400' :
+                          facility.type === 'diagnostic' ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400' :
+                          'bg-rose-500/10 text-rose-600 dark:text-rose-400'
+                        }`}>
                           {facility.type === 'pharmacy' ? (
-                            <PlusCircle className="w-6 h-6 text-primary" />
+                            <PlusCircle className="w-6 h-6" />
                           ) : facility.type === 'clinic' ? (
-                            <Activity className="w-6 h-6 text-primary" />
+                            <Activity className="w-6 h-6" />
+                          ) : facility.type === 'dental' ? (
+                            <Smile className="w-6 h-6" />
+                          ) : facility.type === 'specialty' ? (
+                            <Stethoscope className="w-6 h-6" />
+                          ) : facility.type === 'diagnostic' ? (
+                            <FlaskConical className="w-6 h-6" />
                           ) : (
-                            <Hospital className="w-6 h-6 text-primary" />
+                            <Hospital className="w-6 h-6" />
                           )}
                         </div>
                         {facility.distanceDisplay && (
@@ -343,8 +398,20 @@ const Hospitals: React.FC = () => {
                           </div>
                         )}
                       </div>
-                      <span className="px-3 py-1 bg-muted rounded-full text-[10px] font-bold text-muted-foreground uppercase tracking-widest shrink-0">
-                        {facility.type}
+                      <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest shrink-0 border ${
+                        facility.type === 'pharmacy' ? 'bg-teal-500/5 text-teal-600 dark:text-teal-400 border-teal-500/20' :
+                        facility.type === 'clinic' ? 'bg-emerald-500/5 text-emerald-600 dark:text-emerald-400 border-emerald-500/20' :
+                        facility.type === 'dental' ? 'bg-blue-500/5 text-blue-600 dark:text-blue-400 border-blue-500/20' :
+                        facility.type === 'specialty' ? 'bg-purple-500/5 text-purple-600 dark:text-purple-400 border-purple-500/20' :
+                        facility.type === 'diagnostic' ? 'bg-amber-500/5 text-amber-600 dark:text-amber-400 border-amber-500/20' :
+                        'bg-rose-500/5 text-rose-600 dark:text-rose-400 border-rose-500/20'
+                      }`}>
+                        {facility.type === 'hospital' ? 'Hospital' :
+                         facility.type === 'clinic' ? 'Clinic' :
+                         facility.type === 'pharmacy' ? 'Pharmacy' :
+                         facility.type === 'dental' ? 'Dental' :
+                         facility.type === 'specialty' ? 'Specialist' :
+                         facility.type === 'diagnostic' ? 'Diagnostic/Lab' : facility.type}
                       </span>
                     </div>
                     <h3 className="text-lg font-bold text-foreground mb-2 group-hover:text-primary transition-colors">

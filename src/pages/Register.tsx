@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { createUserWithEmailAndPassword } from 'firebase/auth';
-import { doc, setDoc, collection, getDocs, serverTimestamp, query, where } from 'firebase/firestore';
+import { createUserWithEmailAndPassword, signInWithPopup, GoogleAuthProvider } from 'firebase/auth';
+import { doc, getDoc, setDoc, collection, getDocs, serverTimestamp, query, where } from 'firebase/firestore';
 import { auth, db } from '../firebase';
-import { User, Mail, Lock, Phone, UserCircle, Stethoscope, Hospital, AlertCircle, ArrowRight, Building2, Eye, EyeOff } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { User, Mail, Lock, Phone, UserCircle, Stethoscope, Hospital, AlertCircle, ArrowRight, Building2, Eye, EyeOff, Chrome } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { UserRole, Hospital as HospitalType } from '../types';
 import { cn } from '../lib/utils';
 
@@ -70,6 +70,86 @@ const Register: React.FC = () => {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+
+  // Google Authentication & Profile Completion States
+  const [showRoleModal, setShowRoleModal] = useState(false);
+  const [pendingUser, setPendingUser] = useState<any>(null);
+  const [selectedGender, setSelectedGender] = useState<string>('male');
+  const [selectedRole, setSelectedRole] = useState<'patient' | 'doctor' | null>(null);
+  const [doctorData, setDoctorData] = useState({
+    licenseNumber: '',
+    specialization: '',
+    hospitalId: ''
+  });
+
+  const handleGoogleLogin = async () => {
+    setError('');
+    const provider = new GoogleAuthProvider();
+    try {
+      const userCredential = await signInWithPopup(auth, provider);
+      const user = userCredential.user;
+      
+      // Check if profile exists, if not create it
+      const userDoc = await getDoc(doc(db, 'users', user.uid));
+      if (!userDoc.exists()) {
+        setPendingUser(user);
+        setShowRoleModal(true);
+      } else {
+        navigate('/dashboard');
+      }
+    } catch (err: any) {
+      if (err.code === 'auth/unauthorized-domain') {
+        setError('Domain not authorized. Please add this domain to the "Authorized domains" list in your Firebase Console (Authentication > Settings).');
+      } else if (err.code === 'auth/operation-not-allowed') {
+        setError('Google sign-in is not enabled. Please enable it in your Firebase Console (Authentication > Sign-in method).');
+      } else {
+        setError(err.message || 'Failed to sign in with Google');
+      }
+    }
+  };
+
+  const handleRoleSelect = async (selected: 'patient' | 'doctor') => {
+    setSelectedRole(selected);
+    if (selected === 'patient') {
+      await completeProfile(selected);
+    }
+  };
+
+  const completeProfile = async (selected: 'patient' | 'doctor') => {
+    if (!pendingUser) return;
+    
+    try {
+      const profileData: any = {
+        uid: pendingUser.uid,
+        email: pendingUser.email,
+        fullName: pendingUser.displayName || 'Anonymous',
+        phoneNumber: pendingUser.phoneNumber || '',
+        gender: selectedGender,
+        role: selected,
+        status: 'approved',
+        createdAt: serverTimestamp(),
+        photoURL: pendingUser.photoURL || '',
+      };
+
+      if (selected === 'doctor') {
+        if (!doctorData.licenseNumber || !doctorData.specialization || !doctorData.hospitalId) {
+          setError('Please fill in all doctor details');
+          return;
+        }
+        profileData.licenseNumber = doctorData.licenseNumber;
+        profileData.specialization = doctorData.specialization;
+        profileData.hospitalId = doctorData.hospitalId;
+        profileData.hospitalName = hospitals.find(h => h.id === doctorData.hospitalId)?.name || '';
+        profileData.status = 'pending';
+      }
+
+      await setDoc(doc(db, 'users', pendingUser.uid), profileData);
+      setShowRoleModal(false);
+      navigate('/dashboard');
+    } catch (err: any) {
+      setError('Failed to create profile. Please try again.');
+    }
+  };
 
   useEffect(() => {
     const fetchHospitals = async () => {
@@ -348,11 +428,156 @@ const Register: React.FC = () => {
           </button>
         </form>
 
+        <div className="relative my-10">
+          <div className="absolute inset-0 flex items-center">
+            <div className="w-full border-t border-slate-100 dark:border-slate-700"></div>
+          </div>
+          <div className="relative flex justify-center text-sm">
+            <span className="px-4 bg-white dark:bg-slate-800 text-slate-400">Or continue with</span>
+          </div>
+        </div>
+
+        <button
+          type="button"
+          onClick={handleGoogleLogin}
+          className="w-full py-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 rounded-2xl font-bold hover:bg-slate-50 dark:hover:bg-slate-700 transition-all flex items-center justify-center gap-3"
+        >
+          <Chrome className="w-5 h-5" />
+          Google Account
+        </button>
+
         <p className="mt-10 text-center text-slate-500">
           Already have an account?{' '}
           <Link to="/login" className="font-bold text-neon-blue hover:text-neon-blue-dark">Sign In</Link>
         </p>
       </motion.div>
+
+      {/* Role Selection Modal */}
+      <AnimatePresence>
+        {showRoleModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              className="max-w-md w-full bg-white dark:bg-slate-800 rounded-[2.5rem] p-8 shadow-2xl border border-slate-100 dark:border-slate-700"
+            >
+              <h2 className="text-2xl font-bold text-foreground mb-2 text-center">Complete Your Profile</h2>
+              <p className="text-slate-500 dark:text-slate-400 text-center mb-8">Please select your details to continue</p>
+              
+              <div className="space-y-6">
+                {!selectedRole ? (
+                  <>
+                    <div>
+                      <label className="block text-sm font-bold text-slate-400 uppercase tracking-wider mb-3">Gender / Sex</label>
+                      <div className="grid grid-cols-3 gap-3">
+                        {['male', 'female', 'other'].map((g) => (
+                          <button
+                            key={g}
+                            type="button"
+                            onClick={() => setSelectedGender(g)}
+                            className={cn(
+                              "py-2.5 rounded-xl border-2 font-bold text-xs capitalize transition-all",
+                              selectedGender === g
+                                ? "border-neon-blue bg-neon-blue/10 text-neon-blue"
+                                : "border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-500 hover:border-slate-200 dark:hover:border-slate-600"
+                            )}
+                          >
+                            {g}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-bold text-slate-400 uppercase tracking-wider mb-3">Select Role</label>
+                      <div className="grid grid-cols-1 gap-4">
+                        {[
+                          { id: 'patient', label: 'I am a Patient', icon: UserCircle, desc: 'Book appointments and view records' },
+                          { id: 'doctor', label: 'I am a Doctor', icon: Stethoscope, desc: 'Manage patients and write articles' },
+                        ].map((r) => (
+                          <button
+                            key={r.id}
+                            type="button"
+                            onClick={() => handleRoleSelect(r.id as any)}
+                            className="flex items-center gap-4 p-4 rounded-2xl border-2 border-slate-100 dark:border-slate-700 hover:border-neon-blue hover:bg-neon-blue/5 transition-all text-left group"
+                          >
+                            <div className="w-12 h-12 bg-slate-50 dark:bg-slate-900 rounded-xl flex items-center justify-center group-hover:bg-neon-blue/10 transition-colors">
+                              <r.icon className="w-6 h-6 text-slate-400 group-hover:text-neon-blue" />
+                            </div>
+                            <div>
+                              <p className="font-bold text-foreground">{r.label}</p>
+                              <p className="text-xs text-slate-500 dark:text-slate-400">{r.desc}</p>
+                            </div>
+                            <ArrowRight className="w-5 h-5 ml-auto text-slate-300 group-hover:text-neon-blue" />
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <div className="space-y-4">
+                    <button 
+                      type="button"
+                      onClick={() => setSelectedRole(null)}
+                      className="text-xs font-bold text-neon-blue hover:underline mb-2"
+                    >
+                      ← Back to role selection
+                    </button>
+                    
+                    <div>
+                      <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Medical License #</label>
+                      <input
+                        type="text"
+                        value={doctorData.licenseNumber}
+                        onChange={(e) => setDoctorData({...doctorData, licenseNumber: e.target.value})}
+                        className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl outline-none focus:ring-2 focus:ring-neon-blue text-sm text-foreground"
+                        placeholder="LIC-123456"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Specialization</label>
+                      <select
+                        value={doctorData.specialization}
+                        onChange={(e) => setDoctorData({...doctorData, specialization: e.target.value})}
+                        className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl outline-none focus:ring-2 focus:ring-neon-blue text-sm text-foreground"
+                      >
+                        <option value="">Select specialization...</option>
+                        {SPECIALIZATIONS.map(s => (
+                          <option key={s} value={s}>{s}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Select Hospital</label>
+                      <select
+                        value={doctorData.hospitalId}
+                        onChange={(e) => setDoctorData({...doctorData, hospitalId: e.target.value})}
+                        className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl outline-none focus:ring-2 focus:ring-neon-blue text-sm text-foreground"
+                      >
+                        <option value="">Select a hospital...</option>
+                        {hospitals.map(h => (
+                          <option key={h.id} value={h.id}>{h.name}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => completeProfile('doctor')}
+                      className="w-full py-3 bg-neon-blue text-slate-900 rounded-xl font-bold hover:bg-neon-blue-dark transition-all mt-4"
+                    >
+                      Complete Registration
+                    </button>
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };

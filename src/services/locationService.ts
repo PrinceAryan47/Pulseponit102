@@ -1,7 +1,7 @@
 export interface NearbyFacility {
   name: string;
   address: string;
-  type: 'hospital' | 'clinic' | 'pharmacy';
+  type: 'hospital' | 'clinic' | 'pharmacy' | 'dental' | 'specialty' | 'diagnostic' | string;
   mapsUrl: string;
   lat?: number;
   lng?: number;
