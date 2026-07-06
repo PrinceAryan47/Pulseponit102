@@ -21,7 +21,7 @@ import {
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { findNearbyFacilities, NearbyFacility } from '../services/locationService';
-import { Map, Marker } from 'pigeon-maps';
+import { Map, Overlay } from 'pigeon-maps';
 import VoiceSearch from '../components/VoiceSearch';
 import GuestOverlay from '../components/GuestOverlay';
 import { useAuth } from '../context/AuthContext';
@@ -378,15 +378,14 @@ const Hospitals: React.FC = () => {
             >
               {/* User location marker */}
               {userLocation && (
-                <Marker 
+                <Overlay 
                   anchor={userLocation} 
-                  payload="me"
                 >
-                  <div className="relative flex items-center justify-center">
+                  <div className="relative flex items-center justify-center" style={{ transform: 'translate(-50%, -50%)' }}>
                     <span className="absolute inline-flex h-6 w-6 rounded-full bg-blue-400 opacity-75 animate-ping"></span>
                     <div className="relative rounded-full h-4 w-4 bg-blue-600 border-2 border-white shadow-md"></div>
                   </div>
-                </Marker>
+                </Overlay>
               )}
 
               {/* Nearby facilities markers */}
@@ -394,26 +393,28 @@ const Hospitals: React.FC = () => {
                 if (fac.lat === undefined || fac.lng === undefined) return null;
                 const isSelected = selectedFacility && selectedFacility.name === fac.name;
                 return (
-                  <Marker 
+                  <Overlay 
                     key={`fac-${fIdx}`}
                     anchor={[fac.lat, fac.lng]}
-                    payload={fac}
-                    onClick={({ event, anchor, payload }) => {
-                      event.stopPropagation();
-                      setSelectedFacility(payload);
-                      setMapCenter(anchor);
-                    }}
                   >
-                    <div className={`p-1.5 rounded-full shadow-md cursor-pointer transition-all ${
-                      isSelected 
-                        ? 'bg-rose-500 scale-125 ring-4 ring-rose-500/20' 
-                        : fac.type === 'pharmacy' ? 'bg-teal-500 hover:scale-110' :
-                          fac.type === 'clinic' ? 'bg-emerald-500 hover:scale-110' :
-                          fac.type === 'dental' ? 'bg-blue-500 hover:scale-110' :
-                          fac.type === 'specialty' ? 'bg-purple-500 hover:scale-110' :
-                          fac.type === 'diagnostic' ? 'bg-amber-500 hover:scale-110' :
-                          'bg-rose-500 hover:scale-110'
-                    }`}>
+                    <div 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedFacility(fac);
+                        setMapCenter([fac.lat, fac.lng]);
+                      }}
+                      className={`p-1.5 rounded-full shadow-md cursor-pointer transition-all ${
+                        isSelected 
+                          ? 'bg-rose-500 scale-125 ring-4 ring-rose-500/20' 
+                          : fac.type === 'pharmacy' ? 'bg-teal-500 hover:scale-110' :
+                            fac.type === 'clinic' ? 'bg-emerald-500 hover:scale-110' :
+                            fac.type === 'dental' ? 'bg-blue-500 hover:scale-110' :
+                            fac.type === 'specialty' ? 'bg-purple-500 hover:scale-110' :
+                            fac.type === 'diagnostic' ? 'bg-amber-500 hover:scale-110' :
+                            'bg-rose-500 hover:scale-110'
+                      }`}
+                      style={{ transform: 'translate(-50%, -50%)' }}
+                    >
                       {fac.type === 'pharmacy' ? (
                         <PlusCircle className="w-4 h-4 text-white shrink-0" />
                       ) : fac.type === 'clinic' ? (
@@ -428,7 +429,7 @@ const Hospitals: React.FC = () => {
                         <Hospital className="w-4 h-4 text-white shrink-0" />
                       )}
                     </div>
-                  </Marker>
+                  </Overlay>
                 );
               })}
 
@@ -437,22 +438,24 @@ const Hospitals: React.FC = () => {
                 if (!hosp.location?.lat || !hosp.location?.lng) return null;
                 const isSelected = selectedFacility && selectedFacility.name === hosp.name;
                 return (
-                  <Marker
+                  <Overlay
                     key={`hosp-${hIdx}`}
                     anchor={[hosp.location.lat, hosp.location.lng]}
-                    payload={hosp}
-                    onClick={({ event, anchor, payload }) => {
-                      event.stopPropagation();
-                      setSelectedFacility(payload);
-                      setMapCenter(anchor);
-                    }}
                   >
-                    <div className={`p-2 rounded-full bg-rose-600 border-2 border-white shadow-lg cursor-pointer transition-all ${
-                      isSelected ? 'scale-125 ring-4 ring-rose-600/30' : 'hover:scale-110'
-                    }`}>
+                    <div 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedFacility(hosp);
+                        setMapCenter([hosp.location.lat, hosp.location.lng]);
+                      }}
+                      className={`p-2 rounded-full bg-rose-600 border-2 border-white shadow-lg cursor-pointer transition-all ${
+                        isSelected ? 'scale-125 ring-4 ring-rose-600/30' : 'hover:scale-110'
+                      }`}
+                      style={{ transform: 'translate(-50%, -50%)' }}
+                    >
                       <Hospital className="w-4 h-4 text-white shrink-0" />
                     </div>
-                  </Marker>
+                  </Overlay>
                 );
               })}
             </Map>
