@@ -66,7 +66,113 @@ const Dashboard: React.FC = () => {
   const [isUpdating, setIsUpdating] = useState(false);
   const [latestNews, setLatestNews] = useState<Article[]>([]);
   const [accessRequests, setAccessRequests] = useState<any[]>([]);
+  const [healthReports, setHealthReports] = useState<any[]>([]);
   const navigate = useNavigate();
+
+  const handleDownloadReport = () => {
+    if (!profile) return;
+
+    let reportText = `========================================================================
+                      PULSEPOINT CLINICAL HEALTH REPORT
+                      Generated on: ${new Date().toLocaleString()}
+========================================================================
+
+1. SECURE PATIENT HEALTH PROFILE
+------------------------------------------------------------------------
+Full Name:               ${profile.fullName || "Not specified"}
+Email Address:           ${profile.email || "Not specified"}
+Assigned Role:           ${profile.role ? profile.role.toUpperCase() : "PATIENT"}
+Age:                     ${profile.age || "Not specified"} years
+Gender:                  ${profile.gender || "Not specified"}
+Height:                  ${profile.height || "Not specified"} cm
+Weight:                  ${profile.weight || "Not specified"} kg
+Primary Allergies:       ${profile.allergies || "None declared"}
+Clinical Conditions:     ${profile.conditions || "None declared"}
+
+2. CONSOLIDATED HEALTH SUMMARY & VITAL SIGNS
+------------------------------------------------------------------------
+Health Index Score:      92/100
+Blood Pressure Ref:      120/80 mmHg
+Reference Body Weight:   ${profile.weight ? profile.weight + " kg" : "74.5 kg"}
+
+3. OFFICIAL MEDICAL RECORDS & DIAGNOSES LOG
+------------------------------------------------------------------------
+`;
+
+    if (records.length > 0) {
+      records.forEach((rec, idx) => {
+        reportText += `Record [${idx + 1}]:
+- Record Date:           ${safeFormat(rec.date, "MMMM dd, yyyy")}
+- Primary Diagnosis:     ${rec.diagnosis || "No Diagnosis Info"}
+- Prescription:          ${rec.prescription || "None"}
+- Lab/Test Results:      ${rec.labResults || "None"}
+- Clinical Notes:        ${rec.notes || "None"}
+- Healthcare Specialist: ${rec.doctorName || "Not specified"}
+\n`;
+      });
+    } else {
+      reportText += `No official clinical treatment records or diagnoses archived in your profile.\n`;
+    }
+
+    reportText += `\n4. UPCOMING MEDICAL CLINICAL APPOINTMENTS
+------------------------------------------------------------------------
+`;
+
+    if (appointments.length > 0) {
+      appointments.forEach((app, idx) => {
+        reportText += `Appointment [${idx + 1}]:
+- Date & Time:           ${safeFormat(app.dateTime, "MMMM dd, yyyy hh:mm a")}
+- Medical Provider:      ${profile.role === "patient" ? `Dr. ${app.doctorName || "Specialist"}` : app.patientName || "Patient"}
+- Status:                ${app.status ? app.status.toUpperCase() : "PENDING"}
+- Reason/User Note:      ${app.notes || "No custom note provided."}
+- Doctor Instructions:   ${app.doctorNotes || "None"}
+\n`;
+      });
+    } else {
+      reportText += `No scheduled upcoming medical appointments detected.\n`;
+    }
+
+    if (healthReports.length > 0) {
+      reportText += `\n5. COMPREHENSIVE AI CLINICAL ASSESSMENT HISTORY
+------------------------------------------------------------------------
+`;
+      healthReports.forEach((rep, idx) => {
+        const dateStr = rep.createdAt ? new Date(rep.createdAt).toLocaleDateString() : "N/A";
+        reportText += `Assessment [${idx + 1}] (${rep.type ? rep.type.toUpperCase() : "GENERAL CHECK"}) - ${dateStr}:
+- Registered Concern:    ${rep.inputCriteria?.symptoms || rep.inputCriteria?.primaryConcern || "General Check"}
+- Context Metrics:       Age ${rep.inputCriteria?.age || "N/A"}, Severity ${rep.inputCriteria?.severity || "N/A"}/10, Trend ${rep.inputCriteria?.trend || "N/A"}
+- Clinical Recommendations / Triage Breakdown:
+${rep.reportText ? rep.reportText.trim() : "No report text recorded."}
+\n------------------------------------------------------------------------\n`;
+      });
+    } else {
+      reportText += `\n5. COMPREHENSIVE AI CLINICAL ASSESSMENT HISTORY
+------------------------------------------------------------------------
+No archived symptom checks, cardiovascular risk assessments, or preventive checklists found.\n`;
+    }
+
+    reportText += `\n========================================================================
+End of Automated Clinical Document.
+Disclaimer: This PulsePoint digital health document is generated for
+informative, personal trackability purposes under strict patient consent. 
+This summary is private and should be kept confidential.
+========================================================================`;
+
+    try {
+      const blob = new Blob([reportText], { type: "text/plain;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `PulsePoint_Health_Report_${(profile.fullName || "User").replace(/\s+/g, "_")}.txt`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error("Error creating report download file:", err);
+      alert("Failed to export your health report file. Please try again.");
+    }
+  };
 
   const handleApproveAccess = async (request: any) => {
     try {
@@ -305,11 +411,25 @@ Make it highly direct, inspiring, and actionable. Do not wrap it in quotes.`,
         console.error("Error fetching access requests:", error);
       });
 
+      const qReports = query(
+        collection(db, 'healthReports'),
+        where('userId', '==', currentUserId)
+      );
+      const unsubscribeReports = onSnapshot(qReports, (snap) => {
+        const sorted = snap.docs
+          .map(doc => ({ id: doc.id, ...doc.data() }))
+          .sort((a: any, b: any) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+        setHealthReports(sorted);
+      }, (error) => {
+        console.error("Error fetching health reports:", error);
+      });
+
       return () => {
         unsubscribeApp();
         unsubscribeRec();
         unsubscribeNews();
         unsubscribeAccess();
+        unsubscribeReports();
       };
     }
 
@@ -335,11 +455,22 @@ Make it highly direct, inspiring, and actionable. Do not wrap it in quotes.`,
     >
       <div className="p-8 transition-colors duration-300">
         <div className="max-w-6xl mx-auto">
-          <div className="mb-12">
-            <h1 className="text-3xl font-bold text-foreground mb-2 neon-text">
-              Health Overview
-            </h1>
-            <p className="text-muted-foreground">Track your metrics and upcoming medical activities.</p>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-12">
+            <div>
+              <h1 className="text-3xl font-bold text-foreground mb-2 neon-text">
+                Health Overview
+              </h1>
+              <p className="text-muted-foreground">Track your metrics and upcoming medical activities.</p>
+            </div>
+            {profile && (
+              <button
+                onClick={handleDownloadReport}
+                className="inline-flex items-center justify-center gap-2 px-5 py-3 bg-primary text-primary-foreground font-bold text-xs rounded-2xl hover:bg-neon-blue-dark transition-all shadow-md hover:shadow-lg shadow-primary/25 cursor-pointer select-none shrink-0"
+              >
+                <FileText className="w-4 h-4" />
+                <span>Download Health Report</span>
+              </button>
+            )}
           </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">

@@ -16,13 +16,15 @@ import {
   Info,
   ExternalLink,
   Smile,
-  FlaskConical
+  FlaskConical,
+  Sparkles
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { findNearbyFacilities, NearbyFacility } from '../services/locationService';
 import VoiceSearch from '../components/VoiceSearch';
 import GuestOverlay from '../components/GuestOverlay';
 import { useAuth } from '../context/AuthContext';
+import ReactMarkdown from 'react-markdown';
 
 const Hospitals: React.FC = () => {
   const { profile } = useAuth();
@@ -35,6 +37,51 @@ const Hospitals: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [filterType, setFilterType] = useState<string>('all');
   const [userLocation, setUserLocation] = useState<[number, number] | null>(null);
+
+  // AI Advisor States
+  const [aiAdvisorEnabled, setAiAdvisorEnabled] = useState(false);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiAdvice, setAiAdvice] = useState<string | null>(null);
+  const [aiFacilities, setAiFacilities] = useState<NearbyFacility[] | null>(null);
+  const [aiError, setAiError] = useState<string | null>(null);
+
+  const handleAISearchAdviceWithQuery = async (queryToSearch: string) => {
+    if (!queryToSearch.trim()) return;
+    setAiLoading(true);
+    setAiError(null);
+    setAiAdvice(null);
+    setAiFacilities(null);
+
+    try {
+      const lat = userLocation ? userLocation[0] : (profile?.simulatedLatitude || 0.3476);
+      const lng = userLocation ? userLocation[1] : (profile?.simulatedLongitude || 32.5825);
+
+      const response = await fetch("/api/facilities/search-advice", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          query: queryToSearch,
+          lat,
+          lng
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`Server returned status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      setAiAdvice(data.advice || "No specific advice found for your query.");
+      setAiFacilities(data.facilities || []);
+    } catch (err: any) {
+      console.error("AI Search Advice failed:", err);
+      setAiError("Failed to fetch advice and nearby facilities. Please try again.");
+    } finally {
+      setAiLoading(false);
+    }
+  };
 
   // Fetch hospitals from database
   useEffect(() => {
@@ -270,8 +317,76 @@ const Hospitals: React.FC = () => {
           )}
         </div>
 
+        {/* AI-Powered Patient Navigator Toggles */}
+        <div className="bg-slate-50 dark:bg-slate-900/40 border border-slate-200/60 dark:border-slate-800/60 rounded-3xl p-6 mb-8 transition-all">
+          <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+            <div className="flex items-start gap-3">
+              <div className="p-3 bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 rounded-2xl shrink-0">
+                <Sparkles className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="font-bold text-base text-foreground flex items-center gap-2">
+                  AI Clinical Patient Advisor & Navigator
+                  <span className="px-2.5 py-0.5 bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 text-[10px] rounded-full font-black uppercase tracking-wider">Grounded</span>
+                </h3>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Type active symptoms or search requirements. Gemini retrieves matching medical facilities and generates immediate patient safety feedback.
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => {
+                setAiAdvisorEnabled(!aiAdvisorEnabled);
+                if (aiAdvisorEnabled) {
+                  setAiAdvice(null);
+                  setAiFacilities(null);
+                  setAiError(null);
+                }
+              }}
+              className={`px-5 py-2.5 rounded-2xl font-bold text-xs transition-all flex items-center gap-2 shrink-0 ${
+                aiAdvisorEnabled 
+                  ? "bg-indigo-600 hover:bg-indigo-700 text-white shadow-lg shadow-indigo-500/25" 
+                  : "bg-card border border-border text-foreground hover:bg-muted"
+              }`}
+            >
+              <Sparkles className="w-4 h-4" />
+              {aiAdvisorEnabled ? "Clinical Advisor: Active" : "Turn On AI Clinical Advisor"}
+            </button>
+          </div>
+
+          {aiAdvisorEnabled && (
+            <div className="mt-6 border-t border-slate-200/50 dark:border-slate-800/50 pt-4">
+              <p className="text-xs font-bold text-muted-foreground mb-3">Click a health concern to test dynamic coordinates search instantly:</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                {[
+                  { query: "Severe active toothache", label: "Toothache & Dental Care", desc: "Finds dentists with maps location advice" },
+                  { query: "24/7 pediatric emergency clinic for child high fever", label: "Pediatric Emergency", desc: "Finds 24-hour children medical centers" },
+                  { query: "Late night pharmacy open on Jinja Road", label: "Late-Night Pharmacy", desc: "Locates 24-hour chemical dispensaries" },
+                  { query: "Advanced imaging centre for urgent X-ray and CT scan", label: "X-Ray & Scan Lab", desc: "Finds diagnostic imaging centers" }
+                ].map((item, idx) => (
+                  <button
+                    key={idx}
+                    type="button"
+                    onClick={() => {
+                      setSearchTerm(item.query);
+                      handleAISearchAdviceWithQuery(item.query);
+                    }}
+                    className="text-left p-3.5 bg-card border border-border hover:border-indigo-500/40 rounded-2xl transition-all hover:scale-[1.01]"
+                  >
+                    <h4 className="text-xs font-black text-foreground mb-1 flex items-center gap-1.5">
+                      <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 shrink-0"></span>
+                      {item.label}
+                    </h4>
+                    <p className="text-[10px] text-muted-foreground leading-relaxed truncate">{item.desc}</p>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
         <div className="flex flex-col gap-6 mb-8">
-          <div className="flex flex-col sm:flex-row gap-3">
+          <form onSubmit={(e) => { e.preventDefault(); if (aiAdvisorEnabled) { handleAISearchAdviceWithQuery(searchTerm); } }} className="flex flex-col sm:flex-row gap-3">
             <div className="relative flex-grow flex gap-2">
               <div className="relative flex-grow">
                 <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground/60" />
@@ -279,63 +394,89 @@ const Hospitals: React.FC = () => {
                   type="text"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  placeholder="Search by facility name, address, or medical specialization..."
+                  placeholder={aiAdvisorEnabled ? "Describe symptom, concern, or facility (e.g. 'severe chest pain', 'dentist near me')..." : "Search by facility name, address, or medical specialization..."}
                   className="w-full pl-12 pr-4 py-3 bg-card border border-border rounded-2xl focus:ring-2 focus:ring-primary outline-none transition-all text-foreground"
                 />
               </div>
-              <VoiceSearch onResult={(text) => setSearchTerm(text)} />
+              <VoiceSearch onResult={(text) => {
+                setSearchTerm(text);
+                if (aiAdvisorEnabled) {
+                  handleAISearchAdviceWithQuery(text);
+                }
+              }} />
             </div>
             
-            {/* Native Select fallback for quick accessibility/mobile screen-readers */}
-            <select
-              value={filterType}
-              onChange={(e) => setFilterType(e.target.value)}
-              className="sm:hidden px-6 py-3 bg-card border border-border rounded-2xl text-muted-foreground font-medium focus:ring-2 focus:ring-primary outline-none transition-all"
-            >
-              <option value="all">All Facility Types ({nearbyFacilities.length})</option>
-              <option value="hospital">Hospitals ({nearbyFacilities.filter(f => f.type === 'hospital').length})</option>
-              <option value="clinic">Emergency Clinics ({nearbyFacilities.filter(f => f.type === 'clinic').length})</option>
-              <option value="pharmacy">Pharmacies & Chemists ({nearbyFacilities.filter(f => f.type === 'pharmacy').length})</option>
-              <option value="dental">Dental Clinics ({nearbyFacilities.filter(f => f.type === 'dental').length})</option>
-              <option value="specialty">Specialist Centers ({nearbyFacilities.filter(f => f.type === 'specialty').length})</option>
-              <option value="diagnostic">Diagnostics & Labs ({nearbyFacilities.filter(f => f.type === 'diagnostic').length})</option>
-            </select>
-          </div>
+            {aiAdvisorEnabled ? (
+              <button
+                type="submit"
+                disabled={aiLoading || !searchTerm.trim()}
+                className="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm rounded-2xl shadow-lg shadow-indigo-500/25 transition-all shrink-0 flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
+              >
+                {aiLoading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Searching...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="w-4 h-4" />
+                    Search with AI
+                  </>
+                )}
+              </button>
+            ) : (
+              <select
+                value={filterType}
+                onChange={(e) => setFilterType(e.target.value)}
+                className="px-6 py-3 bg-card border border-border rounded-2xl text-muted-foreground font-medium focus:ring-2 focus:ring-primary outline-none transition-all"
+              >
+                <option value="all">All Facility Types ({nearbyFacilities.length})</option>
+                <option value="hospital">Hospitals ({nearbyFacilities.filter(f => f.type === 'hospital').length})</option>
+                <option value="clinic">Emergency Clinics ({nearbyFacilities.filter(f => f.type === 'clinic').length})</option>
+                <option value="pharmacy">Pharmacies & Chemists ({nearbyFacilities.filter(f => f.type === 'pharmacy').length})</option>
+                <option value="dental">Dental Clinics ({nearbyFacilities.filter(f => f.type === 'dental').length})</option>
+                <option value="specialty">Specialist Centers ({nearbyFacilities.filter(f => f.type === 'specialty').length})</option>
+                <option value="diagnostic">Diagnostics & Labs ({nearbyFacilities.filter(f => f.type === 'diagnostic').length})</option>
+              </select>
+            )}
+          </form>
 
           {/* Gorgeous Category Select Badges with Real Counts */}
-          <div className="overflow-x-auto pb-2 -mx-4 px-4 sm:mx-0 sm:px-0 scrollbar-none">
-            <div className="flex gap-3 min-w-max">
-              {[
-                { id: 'all', label: 'All Providers', count: nearbyFacilities.length, icon: Activity, color: 'border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 bg-slate-50 dark:bg-slate-900', activeColor: 'bg-primary text-primary-foreground border-primary shadow-lg shadow-primary/25' },
-                { id: 'hospital', label: 'Hospitals', count: nearbyFacilities.filter(f => f.type === 'hospital').length, icon: Hospital, color: 'border-rose-100 dark:border-rose-950/40 text-rose-700 dark:text-rose-400 bg-rose-500/5', activeColor: 'bg-rose-500 text-white border-rose-500 shadow-lg shadow-rose-500/20' },
-                { id: 'clinic', label: 'Emergency Clinics', count: nearbyFacilities.filter(f => f.type === 'clinic').length, icon: Activity, color: 'border-emerald-100 dark:border-emerald-950/40 text-emerald-700 dark:text-emerald-400 bg-emerald-500/5', activeColor: 'bg-emerald-500 text-white border-emerald-500 shadow-lg shadow-emerald-500/20' },
-                { id: 'pharmacy', label: 'Pharmacies & Chemists', count: nearbyFacilities.filter(f => f.type === 'pharmacy').length, icon: PlusCircle, color: 'border-teal-100 dark:border-teal-950/40 text-teal-700 dark:text-teal-400 bg-teal-500/5', activeColor: 'bg-teal-500 text-white border-teal-500 shadow-lg shadow-teal-500/20' },
-                { id: 'dental', label: 'Dental Clinics', count: nearbyFacilities.filter(f => f.type === 'dental').length, icon: Smile, color: 'border-blue-100 dark:border-blue-950/40 text-blue-700 dark:text-blue-400 bg-blue-500/5', activeColor: 'bg-blue-500 text-white border-blue-500 shadow-lg shadow-blue-500/20' },
-                { id: 'specialty', label: 'Specialist Centers', count: nearbyFacilities.filter(f => f.type === 'specialty').length, icon: Stethoscope, color: 'border-purple-100 dark:border-purple-950/40 text-purple-700 dark:text-purple-400 bg-purple-500/5', activeColor: 'bg-purple-500 text-white border-purple-500 shadow-lg shadow-purple-500/20' },
-                { id: 'diagnostic', label: 'Diagnostics & Labs', count: nearbyFacilities.filter(f => f.type === 'diagnostic').length, icon: FlaskConical, color: 'border-amber-100 dark:border-amber-950/40 text-amber-700 dark:text-amber-400 bg-amber-500/5', activeColor: 'bg-amber-500 text-white border-amber-500 shadow-lg shadow-amber-500/20' },
-              ].map((cat) => {
-                const Icon = cat.icon;
-                const isActive = filterType === cat.id;
-                return (
-                  <button
-                    key={cat.id}
-                    onClick={() => setFilterType(cat.id)}
-                    className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl border font-bold text-xs transition-all duration-300 ${
-                      isActive ? cat.activeColor : `${cat.color} hover:border-slate-300 dark:hover:border-slate-700 hover:scale-[1.01]`
-                    }`}
-                  >
-                    <Icon className="w-4 h-4 shrink-0" />
-                    <span>{cat.label}</span>
-                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
-                      isActive ? 'bg-white/20 text-white' : 'bg-slate-500/10 text-slate-500 dark:text-slate-400'
-                    }`}>
-                      {cat.count}
-                    </span>
-                  </button>
-                );
-              })}
+          {!aiAdvisorEnabled && (
+            <div className="overflow-x-auto pb-2 -mx-4 px-4 sm:mx-0 sm:px-0 scrollbar-none">
+              <div className="flex gap-3 min-w-max">
+                {[
+                  { id: 'all', label: 'All Providers', count: nearbyFacilities.length, icon: Activity, color: 'border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 bg-slate-50 dark:bg-slate-900', activeColor: 'bg-primary text-primary-foreground border-primary shadow-lg shadow-primary/25' },
+                  { id: 'hospital', label: 'Hospitals', count: nearbyFacilities.filter(f => f.type === 'hospital').length, icon: Hospital, color: 'border-rose-100 dark:border-rose-950/40 text-rose-700 dark:text-rose-400 bg-rose-500/5', activeColor: 'bg-rose-500 text-white border-rose-500 shadow-lg shadow-rose-500/20' },
+                  { id: 'clinic', label: 'Emergency Clinics', count: nearbyFacilities.filter(f => f.type === 'clinic').length, icon: Activity, color: 'border-emerald-100 dark:border-emerald-950/40 text-emerald-700 dark:text-emerald-400 bg-emerald-500/5', activeColor: 'bg-emerald-500 text-white border-emerald-500 shadow-lg shadow-emerald-500/20' },
+                  { id: 'pharmacy', label: 'Pharmacies & Chemists', count: nearbyFacilities.filter(f => f.type === 'pharmacy').length, icon: PlusCircle, color: 'border-teal-100 dark:border-teal-950/40 text-teal-700 dark:text-teal-400 bg-teal-500/5', activeColor: 'bg-teal-500 text-white border-teal-500 shadow-lg shadow-teal-500/20' },
+                  { id: 'dental', label: 'Dental Clinics', count: nearbyFacilities.filter(f => f.type === 'dental').length, icon: Smile, color: 'border-blue-100 dark:border-blue-950/40 text-blue-700 dark:text-blue-400 bg-blue-500/5', activeColor: 'bg-blue-500 text-white border-blue-500 shadow-lg shadow-blue-500/20' },
+                  { id: 'specialty', label: 'Specialist Centers', count: nearbyFacilities.filter(f => f.type === 'specialty').length, icon: Stethoscope, color: 'border-purple-100 dark:border-purple-950/40 text-purple-700 dark:text-purple-400 bg-purple-500/5', activeColor: 'bg-purple-500 text-white border-purple-500 shadow-lg shadow-purple-500/20' },
+                  { id: 'diagnostic', label: 'Diagnostics & Labs', count: nearbyFacilities.filter(f => f.type === 'diagnostic').length, icon: FlaskConical, color: 'border-amber-100 dark:border-amber-950/40 text-amber-700 dark:text-amber-400 bg-amber-500/5', activeColor: 'bg-amber-500 text-white border-amber-500 shadow-lg shadow-amber-500/20' },
+                ].map((cat) => {
+                  const Icon = cat.icon;
+                  const isActive = filterType === cat.id;
+                  return (
+                    <button
+                      key={cat.id}
+                      onClick={() => setFilterType(cat.id)}
+                      className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl border font-bold text-xs transition-all duration-300 ${
+                        isActive ? cat.activeColor : `${cat.color} hover:border-slate-300 dark:hover:border-slate-700 hover:scale-[1.01]`
+                      }`}
+                    >
+                      <Icon className="w-4 h-4 shrink-0" />
+                      <span>{cat.label}</span>
+                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
+                        isActive ? 'bg-white/20 text-white' : 'bg-slate-500/10 text-slate-500 dark:text-slate-400'
+                      }`}>
+                        {cat.count}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
-          </div>
+          )}
         </div>
 
         {error && (
@@ -347,106 +488,258 @@ const Hospitals: React.FC = () => {
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           <div className="lg:col-span-2 space-y-6">
-            <h2 className="text-xl font-bold mb-2 flex items-center gap-2">
-              <Activity className="w-5 h-5 text-primary" />
-              Nearby Facilities ({filteredNearby.length})
-            </h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {filteredNearby.length > 0 ? filteredNearby.map((facility, idx) => (
-                <motion.div
-                  key={idx}
-                  initial={{ opacity: 0, scale: 0.95 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  transition={{ delay: idx * 0.05 }}
-                  className="bg-card border border-border p-6 rounded-[2rem] group hover:border-primary/50 transition-all shadow-sm hover:shadow-md flex flex-col justify-between"
-                >
-                  <div>
-                    <div className="flex items-start justify-between mb-4 gap-2">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <div className={`p-3 rounded-2xl ${
-                          facility.type === 'pharmacy' ? 'bg-teal-500/10 text-teal-600 dark:text-teal-400' :
-                          facility.type === 'clinic' ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' :
-                          facility.type === 'dental' ? 'bg-blue-500/10 text-blue-600 dark:text-blue-400' :
-                          facility.type === 'specialty' ? 'bg-purple-500/10 text-purple-600 dark:text-purple-400' :
-                          facility.type === 'diagnostic' ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400' :
-                          'bg-rose-500/10 text-rose-600 dark:text-rose-400'
-                        }`}>
-                          {facility.type === 'pharmacy' ? (
-                            <PlusCircle className="w-6 h-6" />
-                          ) : facility.type === 'clinic' ? (
-                            <Activity className="w-6 h-6" />
-                          ) : facility.type === 'dental' ? (
-                            <Smile className="w-6 h-6" />
-                          ) : facility.type === 'specialty' ? (
-                            <Stethoscope className="w-6 h-6" />
-                          ) : facility.type === 'diagnostic' ? (
-                            <FlaskConical className="w-6 h-6" />
-                          ) : (
-                            <Hospital className="w-6 h-6" />
-                          )}
-                        </div>
-                        {facility.distanceDisplay && (
-                          <div className="flex items-center gap-1.5 px-3 py-1 bg-primary text-primary-foreground rounded-full text-[10px] font-black uppercase tracking-widest shadow-lg shadow-primary/20">
-                            <MapPin className="w-3 h-3" />
-                            {facility.distanceDisplay} Away
-                          </div>
-                        )}
-                        {facility.durationDisplay && (
-                          <div className="flex items-center gap-1.5 px-3 py-1 bg-amber-500 text-white rounded-full text-[10px] font-black uppercase tracking-widest shadow-lg shadow-amber-500/20">
-                            <Clock className="w-3 h-3 text-white" />
-                            Drive: {facility.durationDisplay}
-                          </div>
-                        )}
+            {aiAdvisorEnabled ? (
+              <div className="space-y-6">
+                <h2 className="text-xl font-bold mb-2 flex items-center gap-2 text-indigo-600 dark:text-indigo-400">
+                  <Sparkles className="w-5 h-5 animate-pulse" />
+                  AI Clinical Advice & Matching Facilities
+                </h2>
+
+                {aiLoading && (
+                  <div className="p-10 text-center bg-card rounded-[2.5rem] border border-indigo-500/10 shadow-lg shadow-indigo-500/5">
+                    <Loader2 className="w-10 h-10 text-indigo-600 dark:text-indigo-400 animate-spin mx-auto mb-4" />
+                    <p className="text-sm font-bold text-foreground">Analyzing medical query and searching local health resources...</p>
+                    <p className="text-xs text-muted-foreground mt-2 animate-pulse">Consulting Gemini with live Google Maps grounding vectors...</p>
+                  </div>
+                )}
+
+                {aiError && (
+                  <div className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-900/30 rounded-2xl text-red-600 text-sm flex items-center gap-3">
+                    <AlertTriangle className="w-5 h-5 animate-bounce" />
+                    {aiError}
+                  </div>
+                )}
+
+                {aiAdvice && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 15 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="bg-gradient-to-br from-indigo-500/5 to-purple-500/5 border border-indigo-500/20 rounded-[2.5rem] p-8 shadow-sm relative overflow-hidden text-foreground"
+                  >
+                    <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/10 rounded-full blur-3xl -z-10"></div>
+                    <div className="flex items-center gap-2.5 mb-4 pb-4 border-b border-indigo-500/10">
+                      <div className="p-2 bg-indigo-500/15 rounded-xl text-indigo-600 dark:text-indigo-400">
+                        <Sparkles className="w-5 h-5" />
                       </div>
-                      <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest shrink-0 border ${
-                        facility.type === 'pharmacy' ? 'bg-teal-500/5 text-teal-600 dark:text-teal-400 border-teal-500/20' :
-                        facility.type === 'clinic' ? 'bg-emerald-500/5 text-emerald-600 dark:text-emerald-400 border-emerald-500/20' :
-                        facility.type === 'dental' ? 'bg-blue-500/5 text-blue-600 dark:text-blue-400 border-blue-500/20' :
-                        facility.type === 'specialty' ? 'bg-purple-500/5 text-purple-600 dark:text-purple-400 border-purple-500/20' :
-                        facility.type === 'diagnostic' ? 'bg-amber-500/5 text-amber-600 dark:text-amber-400 border-amber-500/20' :
-                        'bg-rose-500/5 text-rose-600 dark:text-rose-400 border-rose-500/20'
-                      }`}>
-                        {facility.type === 'hospital' ? 'Hospital' :
-                         facility.type === 'clinic' ? 'Clinic' :
-                         facility.type === 'pharmacy' ? 'Pharmacy' :
-                         facility.type === 'dental' ? 'Dental' :
-                         facility.type === 'specialty' ? 'Specialist' :
-                         facility.type === 'diagnostic' ? 'Diagnostic/Lab' : facility.type}
-                      </span>
+                      <div>
+                        <h3 className="font-extrabold text-sm text-foreground uppercase tracking-wider">AI Clinical Advisor Analysis</h3>
+                        <p className="text-[10px] text-muted-foreground">Empathetic patient support grounded via Google Maps</p>
+                      </div>
                     </div>
-                    <h3 className="text-lg font-bold text-foreground mb-2 group-hover:text-primary transition-colors">
-                      {facility.name}
-                    </h3>
-                    <p className="text-sm text-muted-foreground mb-3 line-clamp-2">
-                      {facility.address}
-                    </p>
-                    {facility.reviews && facility.reviews.length > 0 && (
-                      <div className="mb-4 flex flex-wrap gap-1">
-                        {facility.reviews.map((rev, rIdx) => (
-                          <span key={rIdx} className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded-lg">
-                            {rev}
-                          </span>
-                        ))}
-                      </div>
-                    )}
+                    <div className="prose dark:prose-invert prose-xs text-sm text-slate-700 dark:text-slate-200 leading-relaxed max-w-none">
+                      <ReactMarkdown>{aiAdvice}</ReactMarkdown>
+                    </div>
+                    <div className="mt-6 flex items-start gap-2 bg-amber-500/5 border border-amber-500/20 p-4 rounded-2xl">
+                      <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
+                      <p className="text-[11px] text-amber-700 dark:text-amber-400 leading-relaxed">
+                        <strong>Disclaimer:</strong> This automated advisor uses Google Maps Grounding to suggest facilities. It does not provide medical treatment, diagnosis, or emergency dispatch services. If you are experiencing a life-threatening emergency, please call local emergency numbers or proceed to the nearest emergency room immediately.
+                      </p>
+                    </div>
+                  </motion.div>
+                )}
+
+                {aiFacilities && (
+                  <div className="space-y-4 pt-4">
+                    <h3 className="font-extrabold text-xs uppercase tracking-widest text-muted-foreground">AI Recommended Facilities ({aiFacilities.length})</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      {aiFacilities.length > 0 ? (
+                        aiFacilities.map((facility, idx) => (
+                          <motion.div
+                            key={idx}
+                            initial={{ opacity: 0, scale: 0.95 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            transition={{ delay: idx * 0.05 }}
+                            className="bg-card border border-indigo-500/25 p-6 rounded-[2rem] group hover:border-indigo-500 transition-all shadow-sm hover:shadow-md flex flex-col justify-between text-foreground"
+                          >
+                            <div>
+                              <div className="flex items-start justify-between mb-4 gap-2">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <div className={`p-3 rounded-2xl ${
+                                    facility.type === 'pharmacy' ? 'bg-teal-500/10 text-teal-600 dark:text-teal-400' :
+                                    facility.type === 'clinic' ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' :
+                                    facility.type === 'dental' ? 'bg-blue-500/10 text-blue-600 dark:text-blue-400' :
+                                    facility.type === 'specialty' ? 'bg-purple-500/10 text-purple-600 dark:text-purple-400' :
+                                    facility.type === 'diagnostic' ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400' :
+                                    'bg-rose-500/10 text-rose-600 dark:text-rose-400'
+                                  }`}>
+                                    {facility.type === 'pharmacy' ? (
+                                      <PlusCircle className="w-6 h-6" />
+                                    ) : facility.type === 'clinic' ? (
+                                      <Activity className="w-6 h-6" />
+                                    ) : facility.type === 'dental' ? (
+                                      <Smile className="w-6 h-6" />
+                                    ) : facility.type === 'specialty' ? (
+                                      <Stethoscope className="w-6 h-6" />
+                                    ) : facility.type === 'diagnostic' ? (
+                                      <FlaskConical className="w-6 h-6" />
+                                    ) : (
+                                      <Hospital className="w-6 h-6" />
+                                    )}
+                                  </div>
+                                  {facility.distanceDisplay && (
+                                    <div className="flex items-center gap-1.5 px-3 py-1 bg-indigo-600 text-white rounded-full text-[10px] font-black uppercase tracking-widest shadow-lg shadow-indigo-600/20">
+                                      <MapPin className="w-3 h-3" />
+                                      {facility.distanceDisplay} Away
+                                    </div>
+                                  )}
+                                </div>
+                                <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest shrink-0 border ${
+                                  facility.type === 'pharmacy' ? 'bg-teal-500/5 text-teal-600 dark:text-teal-400 border-teal-500/20' :
+                                  facility.type === 'clinic' ? 'bg-emerald-500/5 text-emerald-600 dark:text-emerald-400 border-emerald-500/20' :
+                                  facility.type === 'dental' ? 'bg-blue-500/5 text-blue-600 dark:text-blue-400 border-blue-500/20' :
+                                  facility.type === 'specialty' ? 'bg-purple-500/5 text-purple-600 dark:text-purple-400 border-purple-500/20' :
+                                  facility.type === 'diagnostic' ? 'bg-amber-500/5 text-amber-600 dark:text-amber-400 border-amber-500/20' :
+                                  'bg-rose-500/5 text-rose-600 dark:text-rose-400 border-rose-500/20'
+                                }`}>
+                                  {facility.type === 'hospital' ? 'Hospital' :
+                                   facility.type === 'clinic' ? 'Clinic' :
+                                   facility.type === 'pharmacy' ? 'Pharmacy' :
+                                   facility.type === 'dental' ? 'Dental' :
+                                   facility.type === 'specialty' ? 'Specialist' :
+                                   facility.type === 'diagnostic' ? 'Diagnostic/Lab' : facility.type}
+                                </span>
+                              </div>
+                              <h3 className="text-lg font-bold text-foreground mb-2 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
+                                {facility.name}
+                              </h3>
+                              <p className="text-sm text-muted-foreground mb-3 line-clamp-2">
+                                {facility.address}
+                              </p>
+                              {facility.reviews && facility.reviews.length > 0 && (
+                                <div className="mb-4 flex flex-wrap gap-1">
+                                  {facility.reviews.map((rev, rIdx) => (
+                                    <span key={rIdx} className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded-lg">
+                                      {rev}
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                            <div className="mt-4 pt-4 border-t border-border/60">
+                              <button 
+                                onClick={() => handleRedirectToMaps(facility)}
+                                className="w-full py-3 bg-indigo-600 text-white rounded-xl font-bold transition-all text-sm flex items-center justify-center gap-2 hover:bg-indigo-700 shadow-lg shadow-indigo-600/20 cursor-pointer"
+                              >
+                                <Navigation className="w-4 h-4 animate-pulse" />
+                                Get Directions (Google Maps)
+                              </button>
+                            </div>
+                          </motion.div>
+                        ))
+                      ) : (
+                        <div className="col-span-full py-20 text-center bg-card rounded-[2.5rem] border border-dashed border-border">
+                          <Navigation className="w-12 h-12 text-muted/20 mx-auto mb-4" />
+                          <p className="text-muted-foreground">Describe your health concern and click "Search with AI" to locate matched providers.</p>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                  <div className="mt-4 pt-4 border-t border-border/60">
-                    <button 
-                      onClick={() => handleRedirectToMaps(facility)}
-                      className="w-full py-3 bg-primary text-primary-foreground rounded-xl font-bold transition-all text-sm flex items-center justify-center gap-2 hover:bg-primary/90 shadow-lg shadow-primary/20"
+                )}
+              </div>
+            ) : (
+              <>
+                <h2 className="text-xl font-bold mb-2 flex items-center gap-2">
+                  <Activity className="w-5 h-5 text-primary" />
+                  Nearby Facilities ({filteredNearby.length})
+                </h2>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {filteredNearby.length > 0 ? filteredNearby.map((facility, idx) => (
+                    <motion.div
+                      key={idx}
+                      initial={{ opacity: 0, scale: 0.95 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      transition={{ delay: idx * 0.05 }}
+                      className="bg-card border border-border p-6 rounded-[2rem] group hover:border-primary/50 transition-all shadow-sm hover:shadow-md flex flex-col justify-between"
                     >
-                      <Navigation className="w-4 h-4 animate-pulse" />
-                      Get Directions (Google Maps)
-                    </button>
-                  </div>
-                </motion.div>
-              )) : (
-                <div className="col-span-full py-20 text-center bg-card rounded-[2.5rem] border border-dashed border-border">
-                  <Navigation className="w-12 h-12 text-muted/20 mx-auto mb-4" />
-                  <p className="text-muted-foreground">Authorize your GPS location or adjust filters to view nearby providers.</p>
+                      <div>
+                        <div className="flex items-start justify-between mb-4 gap-2">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <div className={`p-3 rounded-2xl ${
+                              facility.type === 'pharmacy' ? 'bg-teal-500/10 text-teal-600 dark:text-teal-400' :
+                              facility.type === 'clinic' ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' :
+                              facility.type === 'dental' ? 'bg-blue-500/10 text-blue-600 dark:text-blue-400' :
+                              facility.type === 'specialty' ? 'bg-purple-500/10 text-purple-600 dark:text-purple-400' :
+                              facility.type === 'diagnostic' ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400' :
+                              'bg-rose-500/10 text-rose-600 dark:text-rose-400'
+                            }`}>
+                              {facility.type === 'pharmacy' ? (
+                                <PlusCircle className="w-6 h-6" />
+                              ) : facility.type === 'clinic' ? (
+                                <Activity className="w-6 h-6" />
+                              ) : facility.type === 'dental' ? (
+                                <Smile className="w-6 h-6" />
+                              ) : facility.type === 'specialty' ? (
+                                <Stethoscope className="w-6 h-6" />
+                              ) : facility.type === 'diagnostic' ? (
+                                <FlaskConical className="w-6 h-6" />
+                              ) : (
+                                <Hospital className="w-6 h-6" />
+                              )}
+                            </div>
+                            {facility.distanceDisplay && (
+                              <div className="flex items-center gap-1.5 px-3 py-1 bg-primary text-primary-foreground rounded-full text-[10px] font-black uppercase tracking-widest shadow-lg shadow-primary/20">
+                                <MapPin className="w-3 h-3" />
+                                {facility.distanceDisplay} Away
+                              </div>
+                            )}
+                            {facility.durationDisplay && (
+                              <div className="flex items-center gap-1.5 px-3 py-1 bg-amber-500 text-white rounded-full text-[10px] font-black uppercase tracking-widest shadow-lg shadow-amber-500/20">
+                                <Clock className="w-3 h-3 text-white" />
+                                Drive: {facility.durationDisplay}
+                              </div>
+                            )}
+                          </div>
+                          <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest shrink-0 border ${
+                            facility.type === 'pharmacy' ? 'bg-teal-500/5 text-teal-600 dark:text-teal-400 border-teal-500/20' :
+                            facility.type === 'clinic' ? 'bg-emerald-500/5 text-emerald-600 dark:text-emerald-400 border-emerald-500/20' :
+                            facility.type === 'dental' ? 'bg-blue-500/5 text-blue-600 dark:text-blue-400 border-blue-500/20' :
+                            facility.type === 'specialty' ? 'bg-purple-500/5 text-purple-600 dark:text-purple-400 border-purple-500/20' :
+                            facility.type === 'diagnostic' ? 'bg-amber-500/5 text-amber-600 dark:text-amber-400 border-amber-500/20' :
+                            'bg-rose-500/5 text-rose-600 dark:text-rose-400 border-rose-500/20'
+                          }`}>
+                            {facility.type === 'hospital' ? 'Hospital' :
+                             facility.type === 'clinic' ? 'Clinic' :
+                             facility.type === 'pharmacy' ? 'Pharmacy' :
+                             facility.type === 'dental' ? 'Dental' :
+                             facility.type === 'specialty' ? 'Specialist' :
+                             facility.type === 'diagnostic' ? 'Diagnostic/Lab' : facility.type}
+                          </span>
+                        </div>
+                        <h3 className="text-lg font-bold text-foreground mb-2 group-hover:text-primary transition-colors">
+                          {facility.name}
+                        </h3>
+                        <p className="text-sm text-muted-foreground mb-3 line-clamp-2">
+                          {facility.address}
+                        </p>
+                        {facility.reviews && facility.reviews.length > 0 && (
+                          <div className="mb-4 flex flex-wrap gap-1">
+                            {facility.reviews.map((rev, rIdx) => (
+                              <span key={rIdx} className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded-lg">
+                                {rev}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      <div className="mt-4 pt-4 border-t border-border/60">
+                        <button 
+                          onClick={() => handleRedirectToMaps(facility)}
+                          className="w-full py-3 bg-primary text-primary-foreground rounded-xl font-bold transition-all text-sm flex items-center justify-center gap-2 hover:bg-primary/90 shadow-lg shadow-primary/20"
+                        >
+                          <Navigation className="w-4 h-4 animate-pulse" />
+                          Get Directions (Google Maps)
+                        </button>
+                      </div>
+                    </motion.div>
+                  )) : (
+                    <div className="col-span-full py-20 text-center bg-card rounded-[2.5rem] border border-dashed border-border">
+                      <Navigation className="w-12 h-12 text-muted/20 mx-auto mb-4" />
+                      <p className="text-muted-foreground">Authorize your GPS location or adjust filters to view nearby providers.</p>
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
+              </>
+            )}
           </div>
 
           <div className="space-y-8">

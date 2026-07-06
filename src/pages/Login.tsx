@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { signInWithEmailAndPassword, signInWithPopup, GoogleAuthProvider } from 'firebase/auth';
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
@@ -79,6 +79,51 @@ const Login: React.FC = () => {
     hospitalId: ''
   });
 
+  useEffect(() => {
+    const handleMessage = async (event: MessageEvent) => {
+      if (event.origin !== window.location.origin) return;
+
+      if (event.data?.type === 'FIREBASE_AUTH_SUCCESS') {
+        try {
+          setLoading(true);
+          setError('');
+          const { uid, email, displayName, photoURL } = event.data;
+
+          // Poll briefly for the local Firebase Auth state to sync (as IndexedDB updates cross-window)
+          let currentUser = auth.currentUser;
+          if (!currentUser) {
+            for (let i = 0; i < 20; i++) {
+              await new Promise(resolve => setTimeout(resolve, 150));
+              if (auth.currentUser) {
+                currentUser = auth.currentUser;
+                break;
+              }
+            }
+          }
+
+          const userObj = currentUser || { uid, email, displayName, photoURL };
+
+          // Check if profile exists, if not create it
+          const userDoc = await getDoc(doc(db, 'users', userObj.uid));
+          if (!userDoc.exists()) {
+            setPendingUser(userObj);
+            setShowRoleModal(true);
+          } else {
+            navigate('/dashboard');
+          }
+        } catch (err: any) {
+          console.error("Error syncing Google Auth:", err);
+          setError(err.message || 'Failed to complete Google Sign-In sync');
+        } finally {
+          setLoading(false);
+        }
+      }
+    };
+
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, [navigate]);
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -99,29 +144,32 @@ const Login: React.FC = () => {
     }
   };
 
-  const handleGoogleLogin = async () => {
-    const provider = new GoogleAuthProvider();
-    try {
-      const userCredential = await signInWithPopup(auth, provider);
-      const user = userCredential.user;
-      
-      // Check if profile exists, if not create it
-      const userDoc = await getDoc(doc(db, 'users', user.uid));
-      if (!userDoc.exists()) {
-        // For other new users, show role selection modal
-        setPendingUser(user);
-        setShowRoleModal(true);
-      } else {
-        navigate('/dashboard');
-      }
-    } catch (err: any) {
-      if (err.code === 'auth/unauthorized-domain') {
-        setError('Domain not authorized. Please add this domain to the "Authorized domains" list in your Firebase Console (Authentication > Settings).');
-      } else if (err.code === 'auth/operation-not-allowed') {
-        setError('Google sign-in is not enabled. Please enable it in your Firebase Console (Authentication > Sign-in method).');
-      } else {
-        setError(err.message || 'Failed to sign in with Google');
-      }
+  const handleGoogleLogin = () => {
+    setError('');
+    setLoading(true);
+
+    const width = 500;
+    const height = 650;
+    const left = window.screenX + (window.outerWidth - width) / 2;
+    const top = window.screenY + (window.outerHeight - height) / 2;
+
+    const authWindow = window.open(
+      '/auth-popup.html',
+      'google_auth_popup',
+      `width=${width},height=${height},left=${left},top=${top},scrollbars=yes,resizable=yes`
+    );
+
+    if (!authWindow) {
+      setError('Popup blocked! Please allow popups for this website to sign in with Google.');
+      setLoading(false);
+    } else {
+      // Periodic check if popup was closed without completion
+      const checkClosed = setInterval(() => {
+        if (authWindow.closed) {
+          clearInterval(checkClosed);
+          setLoading(false);
+        }
+      }, 1000);
     }
   };
 

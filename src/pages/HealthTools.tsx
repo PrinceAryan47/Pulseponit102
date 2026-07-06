@@ -20,7 +20,9 @@ import {
   AlertTriangle,
   Shield,
   CheckCircle2,
-  AlertCircle
+  AlertCircle,
+  Trash2,
+  Sparkles
 } from 'lucide-react';
 import {
   Document,
@@ -46,6 +48,17 @@ import Markdown from 'react-markdown';
 import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import GuestOverlay from '../components/GuestOverlay';
+
+// Firebase Firestore Imports
+import { db } from '../firebase';
+import { collection, addDoc, getDocs, query, where, orderBy, deleteDoc, doc } from 'firebase/firestore';
+
+// Resilient Offline Handlers
+import {
+  generateMensHealthFallback,
+  generateFitnessWorkoutFallback,
+  generateSymptomCheckerFallback
+} from '../utils/offlineHealthData';
 
 const HealthTools: React.FC = () => {
   const [searchParams] = useSearchParams();
@@ -186,13 +199,71 @@ const HealthTools: React.FC = () => {
 };
 
 const MensHealthGuide = () => {
-  const { profile } = useAuth();
+  const { profile, user } = useAuth();
   const [age, setAge] = useState(profile?.age?.toString() || '');
   const [focus, setFocus] = useState('overall');
   const [activity, setActivity] = useState('moderate');
   const [familyHistory, setFamilyHistory] = useState('none');
   const [loading, setLoading] = useState(false);
   const [guide, setGuide] = useState<string | null>(null);
+  const [loadedSource, setLoadedSource] = useState<'ai' | 'fallback' | 'database' | null>(null);
+
+  // Firestore History states
+  const [savedReports, setSavedReports] = useState<any[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+
+  // Fetch Saved Reports History
+  const fetchHistory = async () => {
+    if (!user) return;
+    setHistoryLoading(true);
+    try {
+      const q = query(
+        collection(db, 'healthReports'),
+        where('userId', '==', user.uid),
+        where('type', '==', 'mens-health'),
+        orderBy('createdAt', 'desc')
+      );
+      const snap = await getDocs(q);
+      const reports = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setSavedReports(reports);
+    } catch (err) {
+      console.error("Error fetching mens-health history:", err);
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (user) {
+      fetchHistory();
+    }
+  }, [user]);
+
+  // Load a report from history
+  const loadReport = (report: any) => {
+    setAge(report.inputCriteria?.age?.toString() || '');
+    setFocus(report.inputCriteria?.focus || 'overall');
+    setActivity(report.inputCriteria?.activity || 'moderate');
+    setFamilyHistory(report.inputCriteria?.familyHistory || 'none');
+    setGuide(report.reportText);
+    setLoadedSource('database');
+  };
+
+  // Delete a report from history
+  const deleteReport = async (reportId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!window.confirm("Are you sure you want to delete this saved guide?")) return;
+    try {
+      await deleteDoc(doc(db, 'healthReports', reportId));
+      setSavedReports(prev => prev.filter(r => r.id !== reportId));
+      if (guide && savedReports.find(r => r.id === reportId)?.reportText === guide) {
+        setGuide(null);
+        setLoadedSource(null);
+      }
+    } catch (err) {
+      console.error("Error deleting report:", err);
+    }
+  };
 
   // Dynamic Client-side Screening Checklist based on age limits
   const getScreeningRecommendations = (currentAge: number) => {
@@ -223,6 +294,12 @@ const MensHealthGuide = () => {
     if (!age) return;
     
     setLoading(true);
+    setGuide(null);
+    setLoadedSource(null);
+    
+    let generatedText = "";
+    let sourceUsed: 'ai' | 'fallback' = 'ai';
+
     try {
       const ai = new GoogleGenAI({ apiKey: "" });
       const response = await ai.models.generateContent({
@@ -257,12 +334,38 @@ const MensHealthGuide = () => {
         ## 📚 Trusted Clinical References & Source Directory
         Provide a distinct clinical reference section explicitly framing recommendations within clinical guidelines from the US Preventive Services Task Force (USPSTF), American College of Physicians (ACP), American Cancer Society (ACS), and American Heart Association (AHA).`,
       });
-      setGuide(response.text || "Unable to generate guide at this time.");
+      
+      if (response.text) {
+        generatedText = response.text;
+        sourceUsed = 'ai';
+      } else {
+        throw new Error("Empty response from AI engine.");
+      }
     } catch (err) {
-      console.error(err);
-      setGuide("Error connecting to health analysis service.");
+      console.warn("AI generation failed. Proceeding with robust, customized local database generation.", err);
+      // Perfect Client-side Fallback execution
+      generatedText = generateMensHealthFallback({ age: parsedAge, focus, activity, familyHistory });
+      sourceUsed = 'fallback';
     } finally {
+      setGuide(generatedText);
+      setLoadedSource(sourceUsed);
       setLoading(false);
+
+      // Save generated report to Firestore for durable user persistence
+      if (generatedText && user) {
+        try {
+          await addDoc(collection(db, 'healthReports'), {
+            userId: user.uid,
+            type: 'mens-health',
+            inputCriteria: { age: parsedAge, focus, activity, familyHistory },
+            reportText: generatedText,
+            createdAt: new Date().toISOString()
+          });
+          fetchHistory(); // Refresh list
+        } catch (saveErr) {
+          console.error("Error persisting generated health guide to DB:", saveErr);
+        }
+      }
     }
   };
 
@@ -277,96 +380,143 @@ const MensHealthGuide = () => {
       </p>
       
       {/* Evidence-based Medical Guidelines Background Panel */}
-      <div className="bg-amber-500/10 border border-amber-500/25 p-5 rounded-3xl mb-8 flex flex-col sm:flex-row gap-4 items-start">
-        <div className="p-3 bg-amber-500/10 rounded-2xl text-amber-600 dark:text-amber-500 shrink-0">
-          <Activity className="w-6 h-6 animate-pulse" />
+      <div className="bg-slate-50 dark:bg-slate-900/40 border border-slate-100 dark:border-slate-800 p-5 rounded-3xl mb-8 flex flex-col sm:flex-row gap-4 items-start">
+        <div className="p-3 bg-primary/10 rounded-2xl text-primary shrink-0">
+          <Activity className="w-6 h-6" />
         </div>
         <div>
-          <h4 className="font-bold text-sm text-amber-800 dark:text-amber-400 mb-1">Peer-Reviewed Preventive Frameworks</h4>
-          <p className="text-xs text-amber-700/85 dark:text-slate-300 leading-relaxed mb-3 font-semibold">
+          <h4 className="font-bold text-sm text-foreground mb-1">Peer-Reviewed Preventive Frameworks</h4>
+          <p className="text-xs text-muted-foreground leading-relaxed mb-3">
             All age-graded diagnostic screenings, checkups, and cardiological warning indicators are matched against current preventive guidelines established by elite clinical academies:
           </p>
-          <div className="flex flex-wrap gap-2 text-[10px] font-black tracking-wider uppercase">
-            <span className="px-2.5 py-1 bg-amber-500/10 border border-amber-500/20 rounded-md text-amber-800 dark:text-amber-300">USPSTF Guidelines</span>
-            <span className="px-2.5 py-1 bg-amber-500/10 border border-amber-500/20 rounded-md text-amber-800 dark:text-amber-300">American Cancer Society (ACS)</span>
-            <span className="px-2.5 py-1 bg-amber-500/10 border border-amber-500/20 rounded-md text-amber-800 dark:text-amber-300">American Heart Assoc. (AHA)</span>
-            <span className="px-2.5 py-1 bg-amber-500/10 border border-amber-500/20 rounded-md text-amber-800 dark:text-amber-300">AUA Urology Standard</span>
+          <div className="flex flex-wrap gap-2 text-[10px] font-bold tracking-wider uppercase">
+            <span className="px-2.5 py-1 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md text-slate-600 dark:text-slate-300">USPSTF Guidelines</span>
+            <span className="px-2.5 py-1 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md text-slate-600 dark:text-slate-300">American Cancer Society (ACS)</span>
+            <span className="px-2.5 py-1 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md text-slate-600 dark:text-slate-300">American Heart Assoc. (AHA)</span>
+            <span className="px-2.5 py-1 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md text-slate-600 dark:text-slate-300">AUA Urology Standard</span>
           </div>
         </div>
       </div>
       
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-        {/* Form panel */}
-        <form onSubmit={generateGuide} className="lg:col-span-5 bg-muted/30 p-6 sm:p-8 rounded-3xl border border-border/80 space-y-6">
-          <h3 className="font-bold text-sm text-foreground uppercase tracking-widest pb-2 border-b border-border/60">Patient Criteria</h3>
-          
-          <div>
-            <label className="block text-xs font-bold text-foreground/80 uppercase tracking-wider mb-2">Age</label>
-            <input
-              type="number"
-              required
-              value={age}
-              onChange={(e) => setAge(e.target.value)}
-              className="w-full px-5 py-3.5 bg-background border border-border rounded-xl focus:ring-2 focus:ring-primary outline-none transition-all text-foreground text-sm font-medium"
-              placeholder="e.g. 45"
-              min="1"
-              max="120"
-            />
-          </div>
+        {/* Left Side Column: Form + Saved History Panel */}
+        <div className="lg:col-span-5 space-y-6">
+          <form onSubmit={generateGuide} className="bg-muted/30 p-6 sm:p-8 rounded-3xl border border-border/80 space-y-6">
+            <h3 className="font-bold text-sm text-foreground uppercase tracking-widest pb-2 border-b border-border/60">Patient Criteria</h3>
+            
+            <div>
+              <label className="block text-xs font-bold text-foreground/80 uppercase tracking-wider mb-2">Age</label>
+              <input
+                type="number"
+                required
+                value={age}
+                onChange={(e) => setAge(e.target.value)}
+                className="w-full px-5 py-3.5 bg-background border border-border rounded-xl focus:ring-2 focus:ring-primary outline-none transition-all text-foreground text-sm font-medium"
+                placeholder="e.g. 45"
+                min="1"
+                max="120"
+              />
+            </div>
 
-          <div>
-            <label className="block text-xs font-bold text-foreground/80 uppercase tracking-wider mb-2">Primary Wellness Focus</label>
-            <select
-              value={focus}
-              onChange={(e) => setFocus(e.target.value)}
-              className="w-full px-5 py-3.5 bg-background border border-border rounded-xl focus:ring-2 focus:ring-primary outline-none transition-all text-foreground text-sm font-medium"
+            <div>
+              <label className="block text-xs font-bold text-foreground/80 uppercase tracking-wider mb-2">Primary Wellness Focus</label>
+              <select
+                value={focus}
+                onChange={(e) => setFocus(e.target.value)}
+                className="w-full px-5 py-3.5 bg-background border border-border rounded-xl focus:ring-2 focus:ring-primary outline-none transition-all text-foreground text-sm font-medium"
+              >
+                <option value="overall">Overall Longevity & Screening</option>
+                <option value="cardio">Cardiovascular Fitness & Heart Health</option>
+                <option value="strength">Muscle Density & Hormone Balance</option>
+                <option value="recovery">Energy, Sleep & Recovery Optimization</option>
+                <option value="mental">Cognitive Focus & Stress Resilience</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-foreground/80 uppercase tracking-wider mb-2">Exercise / Activity State</label>
+              <select
+                value={activity}
+                onChange={(e) => setActivity(e.target.value)}
+                className="w-full px-5 py-3.5 bg-background border border-border rounded-xl focus:ring-2 focus:ring-primary outline-none transition-all text-foreground text-sm font-medium"
+              >
+                <option value="sedentary">Sedentary (desk job, minimal movement)</option>
+                <option value="light">Lightly Active (active walking, casual activity)</option>
+                <option value="moderate">Moderately Active (structured workouts 3-5x/week)</option>
+                <option value="active">Very Active (heavy weight splits / intense sports)</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-foreground/80 uppercase tracking-wider mb-2">Known Hereditary History Risks</label>
+              <select
+                value={familyHistory}
+                onChange={(e) => setFamilyHistory(e.target.value)}
+                className="w-full px-5 py-3.5 bg-background border border-border rounded-xl focus:ring-2 focus:ring-primary outline-none transition-all text-foreground text-sm font-medium"
+              >
+                <option value="none">No known hereditary family history</option>
+                <option value="heart">Cardiovascular disease or heart attacks</option>
+                <option value="diabetes">Type 2 Diabetes / Metabolic concerns</option>
+                <option value="cancer">Prostate or Colon cancer history</option>
+                <option value="bloodpressure">Clinical Stroke / Arterial hypertension</option>
+              </select>
+            </div>
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full py-4 bg-primary text-primary-foreground rounded-xl font-bold hover:bg-neon-blue-dark transition-all flex items-center justify-center gap-2 disabled:opacity-50 neon-glow text-xs uppercase tracking-wider"
             >
-              <option value="overall">Overall Longevity & Screening</option>
-              <option value="cardio">Cardiovascular Fitness & Heart Health</option>
-              <option value="strength">Muscle Density & Hormone Balance</option>
-              <option value="recovery">Energy, Sleep & Recovery Optimization</option>
-              <option value="mental">Cognitive Focus & Stress Resilience</option>
-            </select>
-          </div>
+              {loading ? 'Synthesizing Guide...' : 'Generate Health Guide'}
+              <Activity className="w-4 h-4 ml-1" />
+            </button>
+          </form>
 
-          <div>
-            <label className="block text-xs font-bold text-foreground/80 uppercase tracking-wider mb-2">Exercise / Activity State</label>
-            <select
-              value={activity}
-              onChange={(e) => setActivity(e.target.value)}
-              className="w-full px-5 py-3.5 bg-background border border-border rounded-xl focus:ring-2 focus:ring-primary outline-none transition-all text-foreground text-sm font-medium"
-            >
-              <option value="sedentary">Sedentary (desk job, minimal movement)</option>
-              <option value="light">Lightly Active (active walking, casual activity)</option>
-              <option value="moderate">Moderately Active (structured workouts 3-5x/week)</option>
-              <option value="active">Very Active (heavy weight splits / intense sports)</option>
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-xs font-bold text-foreground/80 uppercase tracking-wider mb-2">Known Hereditary History Risks</label>
-            <select
-              value={familyHistory}
-              onChange={(e) => setFamilyHistory(e.target.value)}
-              className="w-full px-5 py-3.5 bg-background border border-border rounded-xl focus:ring-2 focus:ring-primary outline-none transition-all text-foreground text-sm font-medium"
-            >
-              <option value="none">No known hereditary family history</option>
-              <option value="heart">Cardiovascular disease or heart attacks</option>
-              <option value="diabetes">Type 2 Diabetes / Metabolic concerns</option>
-              <option value="cancer">Prostate or Colon cancer history</option>
-              <option value="bloodpressure">Clinical Stroke / Arterial hypertension</option>
-            </select>
-          </div>
-
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full py-4 bg-primary text-primary-foreground rounded-xl font-bold hover:bg-neon-blue-dark transition-all flex items-center justify-center gap-2 disabled:opacity-50 neon-glow text-xs uppercase tracking-wider"
-          >
-            {loading ? 'Synthesizing Guide...' : 'Generate Health Guide'}
-            <Activity className="w-4 h-4 ml-1" />
-          </button>
-        </form>
+          {/* Saved History Panel */}
+          {user && (
+            <div className="bg-muted/30 p-6 sm:p-8 rounded-3xl border border-border/80">
+              <h3 className="font-extrabold text-xs text-foreground uppercase tracking-wider mb-4 flex items-center justify-between">
+                <span>📂 Saved Health Reports</span>
+                {historyLoading && <span className="text-[10px] text-muted-foreground animate-pulse font-normal">Loading...</span>}
+              </h3>
+              {savedReports.length === 0 ? (
+                <p className="text-xs text-muted-foreground italic leading-relaxed">No saved reports. Generate a report above to automatically save it in the database.</p>
+              ) : (
+                <div className="space-y-2.5 max-h-[220px] overflow-y-auto pr-1">
+                  {savedReports.map((report) => (
+                    <div
+                      key={report.id}
+                      onClick={() => loadReport(report)}
+                      className={cn(
+                        "group flex items-center justify-between p-3 rounded-xl border transition-all cursor-pointer select-none text-left",
+                        guide === report.reportText
+                          ? "bg-primary/5 border-primary/40"
+                          : "border-border/60 bg-background/50 hover:bg-background hover:border-border-dark"
+                      )}
+                    >
+                      <div className="flex-1 min-w-0 pr-2">
+                        <div className="flex items-center gap-1.5 mb-1">
+                          <span className="text-[10px] font-extrabold uppercase tracking-tight text-primary">Aged {report.inputCriteria?.age}</span>
+                          <span className="text-[9px] text-muted-foreground">• {new Date(report.createdAt).toLocaleDateString()}</span>
+                        </div>
+                        <p className="text-xs font-bold text-foreground truncate capitalize">
+                          Focus: {report.inputCriteria?.focus?.replace('-', ' ')}
+                        </p>
+                      </div>
+                      <button
+                        onClick={(e) => deleteReport(report.id, e)}
+                        className="text-muted-foreground hover:text-red-500 p-1.5 rounded-lg hover:bg-red-500/10 transition-all"
+                        title="Delete from database"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
 
         {/* Live clinical checkpoints panel */}
         <div className="lg:col-span-7 bg-muted/20 p-6 sm:p-8 rounded-3xl border border-border/60">
@@ -462,11 +612,28 @@ const MensHealthGuide = () => {
           animate={{ opacity: 1, y: 0 }}
           className="mt-12 p-8 bg-muted/40 rounded-[2rem] border border-border/80"
         >
-          <div className="flex items-center justify-between border-b border-border/80 pb-4 mb-6">
-            <span className="text-[10px] font-black uppercase tracking-widest text-primary">System Synthesized Guidance Report</span>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-border/80 pb-4 mb-6 gap-3">
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-black uppercase tracking-widest text-primary">System Synthesized Guidance Report</span>
+              {loadedSource === 'database' && (
+                <span className="flex items-center gap-1.5 px-2.5 py-1 bg-emerald-500/10 border border-emerald-500/20 text-[10px] font-bold text-emerald-500 rounded-full">
+                  <CheckCircle2 className="w-3.5 h-3.5" /> DB Loaded
+                </span>
+              )}
+              {loadedSource === 'fallback' && (
+                <span className="flex items-center gap-1.5 px-2.5 py-1 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-[10px] font-bold text-muted-foreground rounded-full">
+                  <Shield className="w-3.5 h-3.5" /> Offline
+                </span>
+              )}
+              {loadedSource === 'ai' && (
+                <span className="flex items-center gap-1.5 px-2.5 py-1 bg-blue-500/10 border border-blue-500/20 text-[10px] font-bold text-blue-500 rounded-full">
+                  <Sparkles className="w-3.5 h-3.5" /> Live AI Generated
+                </span>
+              )}
+            </div>
             <button 
               onClick={() => window.print()}
-              className="text-xs font-bold text-primary hover:underline flex items-center gap-1.5"
+              className="text-xs font-bold text-primary hover:underline flex items-center gap-1.5 self-start sm:self-auto"
             >
               Print Document
             </button>
@@ -580,7 +747,7 @@ const WorkoutTimer = () => {
 };
 
 const FitnessWorkoutTool = () => {
-  const { profile } = useAuth();
+  const { profile, user } = useAuth();
   const [weight, setWeight] = useState('');
   const [height, setHeight] = useState('');
   const [age, setAge] = useState(profile?.age?.toString() || '');
@@ -592,6 +759,69 @@ const FitnessWorkoutTool = () => {
   const [loading, setLoading] = useState(false);
   const [routine, setRoutine] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'schedule' | 'nutrition' | 'progression' | 'full'>('schedule');
+  const [loadedSource, setLoadedSource] = useState<'ai' | 'fallback' | 'database' | null>(null);
+
+  // Firestore History states
+  const [savedReports, setSavedReports] = useState<any[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+
+  // Fetch Saved Reports History
+  const fetchHistory = async () => {
+    if (!user) return;
+    setHistoryLoading(true);
+    try {
+      const q = query(
+        collection(db, 'healthReports'),
+        where('userId', '==', user.uid),
+        where('type', '==', 'fitness-workout'),
+        orderBy('createdAt', 'desc')
+      );
+      const snap = await getDocs(q);
+      const reports = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setSavedReports(reports);
+    } catch (err) {
+      console.error("Error fetching fitness history:", err);
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (user) {
+      fetchHistory();
+    }
+  }, [user]);
+
+  // Load a report from history
+  const loadReport = (report: any) => {
+    setAge(report.inputCriteria?.age?.toString() || '');
+    setGender(report.inputCriteria?.gender || 'male');
+    setWeight(report.inputCriteria?.weight?.toString() || '');
+    setHeight(report.inputCriteria?.height?.toString() || '');
+    setGoal(report.inputCriteria?.goal || 'weight-loss');
+    setLevel(report.inputCriteria?.level || 'beginner');
+    setDays(report.inputCriteria?.days?.toString() || '4');
+    setEquipment(report.inputCriteria?.equipment || 'gym');
+    setRoutine(report.reportText);
+    setLoadedSource('database');
+    setCompletedWorkouts({});
+  };
+
+  // Delete a report from history
+  const deleteReport = async (reportId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!window.confirm("Are you sure you want to delete this saved workout program?")) return;
+    try {
+      await deleteDoc(doc(db, 'healthReports', reportId));
+      setSavedReports(prev => prev.filter(r => r.id !== reportId));
+      if (routine && savedReports.find(r => r.id === reportId)?.reportText === routine) {
+        setRoutine(null);
+        setLoadedSource(null);
+      }
+    } catch (err) {
+      console.error("Error deleting fitness report:", err);
+    }
+  };
 
   // Success Logging System
   const [completedWorkouts, setCompletedWorkouts] = useState<Record<string, boolean>>({});
@@ -959,6 +1189,12 @@ const FitnessWorkoutTool = () => {
     if (!weight || !height || !age) return;
     
     setLoading(true);
+    setRoutine(null);
+    setLoadedSource(null);
+
+    let generatedText = "";
+    let sourceUsed: 'ai' | 'fallback' = 'ai';
+
     try {
       const ai = new GoogleGenAI({ apiKey: "" });
       const response = await ai.models.generateContent({
@@ -997,14 +1233,48 @@ const FitnessWorkoutTool = () => {
         ## 📚 Scientific References & Sports Science Sources
         Provide a distinct sports-science reference index pointing to ACSM physical guidelines, NSCA Strength Standards, and ISSN Nutrition Positions so the client has an educational reference directory.`,
       });
-      setRoutine(response.text || "Unable to generate routine at this time.");
+      
+      if (response.text) {
+        generatedText = response.text;
+        sourceUsed = 'ai';
+      } else {
+        throw new Error("Empty response from AI engine.");
+      }
+    } catch (err) {
+      console.warn("AI workout generation failed. Proceeding with robust, customized sports-science local generator.", err);
+      generatedText = generateFitnessWorkoutFallback({
+        age: parseInt(age, 10) || 25,
+        gender,
+        weight: parseFloat(weight) || 70,
+        height: parseFloat(height) || 175,
+        goal,
+        level,
+        days: parseInt(days, 10) || 4,
+        equipment
+      });
+      sourceUsed = 'fallback';
+    } finally {
+      setRoutine(generatedText);
+      setLoadedSource(sourceUsed);
+      setLoading(false);
       // Reset tracker
       setCompletedWorkouts({});
-    } catch (err) {
-      console.error(err);
-      setRoutine("Error connecting to fitness analysis service.");
-    } finally {
-      setLoading(false);
+
+      // Save generated report to Firestore for durable user persistence
+      if (generatedText && user) {
+        try {
+          await addDoc(collection(db, 'healthReports'), {
+            userId: user.uid,
+            type: 'fitness-workout',
+            inputCriteria: { age: parseInt(age, 10) || 25, gender, weight: parseFloat(weight) || 70, height: parseFloat(height) || 175, goal, level, days: parseInt(days, 10) || 4, equipment },
+            reportText: generatedText,
+            createdAt: new Date().toISOString()
+          });
+          fetchHistory(); // Refresh list
+        } catch (saveErr) {
+          console.error("Error persisting generated fitness plan to DB:", saveErr);
+        }
+      }
     }
   };
 
@@ -1039,126 +1309,178 @@ const FitnessWorkoutTool = () => {
         </div>
       </div>
       
-      <form onSubmit={generateWorkout} className="space-y-6 bg-muted/20 p-6 sm:p-8 rounded-3xl border border-border/80">
-        <h3 className="font-bold text-sm text-foreground uppercase tracking-widest pb-2 border-b border-border/60">1. Body Metrics & Variables</h3>
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-          <div>
-            <label className="block text-xs font-bold text-foreground/85 uppercase tracking-widest mb-2">Age</label>
-            <input
-              type="number"
-              value={age}
-              onChange={(e) => setAge(e.target.value)}
-              className="w-full px-5 py-3.5 bg-background border border-border rounded-xl focus:ring-2 focus:ring-primary outline-none transition-all text-foreground text-sm font-medium"
-              placeholder="e.g. 25"
-              required
-              min="1"
-              max="120"
-            />
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+        <form onSubmit={generateWorkout} className={cn("space-y-6 bg-muted/20 p-6 sm:p-8 rounded-3xl border border-border/80", user ? "lg:col-span-8" : "lg:col-span-12")}>
+          <h3 className="font-bold text-sm text-foreground uppercase tracking-widest pb-2 border-b border-border/60">1. Body Metrics & Variables</h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6">
+            <div>
+              <label className="block text-xs font-bold text-foreground/85 uppercase tracking-widest mb-2">Age</label>
+              <input
+                type="number"
+                value={age}
+                onChange={(e) => setAge(e.target.value)}
+                className="w-full px-5 py-3.5 bg-background border border-border rounded-xl focus:ring-2 focus:ring-primary outline-none transition-all text-foreground text-sm font-medium"
+                placeholder="e.g. 25"
+                required
+                min="1"
+                max="120"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-foreground/85 uppercase tracking-widest mb-2">Weight (kg)</label>
+              <input
+                type="number"
+                value={weight}
+                onChange={(e) => setWeight(e.target.value)}
+                className="w-full px-5 py-3.5 bg-background border border-border rounded-xl focus:ring-2 focus:ring-primary outline-none transition-all text-foreground text-sm font-medium"
+                placeholder="e.g. 70"
+                required
+                min="20"
+                max="300"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-foreground/85 uppercase tracking-widest mb-2">Height (cm)</label>
+              <input
+                type="number"
+                value={height}
+                onChange={(e) => setHeight(e.target.value)}
+                className="w-full px-5 py-3.5 bg-background border border-border rounded-xl focus:ring-2 focus:ring-primary outline-none transition-all text-foreground text-sm font-medium"
+                placeholder="e.g. 175"
+                required
+                min="50"
+                max="250"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-foreground/85 uppercase tracking-widest mb-2">Biological Gender</label>
+              <select
+                value={gender}
+                onChange={(e) => setGender(e.target.value)}
+                className="w-full px-5 py-3.5 bg-background border border-border rounded-xl focus:ring-2 focus:ring-primary outline-none transition-all text-foreground text-sm font-semibold"
+              >
+                <option value="male">Male</option>
+                <option value="female">Female</option>
+                <option value="other">Other</option>
+              </select>
+            </div>
           </div>
-          <div>
-            <label className="block text-xs font-bold text-foreground/85 uppercase tracking-widest mb-2">Weight (kg)</label>
-            <input
-              type="number"
-              value={weight}
-              onChange={(e) => setWeight(e.target.value)}
-              className="w-full px-5 py-3.5 bg-background border border-border rounded-xl focus:ring-2 focus:ring-primary outline-none transition-all text-foreground text-sm font-medium"
-              placeholder="e.g. 70"
-              required
-              min="20"
-              max="300"
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-bold text-foreground/85 uppercase tracking-widest mb-2">Height (cm)</label>
-            <input
-              type="number"
-              value={height}
-              onChange={(e) => setHeight(e.target.value)}
-              className="w-full px-5 py-3.5 bg-background border border-border rounded-xl focus:ring-2 focus:ring-primary outline-none transition-all text-foreground text-sm font-medium"
-              placeholder="e.g. 175"
-              required
-              min="50"
-              max="250"
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-bold text-foreground/85 uppercase tracking-widest mb-2">Biological Gender</label>
-            <select
-              value={gender}
-              onChange={(e) => setGender(e.target.value)}
-              className="w-full px-5 py-3.5 bg-background border border-border rounded-xl focus:ring-2 focus:ring-primary outline-none transition-all text-foreground text-sm font-semibold"
-            >
-              <option value="male">Male</option>
-              <option value="female">Female</option>
-              <option value="other">Other</option>
-            </select>
-          </div>
-        </div>
 
-        <h3 className="font-bold text-sm text-foreground pt-4 pb-2 border-b border-border/60 uppercase tracking-widest">2. Training Design & Goal Setting</h3>
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-          <div>
-            <label className="block text-xs font-bold text-foreground/85 uppercase tracking-widest mb-2">Fitness Goal</label>
-            <select
-              value={goal}
-              onChange={(e) => setGoal(e.target.value)}
-              className="w-full px-5 py-3.5 bg-background border border-border rounded-xl focus:ring-2 focus:ring-primary outline-none transition-all text-foreground text-sm font-semibold"
-            >
-              <option value="weight-loss">Weight Loss & Fat Reduction</option>
-              <option value="muscle-gain">Muscle Hypertrophy & Strength</option>
-              <option value="endurance">Cardiovascular Endurance</option>
-              <option value="flexibility">Joint Mobility & Flexibility</option>
-              <option value="general-health">Overall Longevity & Health</option>
-            </select>
+          <h3 className="font-bold text-sm text-foreground pt-4 pb-2 border-b border-border/60 uppercase tracking-widest">2. Training Design & Goal Setting</h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6">
+            <div>
+              <label className="block text-xs font-bold text-foreground/85 uppercase tracking-widest mb-2">Fitness Goal</label>
+              <select
+                value={goal}
+                onChange={(e) => setGoal(e.target.value)}
+                className="w-full px-5 py-3.5 bg-background border border-border rounded-xl focus:ring-2 focus:ring-primary outline-none transition-all text-foreground text-sm font-semibold"
+              >
+                <option value="weight-loss">Weight Loss & Fat Reduction</option>
+                <option value="muscle-gain">Muscle Hypertrophy & Strength</option>
+                <option value="endurance">Cardiovascular Endurance</option>
+                <option value="flexibility">Joint Mobility & Flexibility</option>
+                <option value="general-health">Overall Longevity & Health</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-foreground/85 uppercase tracking-widest mb-2">Fitness Experience</label>
+              <select
+                value={level}
+                onChange={(e) => setLevel(e.target.value)}
+                className="w-full px-5 py-3.5 bg-background border border-border rounded-xl focus:ring-2 focus:ring-primary outline-none transition-all text-foreground text-sm font-semibold"
+              >
+                <option value="beginner">Beginner (under 6 months)</option>
+                <option value="intermediate">Intermediate (1-3 years)</option>
+                <option value="advanced">Advanced (highly consistent athlete)</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-foreground/85 uppercase tracking-widest mb-2">Active Workout Days</label>
+              <select
+                value={days}
+                onChange={(e) => setDays(e.target.value)}
+                className="w-full px-5 py-3.5 bg-background border border-border rounded-xl focus:ring-2 focus:ring-primary outline-none transition-all text-foreground text-sm font-semibold"
+              >
+                <option value="2">2 Days (Essential Balance)</option>
+                <option value="3">3 Days (Classic Push / Pull / Legs)</option>
+                <option value="4">4 Days (Efficient Routine)</option>
+                <option value="5">5 Days (Highly Commended Split)</option>
+                <option value="6">6 Days (Advanced High Volume)</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-foreground/85 uppercase tracking-widest mb-2">Training Environment</label>
+              <select
+                value={equipment}
+                onChange={(e) => setEquipment(e.target.value)}
+                className="w-full px-5 py-3.5 bg-background border border-border rounded-xl focus:ring-2 focus:ring-primary outline-none transition-all text-foreground text-sm font-semibold"
+              >
+                <option value="bodyweight">No Equipment (Pure Calisthenics)</option>
+                <option value="home">Home Setup (Dumbbells/Bands)</option>
+                <option value="gym">Commercial Gym (Full Equipment)</option>
+              </select>
+            </div>
           </div>
-          <div>
-            <label className="block text-xs font-bold text-foreground/85 uppercase tracking-widest mb-2">Fitness Experience</label>
-            <select
-              value={level}
-              onChange={(e) => setLevel(e.target.value)}
-              className="w-full px-5 py-3.5 bg-background border border-border rounded-xl focus:ring-2 focus:ring-primary outline-none transition-all text-foreground text-sm font-semibold"
-            >
-              <option value="beginner">Beginner (under 6 months)</option>
-              <option value="intermediate">Intermediate (1-3 years)</option>
-              <option value="advanced">Advanced (highly consistent athlete)</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs font-bold text-foreground/85 uppercase tracking-widest mb-2">Active Workout Days</label>
-            <select
-              value={days}
-              onChange={(e) => setDays(e.target.value)}
-              className="w-full px-5 py-3.5 bg-background border border-border rounded-xl focus:ring-2 focus:ring-primary outline-none transition-all text-foreground text-sm font-semibold"
-            >
-              <option value="2">2 Days (Essential Balance)</option>
-              <option value="3">3 Days (Classic Push / Pull / Legs)</option>
-              <option value="4">4 Days (Efficient Routine)</option>
-              <option value="5">5 Days (Highly Commended Split)</option>
-              <option value="6">6 Days (Advanced High Volume)</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs font-bold text-foreground/85 uppercase tracking-widest mb-2">Training Environment</label>
-            <select
-              value={equipment}
-              onChange={(e) => setEquipment(e.target.value)}
-              className="w-full px-5 py-3.5 bg-background border border-border rounded-xl focus:ring-2 focus:ring-primary outline-none transition-all text-foreground text-sm font-semibold"
-            >
-              <option value="bodyweight">No Equipment (Pure Calisthenics)</option>
-              <option value="home">Home Setup (Dumbbells/Bands)</option>
-              <option value="gym">Commercial Gym (Full Equipment)</option>
-            </select>
-          </div>
-        </div>
 
-        <button
-          type="submit"
-          disabled={loading}
-          className="w-full py-4.5 bg-primary text-primary-foreground rounded-xl font-bold hover:bg-neon-blue-dark transition-all shadow-lg shadow-primary/20 disabled:opacity-50 neon-glow text-xs uppercase tracking-wider"
-        >
-          {loading ? 'Assembling Weekly Program...' : 'Generate Workout Routine'}
-        </button>
-      </form>
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full py-4 bg-primary text-primary-foreground rounded-xl font-bold hover:bg-neon-blue-dark transition-all shadow-lg shadow-primary/20 disabled:opacity-50 neon-glow text-xs uppercase tracking-wider"
+          >
+            {loading ? 'Assembling Weekly Program...' : 'Generate Workout Routine'}
+          </button>
+        </form>
+
+        {/* Right: Saved History Card */}
+        {user && (
+          <div className="lg:col-span-4 bg-muted/30 p-6 sm:p-8 rounded-3xl border border-border/80">
+            <h3 className="font-extrabold text-xs text-foreground uppercase tracking-wider mb-4 flex items-center justify-between">
+              <span>📂 Saved Workout Programs</span>
+              {historyLoading && <span className="text-[10px] text-muted-foreground animate-pulse font-normal">Loading...</span>}
+            </h3>
+            {savedReports.length === 0 ? (
+              <p className="text-xs text-muted-foreground italic leading-relaxed">No saved programs yet. Create a program to save it automatically in the database.</p>
+            ) : (
+              <div className="space-y-2.5 max-h-[350px] overflow-y-auto pr-1">
+                {savedReports.map((report) => (
+                  <div
+                    key={report.id}
+                    onClick={() => loadReport(report)}
+                    className={cn(
+                      "group flex items-center justify-between p-3.5 rounded-xl border transition-all cursor-pointer select-none text-left",
+                      routine === report.reportText
+                        ? "bg-primary/5 border-primary/40"
+                        : "border-border/60 bg-background/50 hover:bg-background hover:border-border-dark"
+                    )}
+                  >
+                    <div className="flex-1 min-w-0 pr-2">
+                      <div className="flex items-center gap-1.5 mb-1">
+                        <span className="text-[10px] font-extrabold uppercase tracking-tight text-primary">
+                          {report.inputCriteria?.days}-Day Split
+                        </span>
+                        <span className="text-[9px] text-muted-foreground">• {new Date(report.createdAt).toLocaleDateString()}</span>
+                      </div>
+                      <p className="text-xs font-bold text-foreground truncate capitalize">
+                        Goal: {report.inputCriteria?.goal?.replace('-', ' ')}
+                      </p>
+                      <p className="text-[10px] text-muted-foreground truncate">
+                        {report.inputCriteria?.level} • {report.inputCriteria?.weight}kg / {report.inputCriteria?.height}cm
+                      </p>
+                    </div>
+                    <button
+                      onClick={(e) => deleteReport(report.id, e)}
+                      className="text-muted-foreground hover:text-red-500 p-1.5 rounded-lg hover:bg-red-500/10 transition-all"
+                      title="Delete from database"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
 
       {routine && (() => {
         const sections = parseSections(routine);
@@ -1191,10 +1513,27 @@ const FitnessWorkoutTool = () => {
           >
             {/* Universal Download Panel - Highlights word export & download options */}
             <div className="bg-card border-2 border-primary/20 p-6 sm:p-8 rounded-[2rem] shadow-xl flex flex-col md:flex-row items-center justify-between gap-6">
-              <div className="space-y-1 text-center md:text-left">
-                <span className="px-2.5 py-1 bg-emerald-500/10 text-emerald-500 text-[10px] font-black uppercase tracking-widest rounded-md">
-                  Word Document Export Ready
-                </span>
+              <div className="space-y-2 text-center md:text-left">
+                <div className="flex flex-wrap items-center justify-center md:justify-start gap-2">
+                  <span className="px-2.5 py-1 bg-emerald-500/10 text-emerald-500 text-[10px] font-black uppercase tracking-widest rounded-md">
+                    Word Document Export Ready
+                  </span>
+                  {loadedSource === 'database' && (
+                    <span className="flex items-center gap-1.5 px-2.5 py-1 bg-emerald-500/10 border border-emerald-500/20 text-[10px] font-bold text-emerald-500 rounded-md">
+                      <CheckCircle2 className="w-3 h-3" /> DB Loaded
+                    </span>
+                  )}
+                  {loadedSource === 'fallback' && (
+                    <span className="flex items-center gap-1.5 px-2.5 py-1 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-[10px] font-bold text-muted-foreground rounded-md">
+                      <Shield className="w-3 h-3" /> Offline
+                    </span>
+                  )}
+                  {loadedSource === 'ai' && (
+                    <span className="flex items-center gap-1.5 px-2.5 py-1 bg-blue-500/10 border border-blue-500/20 text-[10px] font-bold text-blue-500 rounded-md">
+                      <Sparkles className="w-3 h-3" /> Live AI Generated
+                    </span>
+                  )}
+                </div>
                 <h3 className="font-bold text-xl text-foreground">Download Your Plan</h3>
                 <p className="text-xs text-muted-foreground max-w-xl leading-relaxed">
                   We have generated a clinical-grade formatted Word (.docx) document complete with custom headings, formatted bullet lists, and structured training splits ready to read, print or save offline!
@@ -1493,7 +1832,7 @@ const BMICalculator = () => {
 };
 
 const SymptomChecker = () => {
-  const { profile } = useAuth();
+  const { profile, user } = useAuth();
   
   // 5 Form Step states
   const [step, setStep] = useState(1);
@@ -1518,6 +1857,77 @@ const SymptomChecker = () => {
 
   // Triggers & Context (Section 5)
   const [triggers, setTriggers] = useState('');
+
+  // Loaded Source and History states
+  const [loadedSource, setLoadedSource] = useState<'ai' | 'fallback' | 'database' | null>(null);
+  const [savedReports, setSavedReports] = useState<any[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+
+  // Fetch Saved Reports History
+  const fetchHistory = async () => {
+    if (!user) return;
+    setHistoryLoading(true);
+    try {
+      const q = query(
+        collection(db, 'healthReports'),
+        where('userId', '==', user.uid),
+        where('type', '==', 'symptom-checker'),
+        orderBy('createdAt', 'desc')
+      );
+      const snap = await getDocs(q);
+      const reports = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setSavedReports(reports);
+    } catch (err) {
+      console.error("Error fetching symptom checker history:", err);
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (user) {
+      fetchHistory();
+    }
+  }, [user]);
+
+  // Load a report from history
+  const loadReport = (report: any) => {
+    setAge(report.inputCriteria?.age?.toString() || '');
+    setGender(report.inputCriteria?.gender || 'male');
+    setPregnancyStatus(report.inputCriteria?.pregnancyStatus || 'no');
+    setSymptoms(report.inputCriteria?.symptoms || '');
+    setSeverity(report.inputCriteria?.severity || '5');
+    setTrend(report.inputCriteria?.trend || 'stable');
+    setDuration(report.inputCriteria?.duration || '');
+    setSelectedSymptoms(report.inputCriteria?.selectedSymptoms || []);
+    setHistory(report.inputCriteria?.history || '');
+    setAllergiesMedications(report.inputCriteria?.allergiesMedications || '');
+    setTriggers(report.inputCriteria?.triggers || '');
+
+    setAnalysis(report.reportText);
+    const parsed = parseAnalysis(report.reportText);
+    setParsedResult(parsed);
+    setLoadedSource('database');
+    setStep(5); // Jump to final step to view results
+    setActiveResultTab('causes');
+  };
+
+  // Delete a report from history
+  const deleteReport = async (reportId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!window.confirm("Are you sure you want to delete this saved symptom assessment?")) return;
+    try {
+      await deleteDoc(doc(db, 'healthReports', reportId));
+      setSavedReports(prev => prev.filter(r => r.id !== reportId));
+      if (analysis && savedReports.find(r => r.id === reportId)?.reportText === analysis) {
+        setAnalysis(null);
+        setParsedResult(null);
+        setLoadedSource(null);
+      }
+    } catch (err) {
+      console.error("Error deleting symptom checker report:", err);
+    }
+  };
 
   // Execution & Output states
   const [loading, setLoading] = useState(false);
@@ -1599,6 +2009,11 @@ const SymptomChecker = () => {
     setLoading(true);
     setAnalysis(null);
     setParsedResult(null);
+    setLoadedSource(null);
+
+    let generatedText = "";
+    let sourceUsed: 'ai' | 'fallback' = 'ai';
+
     try {
       const ai = new GoogleGenAI({ apiKey: "" });
       const response = await ai.models.generateContent({
@@ -1648,16 +2063,51 @@ You MUST structure your response into exactly 5 distinct sections, each preceded
 Be professional, direct, supportive, and clear. Avoid fluff. Do not use conversational preambles or postambles outside of the sections.`,
       });
 
-      const responseText = response.text || "Unable to analyze symptoms at this time.";
-      setAnalysis(responseText);
-      const parsed = parseAnalysis(responseText);
-      setParsedResult(parsed);
-      setActiveResultTab('causes');
+      if (response.text) {
+        generatedText = response.text;
+        sourceUsed = 'ai';
+      } else {
+        throw new Error("Empty response from clinical AI engine.");
+      }
     } catch (err) {
-      console.error(err);
-      setAnalysis("Error connecting to health analysis service.");
+      console.warn("AI clinical analysis failed. Triggering robust local evidence-based clinical engine.", err);
+      generatedText = generateSymptomCheckerFallback({
+        age: parseInt(age, 10) || 30,
+        gender,
+        pregnancyStatus,
+        symptoms,
+        severity: parseInt(severity, 10) || 5,
+        trend,
+        duration,
+        selectedSymptoms,
+        history,
+        allergiesMedications,
+        triggers
+      });
+      sourceUsed = 'fallback';
     } finally {
+      setAnalysis(generatedText);
+      const parsed = parseAnalysis(generatedText);
+      setParsedResult(parsed);
+      setLoadedSource(sourceUsed);
       setLoading(false);
+      setActiveResultTab('causes');
+
+      // Save generated clinical report to Firestore for durable user persistence
+      if (generatedText && user) {
+        try {
+          await addDoc(collection(db, 'healthReports'), {
+            userId: user.uid,
+            type: 'symptom-checker',
+            inputCriteria: { age: parseInt(age, 10) || 30, gender, pregnancyStatus, symptoms, severity: parseInt(severity, 10) || 5, trend, duration, selectedSymptoms, history, allergiesMedications, triggers },
+            reportText: generatedText,
+            createdAt: new Date().toISOString()
+          });
+          fetchHistory(); // Refresh history list
+        } catch (saveErr) {
+          console.error("Error persisting generated clinical report to DB:", saveErr);
+        }
+      }
     }
   };
 
@@ -1710,8 +2160,9 @@ Be professional, direct, supportive, and clear. Avoid fluff. Do not use conversa
         </div>
       </div>
 
-      {/* 5-Step Interactive Form */}
-      <div id="stepper-card" className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-3xl p-6 sm:p-8 shadow-sm">
+      {/* 5-Step Interactive Form with Saved Assessments History */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+        <div id="stepper-card" className={cn("bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-3xl p-6 sm:p-8 shadow-sm", user ? "lg:col-span-8" : "lg:col-span-12")}>
         
         {/* Stepper Header */}
         <div id="stepper-progress" className="mb-10">
@@ -2001,8 +2452,8 @@ Be professional, direct, supportive, and clear. Avoid fluff. Do not use conversa
                   />
                 </div>
 
-                <div className="p-4 bg-amber-500/15 border border-amber-500/20 text-amber-800 dark:text-amber-400 rounded-2xl flex gap-3 text-xs leading-relaxed">
-                  <AlertTriangle className="w-5 h-5 shrink-0 text-amber-500" />
+                <div className="p-4 bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800 text-muted-foreground rounded-2xl flex gap-3 text-xs leading-relaxed">
+                  <Info className="w-5 h-5 shrink-0 text-slate-400" />
                   <p>
                     <strong>Educational Guidance:</strong> This digital symptom evaluation is driven by clinical databases but does not constitute, replace, or override a professional in-person medical diagnosis. If you are experiencing serious, acute symptoms, please seek emergency medical attention.
                   </p>
@@ -2049,6 +2500,57 @@ Be professional, direct, supportive, and clear. Avoid fluff. Do not use conversa
         </form>
       </div>
 
+      {/* Right: Saved Assessments History List */}
+      {user && (
+        <div className="lg:col-span-4 bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 p-6 sm:p-8 rounded-3xl shadow-sm">
+          <h3 className="font-extrabold text-xs text-foreground uppercase tracking-wider mb-4 flex items-center justify-between">
+            <span>📂 Saved Assessments</span>
+            {historyLoading && <span className="text-[10px] text-muted-foreground animate-pulse font-normal">Loading...</span>}
+          </h3>
+          {savedReports.length === 0 ? (
+            <p className="text-xs text-muted-foreground italic leading-relaxed">No saved assessments yet. Complete an assessment to save it automatically in the database.</p>
+          ) : (
+            <div className="space-y-2.5 max-h-[450px] overflow-y-auto pr-1">
+              {savedReports.map((report) => (
+                <div
+                  key={report.id}
+                  onClick={() => loadReport(report)}
+                  className={cn(
+                    "group flex items-center justify-between p-3.5 rounded-xl border transition-all cursor-pointer select-none text-left",
+                    analysis === report.reportText
+                      ? "bg-primary/5 border-primary/40"
+                      : "border-slate-100 dark:border-slate-800 bg-background hover:bg-slate-50 dark:hover:bg-slate-800 hover:border-slate-300 dark:hover:border-slate-700"
+                  )}
+                >
+                  <div className="flex-1 min-w-0 pr-2">
+                    <div className="flex items-center gap-1.5 mb-1">
+                      <span className="text-[10px] font-extrabold uppercase tracking-tight text-primary">
+                        Severity {report.inputCriteria?.severity}/10
+                      </span>
+                      <span className="text-[9px] text-muted-foreground">• {new Date(report.createdAt).toLocaleDateString()}</span>
+                    </div>
+                    <p className="text-xs font-bold text-foreground truncate capitalize">
+                      {report.inputCriteria?.symptoms}
+                    </p>
+                    <p className="text-[10px] text-muted-foreground truncate">
+                      {report.inputCriteria?.age} yrs • {report.inputCriteria?.gender} • {report.inputCriteria?.trend}
+                    </p>
+                  </div>
+                  <button
+                    onClick={(e) => deleteReport(report.id, e)}
+                    className="text-muted-foreground hover:text-red-500 p-1.5 rounded-lg hover:bg-red-500/10 transition-all"
+                    title="Delete from database"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+
       {/* Analysis Results Display */}
       {analysis && (
         <motion.div 
@@ -2057,9 +2559,28 @@ Be professional, direct, supportive, and clear. Avoid fluff. Do not use conversa
           animate={{ opacity: 1, y: 0 }}
           className="mt-12 bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-3xl p-6 sm:p-8 shadow-sm"
         >
-          <div className="flex items-center gap-2.5 mb-6 text-neon-blue border-b border-slate-100 dark:border-slate-800 pb-4">
-            <AlertCircle className="w-6 h-6" />
-            <h3 className="text-xl font-bold text-[rgb(var(--foreground))]">Clinical Triage & Symptom Breakdown</h3>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 border-b border-slate-100 dark:border-slate-800 pb-4">
+            <div className="flex items-center gap-2.5 text-neon-blue">
+              <AlertCircle className="w-6 h-6" />
+              <h3 className="text-xl font-bold text-[rgb(var(--foreground))]">Clinical Triage & Symptom Breakdown</h3>
+            </div>
+            <div className="flex items-center gap-2">
+              {loadedSource === 'database' && (
+                <span className="flex items-center gap-1.5 px-2.5 py-1 bg-emerald-500/10 border border-emerald-500/20 text-[10px] font-bold text-emerald-500 rounded-md">
+                  <CheckCircle2 className="w-3 h-3" /> DB Loaded
+                </span>
+              )}
+              {loadedSource === 'fallback' && (
+                <span className="flex items-center gap-1.5 px-2.5 py-1 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-[10px] font-bold text-muted-foreground rounded-md">
+                  <Shield className="w-3 h-3" /> Offline
+                </span>
+              )}
+              {loadedSource === 'ai' && (
+                <span className="flex items-center gap-1.5 px-2.5 py-1 bg-blue-500/10 border border-blue-500/20 text-[10px] font-bold text-blue-500 rounded-md">
+                  <Sparkles className="w-3 h-3" /> Live AI Generated
+                </span>
+              )}
+            </div>
           </div>
 
           {parsedResult ? (
@@ -2124,7 +2645,7 @@ Be professional, direct, supportive, and clear. Avoid fluff. Do not use conversa
                     )}
                     {activeResultTab === 'firstaid' && (
                       <div className="space-y-4">
-                        <div className="flex items-center gap-2 text-amber-500 text-sm font-bold bg-amber-500/10 w-fit px-3.5 py-1.5 rounded-full mb-2">
+                        <div className="flex items-center gap-2 text-rose-500 text-sm font-bold bg-rose-500/10 w-fit px-3.5 py-1.5 rounded-full mb-2">
                           <AlertTriangle className="w-4 h-4" /> Immediate Care & Red Flags
                         </div>
                         <div className="bg-red-500/5 border border-red-500/10 p-5 rounded-2xl mb-4 text-xs text-red-400 leading-relaxed font-semibold">

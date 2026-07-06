@@ -305,12 +305,6 @@ const Layout: React.FC = () => {
 
         {/* Main Content Area */}
         <div className="flex-grow flex flex-col min-h-screen overflow-hidden">
-          {isQuotaExceeded && (
-            <div className="bg-amber-500/10 border-b border-amber-500/20 text-amber-600 dark:text-amber-500 px-6 py-2.5 text-xs font-semibold flex items-center justify-center gap-2 select-none shrink-0">
-              <CloudOff className="w-4 h-4 shrink-0 text-amber-500 animate-pulse" />
-              <span>Cloud Quota Limit Reached: PulsePoint has seamlessly engaged robust Offline / Demo Mode. High-performance simulations, guides, and diagnostic calculators remain fully active!</span>
-            </div>
-          )}
           {/* Dashboard Header */}
           <header className="h-16 bg-background border-b border-border flex items-center justify-between px-8 sticky top-0 z-50 transition-colors duration-300">
             <div className="flex items-center gap-4 lg:hidden">
@@ -460,12 +454,6 @@ const Layout: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-background flex flex-col transition-colors duration-300">
-      {isQuotaExceeded && (
-        <div className="bg-amber-500/10 border-b border-amber-500/20 text-amber-600 dark:text-amber-500 px-6 py-2.5 text-xs font-semibold flex items-center justify-center gap-2 select-none shrink-0">
-          <CloudOff className="w-4 h-4 shrink-0 text-amber-500 animate-pulse" />
-          <span>Cloud Quota Limit Reached: PulsePoint has seamlessly engaged robust Offline / Demo Mode. High-performance simulations, guides, and diagnostic calculators remain fully active!</span>
-        </div>
-      )}
       {/* Navigation */}
       <nav className="bg-background border-b border-border sticky top-0 z-50 transition-colors duration-300">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">

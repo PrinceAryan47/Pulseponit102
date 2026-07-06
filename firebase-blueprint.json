@@ -170,6 +170,20 @@
         "updatedAt": { "type": "string", "format": "date-time" }
       },
       "required": ["patientId", "doctorId", "status"]
+    },
+    "HealthReport": {
+      "title": "HealthReport",
+      "description": "Generated and saved patient health reports (Men's Health, Fitness, Symptom checker)",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "type": { "type": "string", "enum": ["mens-health", "fitness-workout", "symptom-check"] },
+        "inputCriteria": { "type": "object" },
+        "reportText": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "type", "reportText", "createdAt"]
     }
   },
   "firestore": {
@@ -181,6 +195,7 @@
     "/notifications/{notificationId}": { "schema": "Notification", "description": "User notifications" },
     "/messages/{messageId}": { "schema": "Message", "description": "Chat messages" },
     "/calls/{callId}": { "schema": "Call", "description": "Call requests" },
-    "/accessRequests/{requestId}": { "schema": "AccessRequest", "description": "Consent requests to access medical records" }
+    "/accessRequests/{requestId}": { "schema": "AccessRequest", "description": "Consent requests to access medical records" },
+    "/healthReports/{reportId}": { "schema": "HealthReport", "description": "Saved personalized health reports" }
   }
 }

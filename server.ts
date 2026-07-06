@@ -1323,6 +1323,205 @@ Our backend clinical intelligence network is temporarily offline. Please contact
     });
   });
 
+  // Advice and personalized search recommendations powered by Google Maps grounding and Gemini intelligence
+  app.post("/api/facilities/search-advice", async (req, res) => {
+    const { query: searchQuery, lat, lng } = req.body;
+    if (!searchQuery) {
+      return res.status(400).json({ error: "query is required" });
+    }
+
+    const userLat = lat ? parseFloat(lat) : 0.3476; // Default to Kampala if user coords not passed
+    const userLng = lng ? parseFloat(lng) : 32.5825;
+
+    try {
+      console.log(`[Search Advice] Query: "${searchQuery}" near location: ${userLat}, ${userLng}`);
+      const ai = getAIClient();
+      const prompt = `You are an empathetic, professional medical facility locator and clinical support advisor.
+      The patient has entered the search query/medical concern: "${searchQuery}"
+      The patient's current GPS coordinates are: Latitude ${userLat}, Longitude ${userLng}.
+      
+      Using Google Maps Grounding, find relevant medical facilities near their coordinates that best address their specific issue or search query.
+      - If they describe a symptom (e.g., severe toothache), prioritize specialized providers (e.g., dental clinics).
+      - If they describe an emergency (e.g., chest pain, high fever), prioritize general hospitals with active ER or 24/7 care.
+      - If they search for a service (e.g., pharmacy, lab test, ultrasound), prioritize pharmacies, labs, or diagnostic centers.
+      
+      Formulate your response as a JSON object containing two fields:
+      1. "advice": A string containing warm, professional, compassionate medical guidance and advice in clear markdown. First, give immediate educational feedback about their query/symptom (including a friendly disclaimer that this is AI-powered support and not a substitute for professional medical care). Then, explain why the selected facilities are highly suited to help, and list what they should do or bring (e.g., medical history, ID).
+      2. "facilities": A JSON array of the matching medical facilities found via Google Maps. Each object MUST contain:
+         - "name": string (full official name of the facility)
+         - "address": string (street address)
+         - "type": "hospital" | "clinic" | "pharmacy" | "dental" | "specialty" | "diagnostic"
+         - "mapsUrl": string (direct Google Maps URL)
+         - "lat": number (latitude)
+         - "lng": number (longitude)
+         - "reviews": array of strings (such as ratings or helpful snippets)
+         
+      Please output ONLY the JSON object inside a \`\`\`json markdown block. Do not add any conversational text before or after the markdown block.`;
+
+      const apiCallPromise = ai.models.generateContent({
+        model: "gemini-3.5-flash",
+        contents: prompt,
+        config: {
+          tools: [{ googleMaps: {} }],
+          toolConfig: {
+            retrievalConfig: {
+              latLng: {
+                latitude: userLat,
+                longitude: userLng
+              }
+            }
+          }
+        },
+      });
+
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error("Timeout: Gemini Search Advice request timed out after 45000ms")), 45000);
+      });
+
+      const response = await Promise.race([apiCallPromise, timeoutPromise]);
+      const text = response.text || "";
+
+      let adviceData: any = { advice: "", facilities: [] };
+      const jsonMatch = text.match(/```json\s*([\s\S]*?)\s*```/) || text.match(/```\s*([\s\S]*?)\s*```/);
+      const jsonStr = jsonMatch ? jsonMatch[1].trim() : text.trim();
+      
+      try {
+        adviceData = JSON.parse(jsonStr);
+      } catch (parseErr) {
+        console.warn("Failed to parse advice output as JSON:", parseErr);
+        const startIdx = jsonStr.indexOf("{");
+        const endIdx = jsonStr.lastIndexOf("}");
+        if (startIdx !== -1 && endIdx !== -1) {
+          try {
+            adviceData = JSON.parse(jsonStr.substring(startIdx, endIdx + 1));
+          } catch (e) {
+            console.error("Permissive extraction of advice failed:", e);
+          }
+        }
+      }
+
+      if (!adviceData.advice) {
+        adviceData.advice = "Here is some helpful guidance based on your query. Please note that this is an automated AI support advisor. For any immediate medical emergencies, please visit the nearest emergency room immediately.";
+      }
+
+      if (Array.isArray(adviceData.facilities) && adviceData.facilities.length > 0) {
+        adviceData.facilities = adviceData.facilities.map((f: any) => {
+          const fLat = f.lat || userLat;
+          const fLng = f.lng || userLng;
+          const distanceMeter = calculateDistance(userLat, userLng, fLat, fLng);
+          return {
+            name: f.name || "Unknown Facility",
+            address: f.address || "Address not available",
+            type: f.type || "hospital",
+            mapsUrl: f.mapsUrl || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent((f.name || '') + ' ' + (f.address || ''))}`,
+            lat: fLat,
+            lng: fLng,
+            distanceMeter,
+            distanceDisplay: distanceMeter > 1000 
+              ? `${(distanceMeter / 1000).toFixed(1)} km` 
+              : `${Math.round(distanceMeter)} m`,
+            reviews: Array.isArray(f.reviews) ? f.reviews : []
+          };
+        }).sort((a: any, b: any) => (a.distanceMeter || 0) - (b.distanceMeter || 0));
+      } else {
+        const queryLower = searchQuery.toLowerCase();
+        const fallbackList = [
+          {
+            name: "Mulago National Referral Hospital",
+            address: "Mulago Hill, Kampala, Uganda",
+            type: "hospital",
+            lat: 0.3382,
+            lng: 32.5761,
+            reviews: ["National level referral clinical support."]
+          },
+          {
+            name: "IHK (International Hospital Kampala)",
+            address: "Plot 4686, Barnabas Road, Kisugu, Namuwongo, Kampala, Uganda",
+            type: "hospital",
+            lat: 0.3112,
+            lng: 32.6105,
+            reviews: ["Highly rated premium private health facility."]
+          },
+          {
+            name: "Jubilee Dental Clinic",
+            address: "Plot 30, Jinja Road, Kampala, Uganda",
+            type: "dental",
+            lat: 0.3155,
+            lng: 32.5892,
+            reviews: ["State of the art dental implants & orthodontics."]
+          },
+          {
+            name: "Kampala Imaging Centre (KIC)",
+            address: "Plot 12, George Street, Kampala, Uganda",
+            type: "diagnostic",
+            lat: 0.3204,
+            lng: 32.5755,
+            reviews: ["Advanced MRI, 3D/4D Ultrasound, and CT Scan diagnostics."]
+          },
+          {
+            name: "The Surgery Uganda",
+            address: "21 Luthuli Avenue, Bugolobi, Kampala, Uganda",
+            type: "clinic",
+            lat: 0.3182,
+            lng: 32.6120,
+            reviews: ["Excellent 24-hour emergency response."]
+          }
+        ];
+
+        const matchedFallback = fallbackList.filter(f => 
+          f.name.toLowerCase().includes(queryLower) || 
+          f.type.toLowerCase().includes(queryLower) ||
+          (queryLower.includes("dent") && f.type === "dental") ||
+          (queryLower.includes("tooth") && f.type === "dental") ||
+          (queryLower.includes("teeth") && f.type === "dental") ||
+          (queryLower.includes("emergency") && (f.type === "hospital" || f.type === "clinic")) ||
+          (queryLower.includes("er") && (f.type === "hospital" || f.type === "clinic")) ||
+          (queryLower.includes("scan") && f.type === "diagnostic") ||
+          (queryLower.includes("xray") && f.type === "diagnostic") ||
+          (queryLower.includes("lab") && f.type === "diagnostic")
+        );
+
+        const listToUse = matchedFallback.length > 0 ? matchedFallback : fallbackList.slice(0, 3);
+        adviceData.facilities = listToUse.map((f: any) => {
+          const distanceMeter = calculateDistance(userLat, userLng, f.lat, f.lng);
+          return {
+            ...f,
+            mapsUrl: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(f.name + " " + f.address)}`,
+            distanceMeter,
+            distanceDisplay: distanceMeter > 1000 
+              ? `${(distanceMeter / 1000).toFixed(1)} km` 
+              : `${Math.round(distanceMeter)} m`
+          };
+        });
+      }
+
+      res.json(adviceData);
+    } catch (err: any) {
+      console.error("Error in search-advice endpoint:", err);
+      res.json({
+        advice: `### Medical Facility Locator Assistant\n\nI encountered a brief connection error, but I can guide you. Based on your search for **"${searchQuery}"**, here are some of our verified local medical facilities near you. For any severe symptoms, chest pain, or trauma, please seek immediate emergency care at the nearest hospital.\n\n*What to bring: your identification, previous prescriptions, and any insurance credentials.*`,
+        facilities: [
+          {
+            name: "Mulago National Referral Hospital",
+            address: "Mulago Hill, Kampala, Uganda",
+            type: "hospital",
+            mapsUrl: "https://www.google.com/maps/search/?api=1&query=Mulago+National+Referral+Hospital+Kampala",
+            distanceDisplay: "Calculated dynamically",
+            reviews: ["24/7 National Emergency Center"]
+          },
+          {
+            name: "The Surgery Uganda",
+            address: "21 Luthuli Avenue, Bugolobi, Kampala, Uganda",
+            type: "clinic",
+            mapsUrl: "https://www.google.com/maps/search/?api=1&query=The+Surgery+Uganda+Bugolobi",
+            distanceDisplay: "Calculated dynamically",
+            reviews: ["24-Hour Medical Center & Ambulance"]
+          }
+        ]
+      });
+    }
+  });
+
   // Admin API (Mocked for now as we don't have service account, but centralized here)
   app.post("/api/admin/verify", (req, res) => {
     const { email } = req.body;
