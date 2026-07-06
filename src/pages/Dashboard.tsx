@@ -34,6 +34,7 @@ import GuestOverlay from '../components/GuestOverlay';
 import { cn } from '../lib/utils';
 import { createNotification } from '../services/notificationService';
 import { safeFormat } from '../lib/dateUtils';
+import { handleFirestoreError, OperationType } from '../lib/firestore-helpers';
 
 const StatCard = React.memo(({ icon: Icon, label, value, trend, colorClass }: any) => (
   <div className="bg-card p-6 rounded-3xl border border-border shadow-sm hover:shadow-md transition-all">
@@ -408,7 +409,7 @@ Make it highly direct, inspiring, and actionable. Do not wrap it in quotes.`,
       const unsubscribeAccess = onSnapshot(qAccess, (snap) => {
         setAccessRequests(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
       }, (error) => {
-        console.error("Error fetching access requests:", error);
+        handleFirestoreError(error, OperationType.LIST, 'accessRequests');
       });
 
       const qReports = query(
@@ -421,7 +422,7 @@ Make it highly direct, inspiring, and actionable. Do not wrap it in quotes.`,
           .sort((a: any, b: any) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
         setHealthReports(sorted);
       }, (error) => {
-        console.error("Error fetching health reports:", error);
+        handleFirestoreError(error, OperationType.LIST, 'healthReports');
       });
 
       return () => {

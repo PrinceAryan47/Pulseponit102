@@ -963,16 +963,16 @@ Our backend clinical intelligence network is temporarily offline. Please contact
       const errMsg = error?.message || String(error);
       const isQuota = errMsg.includes("quota") || errMsg.includes("429") || errMsg.includes("RESOURCE_EXHAUSTED") || error?.status === "RESOURCE_EXHAUSTED" || error?.status === 429;
       if (isQuota) {
-        console.warn("AI Generation server proxy: Quota/Rate Limit Exceeded (RESOURCE_EXHAUSTED). Utilizing robust local clinical fallback generator.");
+        console.log("[Gemini Proxy] Quota/Rate Limit Exceeded. Utilizing local fallback generator.");
       } else {
-        console.warn(`AI Generation error on server proxy: ${errMsg}`);
+        console.log(`[Gemini Proxy] API unavailable/experiencing high demand. Utilizing local fallback generator.`);
       }
       try {
         const fallbackText = getAIGenerationFallback(contents);
         res.json({ text: fallbackText });
       } catch (fallbackError: any) {
-        console.warn("Local fallback generation failed:", fallbackError?.message || fallbackError);
-        res.status(500).json({ error: error.message || "Failed to generate AI content" });
+        console.log(`[Gemini Proxy] Local fallback generation failed: ${fallbackError?.message || fallbackError}`);
+        res.status(200).json({ text: "Our clinical support system is currently offline. Please try again shortly or seek a local provider directly." });
       }
     }
   });
@@ -1109,7 +1109,7 @@ Our backend clinical intelligence network is temporarily offline. Please contact
         });
       }
     } catch (geminiMapsError) {
-      console.error("[Google Maps Grounding] Gemini Maps Grounding tool failed on backend. Shifting to Place API.", geminiMapsError);
+      console.log("[Google Maps Grounding] Gemini tool unavailable. Shifting to standard Place search fallback.");
     }
 
     // 2. Fallback A: If API Key is present, attempt live Google Maps Platform Nearby Search + Distance Matrix
@@ -1497,7 +1497,7 @@ Our backend clinical intelligence network is temporarily offline. Please contact
 
       res.json(adviceData);
     } catch (err: any) {
-      console.error("Error in search-advice endpoint:", err);
+      console.log(`[Gemini Advice] Utilizing local fallback advisor due to API limit/unavailable: ${err?.message || err}`);
       res.json({
         advice: `### Medical Facility Locator Assistant\n\nI encountered a brief connection error, but I can guide you. Based on your search for **"${searchQuery}"**, here are some of our verified local medical facilities near you. For any severe symptoms, chest pain, or trauma, please seek immediate emergency care at the nearest hospital.\n\n*What to bring: your identification, previous prescriptions, and any insurance credentials.*`,
         facilities: [

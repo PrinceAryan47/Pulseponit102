@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { findNearbyFacilities, NearbyFacility } from '../services/locationService';
+import { Map, Marker } from 'pigeon-maps';
 import VoiceSearch from '../components/VoiceSearch';
 import GuestOverlay from '../components/GuestOverlay';
 import { useAuth } from '../context/AuthContext';
@@ -37,6 +38,9 @@ const Hospitals: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [filterType, setFilterType] = useState<string>('all');
   const [userLocation, setUserLocation] = useState<[number, number] | null>(null);
+  const [mapCenter, setMapCenter] = useState<[number, number]>([0.3476, 32.5825]);
+  const [mapZoom, setMapZoom] = useState<number>(13);
+  const [selectedFacility, setSelectedFacility] = useState<any | null>(null);
 
   // AI Advisor States
   const [aiAdvisorEnabled, setAiAdvisorEnabled] = useState(false);
@@ -103,6 +107,7 @@ const Hospitals: React.FC = () => {
       const lat = profile.simulatedLatitude;
       const lng = profile.simulatedLongitude;
       setUserLocation([lat, lng]);
+      setMapCenter([lat, lng]);
       findNearbyFacilities(lat, lng).then(results => {
         setNearbyFacilities(results.facilities || []);
         setGroundingSources(results.groundingSources || []);
@@ -117,6 +122,7 @@ const Hospitals: React.FC = () => {
         async (position) => {
           const { latitude, longitude } = position.coords;
           setUserLocation([latitude, longitude]);
+          setMapCenter([latitude, longitude]);
           try {
             const results = await findNearbyFacilities(latitude, longitude);
             setNearbyFacilities(results.facilities || []);
@@ -140,6 +146,7 @@ const Hospitals: React.FC = () => {
       const lat = profile.simulatedLatitude;
       const lng = profile.simulatedLongitude;
       setUserLocation([lat, lng]);
+      setMapCenter([lat, lng]);
       findNearbyFacilities(lat, lng).then(results => {
         setNearbyFacilities(results.facilities || []);
         setGroundingSources(results.groundingSources || []);
@@ -163,6 +170,7 @@ const Hospitals: React.FC = () => {
       async (position) => {
         const { latitude, longitude } = position.coords;
         setUserLocation([latitude, longitude]);
+        setMapCenter([latitude, longitude]);
         try {
           const results = await findNearbyFacilities(latitude, longitude);
           setNearbyFacilities(results.facilities || []);
@@ -179,6 +187,22 @@ const Hospitals: React.FC = () => {
       },
       { enableHighAccuracy: false, timeout: 15000, maximumAge: 60000 }
     );
+  };
+
+  const handleMapClick = async ({ latLng }: { latLng: [number, number] }) => {
+    setUserLocation(latLng);
+    setMapCenter(latLng);
+    setLocating(true);
+    setError(null);
+    try {
+      const results = await findNearbyFacilities(latLng[0], latLng[1]);
+      setNearbyFacilities(results.facilities || []);
+      setGroundingSources(results.groundingSources || []);
+    } catch (err) {
+      setError("Failed to fetch facilities for this clicked location. Please try again.");
+    } finally {
+      setLocating(false);
+    }
   };
 
   const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
@@ -315,6 +339,171 @@ const Hospitals: React.FC = () => {
               Authorize GPS Location
             </button>
           )}
+        </div>
+
+        {/* GPS Interactive Map Container */}
+        <div className="mb-8 bg-card border border-border rounded-[2.5rem] overflow-hidden shadow-sm hover:shadow-md transition-all relative">
+          <div className="p-6 border-b border-border/60 bg-slate-50/50 dark:bg-slate-900/50 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div>
+              <h3 className="text-lg font-bold text-foreground flex items-center gap-2">
+                <MapPin className="w-5 h-5 text-primary animate-bounce" />
+                Live GPS Location Map
+              </h3>
+              <p className="text-xs text-muted-foreground">
+                Click anywhere on the map to set custom coordinates, or click a marker to view medical provider details.
+              </p>
+            </div>
+            {userLocation && (
+              <button
+                onClick={() => {
+                  setMapCenter(userLocation);
+                  setMapZoom(14);
+                }}
+                className="px-4 py-2 bg-primary/10 hover:bg-primary/20 text-primary rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer"
+              >
+                <Navigation className="w-3.5 h-3.5" />
+                Center on My GPS
+              </button>
+            )}
+          </div>
+          <div className="h-[400px] w-full relative bg-slate-100 dark:bg-slate-950">
+            <Map 
+              center={mapCenter} 
+              zoom={mapZoom} 
+              onBoundsChanged={({ center, zoom }) => {
+                setMapCenter(center);
+                setMapZoom(zoom);
+              }}
+              onClick={handleMapClick}
+            >
+              {/* User location marker */}
+              {userLocation && (
+                <Marker 
+                  anchor={userLocation} 
+                  payload="me"
+                >
+                  <div className="relative flex items-center justify-center">
+                    <span className="absolute inline-flex h-6 w-6 rounded-full bg-blue-400 opacity-75 animate-ping"></span>
+                    <div className="relative rounded-full h-4 w-4 bg-blue-600 border-2 border-white shadow-md"></div>
+                  </div>
+                </Marker>
+              )}
+
+              {/* Nearby facilities markers */}
+              {nearbyFacilities.map((fac, fIdx) => {
+                if (fac.lat === undefined || fac.lng === undefined) return null;
+                const isSelected = selectedFacility && selectedFacility.name === fac.name;
+                return (
+                  <Marker 
+                    key={`fac-${fIdx}`}
+                    anchor={[fac.lat, fac.lng]}
+                    payload={fac}
+                    onClick={({ event, anchor, payload }) => {
+                      event.stopPropagation();
+                      setSelectedFacility(payload);
+                      setMapCenter(anchor);
+                    }}
+                  >
+                    <div className={`p-1.5 rounded-full shadow-md cursor-pointer transition-all ${
+                      isSelected 
+                        ? 'bg-rose-500 scale-125 ring-4 ring-rose-500/20' 
+                        : fac.type === 'pharmacy' ? 'bg-teal-500 hover:scale-110' :
+                          fac.type === 'clinic' ? 'bg-emerald-500 hover:scale-110' :
+                          fac.type === 'dental' ? 'bg-blue-500 hover:scale-110' :
+                          fac.type === 'specialty' ? 'bg-purple-500 hover:scale-110' :
+                          fac.type === 'diagnostic' ? 'bg-amber-500 hover:scale-110' :
+                          'bg-rose-500 hover:scale-110'
+                    }`}>
+                      {fac.type === 'pharmacy' ? (
+                        <PlusCircle className="w-4 h-4 text-white shrink-0" />
+                      ) : fac.type === 'clinic' ? (
+                        <Activity className="w-4 h-4 text-white shrink-0" />
+                      ) : fac.type === 'dental' ? (
+                        <Smile className="w-4 h-4 text-white shrink-0" />
+                      ) : fac.type === 'specialty' ? (
+                        <Stethoscope className="w-4 h-4 text-white shrink-0" />
+                      ) : fac.type === 'diagnostic' ? (
+                        <FlaskConical className="w-4 h-4 text-white shrink-0" />
+                      ) : (
+                        <Hospital className="w-4 h-4 text-white shrink-0" />
+                      )}
+                    </div>
+                  </Marker>
+                );
+              })}
+
+              {/* Partner Hospitals from database */}
+              {hospitals.map((hosp, hIdx) => {
+                if (!hosp.location?.lat || !hosp.location?.lng) return null;
+                const isSelected = selectedFacility && selectedFacility.name === hosp.name;
+                return (
+                  <Marker
+                    key={`hosp-${hIdx}`}
+                    anchor={[hosp.location.lat, hosp.location.lng]}
+                    payload={hosp}
+                    onClick={({ event, anchor, payload }) => {
+                      event.stopPropagation();
+                      setSelectedFacility(payload);
+                      setMapCenter(anchor);
+                    }}
+                  >
+                    <div className={`p-2 rounded-full bg-rose-600 border-2 border-white shadow-lg cursor-pointer transition-all ${
+                      isSelected ? 'scale-125 ring-4 ring-rose-600/30' : 'hover:scale-110'
+                    }`}>
+                      <Hospital className="w-4 h-4 text-white shrink-0" />
+                    </div>
+                  </Marker>
+                );
+              })}
+            </Map>
+
+            {/* Selected facility detail popover inside the map */}
+            {selectedFacility && (
+              <div className="absolute bottom-6 left-6 right-6 md:left-auto md:right-6 md:w-96 bg-card border border-border p-5 rounded-3xl shadow-xl z-20 animate-in fade-in slide-in-from-bottom-4">
+                <div className="flex items-start justify-between gap-2 mb-3">
+                  <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider border ${
+                    selectedFacility.type === 'pharmacy' ? 'bg-teal-500/5 text-teal-600 dark:text-teal-400 border-teal-500/20' :
+                    selectedFacility.type === 'clinic' ? 'bg-emerald-500/5 text-emerald-600 dark:text-emerald-400 border-emerald-500/20' :
+                    selectedFacility.type === 'dental' ? 'bg-blue-500/5 text-blue-600 dark:text-blue-400 border-blue-500/20' :
+                    selectedFacility.type === 'specialty' ? 'bg-purple-500/5 text-purple-600 dark:text-purple-400 border-purple-500/20' :
+                    selectedFacility.type === 'diagnostic' ? 'bg-amber-500/5 text-amber-600 dark:text-amber-400 border-amber-500/20' :
+                    'bg-rose-500/5 text-rose-600 dark:text-rose-400 border-rose-500/20'
+                  }`}>
+                    {selectedFacility.type === 'hospital' ? 'Hospital' :
+                     selectedFacility.type === 'clinic' ? 'Clinic' :
+                     selectedFacility.type === 'pharmacy' ? 'Pharmacy' :
+                     selectedFacility.type === 'dental' ? 'Dental' :
+                     selectedFacility.type === 'specialty' ? 'Specialist' :
+                     selectedFacility.type === 'diagnostic' ? 'Diagnostic' : 'Hospital'}
+                  </span>
+                  <button 
+                    onClick={() => setSelectedFacility(null)}
+                    className="text-muted-foreground hover:text-foreground text-xs font-black bg-muted w-6 h-6 rounded-full flex items-center justify-center hover:bg-slate-200 dark:hover:bg-slate-800"
+                  >
+                    ×
+                  </button>
+                </div>
+                <h4 className="font-extrabold text-foreground text-sm mb-1 truncate">{selectedFacility.name}</h4>
+                <p className="text-[11px] text-muted-foreground mb-3 line-clamp-2">{selectedFacility.address || selectedFacility.openingHours}</p>
+                
+                {selectedFacility.reviews && selectedFacility.reviews.length > 0 && (
+                  <p className="text-[10px] text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded-lg inline-block font-semibold mb-4">
+                    {selectedFacility.reviews[0]}
+                  </p>
+                )}
+
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => handleRedirectToMaps(selectedFacility)}
+                    className="flex-1 py-2.5 bg-primary text-primary-foreground font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 hover:bg-primary/90 transition-all shadow-md shadow-primary/20 cursor-pointer"
+                  >
+                    <Navigation className="w-3.5 h-3.5" />
+                    Open Directions
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* AI-Powered Patient Navigator Toggles */}
