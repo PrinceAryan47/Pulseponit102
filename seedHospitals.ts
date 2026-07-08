@@ -15,7 +15,8 @@ const seedHospitals = async () => {
       contactEmail: "info@mulago.or.ug",
       services: ["General Surgery", "Internal Medicine", "Pediatrics", "Obstetrics & Gynecology", "Emergency"],
       openingHours: "24/7",
-      photoURL: "https://images.unsplash.com/photo-1587350859728-117699f4a1ec?auto=format&fit=crop&q=80&w=800"
+      photoURL: "https://images.unsplash.com/photo-1587350859728-117699f4a1ec?auto=format&fit=crop&q=80&w=800",
+      location: { lat: 0.3378, lng: 32.5761 }
     },
     {
       name: "Nakasero Hospital",
@@ -25,7 +26,8 @@ const seedHospitals = async () => {
       contactEmail: "info@nhl.co.ug",
       services: ["Cardiology", "Neurology", "Oncology", "Emergency", "Diagnostics"],
       openingHours: "24/7",
-      photoURL: "https://images.unsplash.com/photo-1519494026892-80bbd2d6fd0d?auto=format&fit=crop&q=80&w=800"
+      photoURL: "https://images.unsplash.com/photo-1519494026892-80bbd2d6fd0d?auto=format&fit=crop&q=80&w=800",
+      location: { lat: 0.3265, lng: 32.5815 }
     },
     {
       name: "International Hospital Kampala (IHK)",
@@ -35,7 +37,8 @@ const seedHospitals = async () => {
       contactEmail: "info@img.co.ug",
       services: ["Emergency Medicine", "Intensive Care", "Surgery", "Maternity", "ICU"],
       openingHours: "24/7",
-      photoURL: "https://images.unsplash.com/photo-1516549655169-df83a0774514?auto=format&fit=crop&q=80&w=800"
+      photoURL: "https://images.unsplash.com/photo-1516549655169-df83a0774514?auto=format&fit=crop&q=80&w=800",
+      location: { lat: 0.3015, lng: 32.6105 }
     },
     {
       name: "St. Francis Hospital Nsambya",
@@ -45,7 +48,8 @@ const seedHospitals = async () => {
       contactEmail: "info@nsambyahospital.or.ug",
       services: ["Obstetrics", "Gynecology", "Pediatrics", "Surgery", "Maternity"],
       openingHours: "24/7",
-      photoURL: "https://images.unsplash.com/photo-1512678080530-7760d81faba6?auto=format&fit=crop&q=80&w=800"
+      photoURL: "https://images.unsplash.com/photo-1512678080530-7760d81faba6?auto=format&fit=crop&q=80&w=800",
+      location: { lat: 0.3012, lng: 32.5878 }
     },
     {
       name: "Case Hospital",
@@ -55,7 +59,8 @@ const seedHospitals = async () => {
       contactEmail: "info@casemedicalcentre.com",
       services: ["Dermatology", "Orthopedics", "Radiology", "General Practice", "Emergency", "Dental"],
       openingHours: "24/7",
-      photoURL: "https://images.unsplash.com/photo-1538108197017-c13466739195?auto=format&fit=crop&q=80&w=800"
+      photoURL: "https://images.unsplash.com/photo-1538108197017-c13466739195?auto=format&fit=crop&q=80&w=800",
+      location: { lat: 0.3242, lng: 32.5786 }
     },
     {
       name: "Uganda Martyrs Hospital Lubaga",
@@ -65,7 +70,8 @@ const seedHospitals = async () => {
       contactEmail: "info@lubagahospital.org",
       services: ["General Medicine", "Surgery", "Maternity", "Pediatrics"],
       openingHours: "24/7",
-      photoURL: "https://images.unsplash.com/photo-1504439468489-c8920d796a29?auto=format&fit=crop&q=80&w=800"
+      photoURL: "https://images.unsplash.com/photo-1504439468489-c8920d796a29?auto=format&fit=crop&q=80&w=800",
+      location: { lat: 0.3025, lng: 32.5535 }
     },
     {
       name: "Mengo Hospital",
@@ -75,7 +81,8 @@ const seedHospitals = async () => {
       contactEmail: "info@mengohospital.org",
       services: ["Dental", "Eye Care", "Surgery", "Maternity", "Pediatrics"],
       openingHours: "24/7",
-      photoURL: "https://images.unsplash.com/photo-1519494026892-80bbd2d6fd0d?auto=format&fit=crop&q=80&w=800"
+      photoURL: "https://images.unsplash.com/photo-1519494026892-80bbd2d6fd0d?auto=format&fit=crop&q=80&w=800",
+      location: { lat: 0.3125, lng: 32.5595 }
     },
     {
       name: "Kibuli Muslim Hospital",
@@ -85,7 +92,8 @@ const seedHospitals = async () => {
       contactEmail: "info@kibulihospital.org",
       services: ["General Medicine", "Surgery", "Maternity", "Diagnostics"],
       openingHours: "24/7",
-      photoURL: "https://images.unsplash.com/photo-1516549655169-df83a0774514?auto=format&fit=crop&q=80&w=800"
+      photoURL: "https://images.unsplash.com/photo-1516549655169-df83a0774514?auto=format&fit=crop&q=80&w=800",
+      location: { lat: 0.3085, lng: 32.5975 }
     },
     {
       name: "Gulu Regional Referral Hospital",
@@ -95,7 +103,8 @@ const seedHospitals = async () => {
       contactEmail: "info@guluhospital.go.ug",
       services: ["General Surgery", "Pediatrics", "Maternity", "Emergency"],
       openingHours: "24/7",
-      photoURL: "https://images.unsplash.com/photo-1587350859728-117699f4a1ec?auto=format&fit=crop&q=80&w=800"
+      photoURL: "https://images.unsplash.com/photo-1587350859728-117699f4a1ec?auto=format&fit=crop&q=80&w=800",
+      location: { lat: 2.7725, lng: 32.3005 }
     },
     {
       name: "Mbarara Regional Referral Hospital",
@@ -105,7 +114,8 @@ const seedHospitals = async () => {
       contactEmail: "info@mbararahospital.go.ug",
       services: ["Surgery", "Internal Medicine", "Pediatrics", "Obstetrics"],
       openingHours: "24/7",
-      photoURL: "https://images.unsplash.com/photo-1512678080530-7760d81faba6?auto=format&fit=crop&q=80&w=800"
+      photoURL: "https://images.unsplash.com/photo-1512678080530-7760d81faba6?auto=format&fit=crop&q=80&w=800",
+      location: { lat: -0.6125, lng: 30.6555 }
     },
     {
       name: "Jinja Regional Referral Hospital",
@@ -115,7 +125,8 @@ const seedHospitals = async () => {
       contactEmail: "info@jinjahospital.go.ug",
       services: ["Emergency", "Surgery", "Maternity", "Pediatrics"],
       openingHours: "24/7",
-      photoURL: "https://images.unsplash.com/photo-1538108197017-c13466739195?auto=format&fit=crop&q=80&w=800"
+      photoURL: "https://images.unsplash.com/photo-1538108197017-c13466739195?auto=format&fit=crop&q=80&w=800",
+      location: { lat: 0.4265, lng: 33.2045 }
     }
   ];
 
@@ -126,7 +137,7 @@ const seedHospitals = async () => {
       await deleteDoc(doc(db, 'hospitals', hospitalDoc.id));
     }
     
-    console.log("Seeding hospitals...");
+    console.log("Seeding hospitals with coordinates...");
     for (const hospital of hospitals) {
       await addDoc(collection(db, 'hospitals'), hospital);
     }

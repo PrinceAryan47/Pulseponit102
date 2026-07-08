@@ -5,6 +5,164 @@ import path from "path";
 import { createServer } from "http";
 import { Server, Socket } from "socket.io";
 import { GoogleGenAI } from "@google/genai";
+import admin from "firebase-admin";
+import { getFirestore } from "firebase-admin/firestore";
+import firebaseConfig from "./firebase-applet-config.json";
+
+// Initialize Firebase Admin lazily and safely
+let adminDb: admin.firestore.Firestore | null = null;
+
+function getAdminDb(): admin.firestore.Firestore | null {
+  if (!adminDb) {
+    try {
+      if (firebaseConfig && firebaseConfig.projectId) {
+        if (admin.apps.length === 0) {
+          admin.initializeApp({
+            projectId: firebaseConfig.projectId,
+          });
+        }
+        const databaseId = firebaseConfig.firestoreDatabaseId;
+        if (databaseId && databaseId !== "(default)") {
+          adminDb = getFirestore(admin.apps[0], databaseId);
+        } else {
+          adminDb = getFirestore(admin.apps[0]);
+        }
+      }
+    } catch (err) {
+      console.error("Failed to initialize firebase-admin on backend:", err);
+    }
+  }
+  return adminDb;
+}
+
+async function getHospitalsFromDb(): Promise<any[]> {
+  const db = getAdminDb();
+  if (!db) return [];
+  try {
+    const snap = await db.collection("hospitals").get();
+    const list: any[] = [];
+    snap.forEach(doc => {
+      list.push({ id: doc.id, ...doc.data() });
+    });
+    return list;
+  } catch (err) {
+    console.error("Failed to fetch hospitals from Firestore in server.ts:", err);
+    return [];
+  }
+}
+
+async function seedHospitalsIfEmpty() {
+  const db = getAdminDb();
+  if (!db) return;
+  try {
+    const snap = await db.collection("hospitals").limit(1).get();
+    if (snap.empty) {
+      console.log("No hospitals found in Firestore database. Seeding Partner Hospitals automatically...");
+      const hospitals = [
+        {
+          name: "Mulago National Referral Hospital",
+          licenseNumber: "HOSP-UG-001",
+          address: "Mulago Hill, Kampala, Uganda",
+          contactPhone: "+256 414 554001",
+          contactEmail: "info@mulago.or.ug",
+          services: ["General Surgery", "Internal Medicine", "Pediatrics", "Obstetrics & Gynecology", "Emergency"],
+          openingHours: "24/7",
+          photoURL: "https://images.unsplash.com/photo-1587350859728-117699f4a1ec?auto=format&fit=crop&q=80&w=800",
+          location: { lat: 0.3378, lng: 32.5761 }
+        },
+        {
+          name: "Nakasero Hospital",
+          licenseNumber: "HOSP-UG-002",
+          address: "Plot 14A Akii Bua Rd, Kampala, Uganda",
+          contactPhone: "+256 312 531300",
+          contactEmail: "info@nhl.co.ug",
+          services: ["Cardiology", "Neurology", "Oncology", "Emergency", "Diagnostics"],
+          openingHours: "24/7",
+          photoURL: "https://images.unsplash.com/photo-1519494026892-80bbd2d6fd0d?auto=format&fit=crop&q=80&w=800",
+          location: { lat: 0.3265, lng: 32.5815 }
+        },
+        {
+          name: "International Hospital Kampala (IHK)",
+          licenseNumber: "HOSP-UG-004",
+          address: "Plot 4686 Barnabas Rd, Namuwongo, Kampala",
+          contactPhone: "+256 312 200400",
+          contactEmail: "info@img.co.ug",
+          services: ["Emergency Medicine", "Intensive Care", "Surgery", "Maternity", "ICU"],
+          openingHours: "24/7",
+          photoURL: "https://images.unsplash.com/photo-1516549655169-df83a0774514?auto=format&fit=crop&q=80&w=800",
+          location: { lat: 0.3015, lng: 32.6105 }
+        },
+        {
+          name: "St. Francis Hospital Nsambya",
+          licenseNumber: "HOSP-UG-005",
+          address: "Nsambya Hill, Kampala, Uganda",
+          contactPhone: "+256 414 267012",
+          contactEmail: "info@nsambyahospital.or.ug",
+          services: ["Obstetrics", "Gynecology", "Pediatrics", "Surgery", "Maternity"],
+          openingHours: "24/7",
+          photoURL: "https://images.unsplash.com/photo-1512678080530-7760d81faba6?auto=format&fit=crop&q=80&w=800",
+          location: { lat: 0.3012, lng: 32.5878 }
+        },
+        {
+          name: "Case Hospital",
+          licenseNumber: "HOSP-UG-003",
+          address: "Plot 69/71 Buganda Rd, Kampala, Uganda",
+          contactPhone: "+256 312 250700",
+          contactEmail: "info@casemedicalcentre.com",
+          services: ["Dermatology", "Orthopedics", "Radiology", "General Practice", "Emergency", "Dental"],
+          openingHours: "24/7",
+          photoURL: "https://images.unsplash.com/photo-1538108197017-c13466739195?auto=format&fit=crop&q=80&w=800",
+          location: { lat: 0.3242, lng: 32.5786 }
+        },
+        {
+          name: "Uganda Martyrs Hospital Lubaga",
+          licenseNumber: "HOSP-UG-006",
+          address: "Lubaga Hill, Kampala, Uganda",
+          contactPhone: "+256 414 270221",
+          contactEmail: "info@lubagahospital.org",
+          services: ["General Medicine", "Surgery", "Maternity", "Pediatrics"],
+          openingHours: "24/7",
+          photoURL: "https://images.unsplash.com/photo-1504439468489-c8920d796a29?auto=format&fit=crop&q=80&w=800",
+          location: { lat: 0.3025, lng: 32.5535 }
+        },
+        {
+          name: "Mengo Hospital",
+          licenseNumber: "HOSP-UG-007",
+          address: "Namirembe Hill, Kampala, Uganda",
+          contactPhone: "+256 414 270222",
+          contactEmail: "info@mengohospital.org",
+          services: ["Dental", "Eye Care", "Surgery", "Maternity", "Pediatrics"],
+          openingHours: "24/7",
+          photoURL: "https://images.unsplash.com/photo-1519494026892-80bbd2d6fd0d?auto=format&fit=crop&q=80&w=800",
+          location: { lat: 0.3125, lng: 32.5595 }
+        },
+        {
+          name: "Kibuli Muslim Hospital",
+          licenseNumber: "HOSP-UG-008",
+          address: "Kibuli Hill, Kampala, Uganda",
+          contactPhone: "+256 414 235296",
+          contactEmail: "info@kibulihospital.org",
+          services: ["General Medicine", "Surgery", "Maternity", "Diagnostics"],
+          openingHours: "24/7",
+          photoURL: "https://images.unsplash.com/photo-1516549655169-df83a0774514?auto=format&fit=crop&q=80&w=800",
+          location: { lat: 0.3085, lng: 32.5975 }
+        }
+      ];
+      
+      const batch = db.batch();
+      for (const hosp of hospitals) {
+        const ref = db.collection("hospitals").doc();
+        batch.set(ref, hosp);
+      }
+      await batch.commit();
+      console.log("Partner Hospitals seeded successfully inside Firestore database.");
+    } else {
+      console.log("Hospitals collection already has records in Firestore.");
+    }
+  } catch (err) {
+    console.error("Auto-seeding hospitals failed in server.ts:", err);
+  }
+}
 
 // Helper to calculate distance on server
 const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
@@ -1335,12 +1493,32 @@ Our backend clinical intelligence network is temporarily offline. Please contact
 
     try {
       console.log(`[Search Advice] Query: "${searchQuery}" near location: ${userLat}, ${userLng}`);
+      
+      // Query verified partner hospitals from Firestore
+      const dbHospitals = await getHospitalsFromDb();
+      const dbHospitalsStr = dbHospitals.length > 0 
+        ? JSON.stringify(dbHospitals.map(h => ({
+            name: h.name,
+            address: h.address,
+            services: h.services || [],
+            openingHours: h.openingHours || "24/7",
+            lat: h.location?.lat,
+            lng: h.location?.lng,
+            phone: h.contactPhone,
+            email: h.contactEmail
+          })))
+        : "None registered in database yet.";
+
       const ai = getAIClient();
       const prompt = `You are an empathetic, professional medical facility locator and clinical support advisor.
       The patient has entered the search query/medical concern: "${searchQuery}"
       The patient's current GPS coordinates are: Latitude ${userLat}, Longitude ${userLng}.
       
-      Using Google Maps Grounding, find relevant medical facilities near their coordinates that best address their specific issue or search query.
+      Here is a list of our verified "Partner Hospitals" stored in our database backend:
+      ${dbHospitalsStr}
+      
+      Using Google Maps Grounding AND the list of Partner Hospitals provided above, find relevant medical facilities near their coordinates that best address their specific issue or search query.
+      - If one of our "Partner Hospitals" is highly relevant (e.g., they need a hospital, clinic, or specialized surgery/service offered by that partner), you MUST prioritize recommending and including that Partner Hospital in your response, advice, and the facilities list!
       - If they describe a symptom (e.g., severe toothache), prioritize specialized providers (e.g., dental clinics).
       - If they describe an emergency (e.g., chest pain, high fever), prioritize general hospitals with active ER or 24/7 care.
       - If they search for a service (e.g., pharmacy, lab test, ultrasound), prioritize pharmacies, labs, or diagnostic centers.
@@ -1548,8 +1726,9 @@ Our backend clinical intelligence network is temporarily offline. Please contact
     });
   }
 
-  httpServer.listen(PORT, "0.0.0.0", () => {
+  httpServer.listen(PORT, "0.0.0.0", async () => {
     console.log(`Server running on http://localhost:${PORT}`);
+    await seedHospitalsIfEmpty();
   });
 }
 

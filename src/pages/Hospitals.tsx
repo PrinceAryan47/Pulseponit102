@@ -37,7 +37,8 @@ const Hospitals: React.FC = () => {
   const [groundingSources, setGroundingSources] = useState<any[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [filterType, setFilterType] = useState<string>('all');
-  const [userLocation, setUserLocation] = useState<[number, number] | null>(null);
+  const [userLocation, setUserLocation] = useState<[number, number] | null>([0.3476, 32.5825]);
+  const [isPreciseLocation, setIsPreciseLocation] = useState<boolean>(false);
   const [mapCenter, setMapCenter] = useState<[number, number]>([0.3476, 32.5825]);
   const [mapZoom, setMapZoom] = useState<number>(13);
   const [selectedFacility, setSelectedFacility] = useState<any | null>(null);
@@ -103,38 +104,46 @@ const Hospitals: React.FC = () => {
 
   // Automatically fetch user location on mount
   useEffect(() => {
+    let initialLat = 0.3476;
+    let initialLng = 32.5825;
+    let precise = false;
+
     if (profile?.simulatedLocationEnabled && profile?.simulatedLatitude && profile?.simulatedLongitude) {
-      const lat = profile.simulatedLatitude;
-      const lng = profile.simulatedLongitude;
-      setUserLocation([lat, lng]);
-      setMapCenter([lat, lng]);
-      findNearbyFacilities(lat, lng).then(results => {
-        setNearbyFacilities(results.facilities || []);
-        setGroundingSources(results.groundingSources || []);
-      }).catch(err => {
-        console.warn("Failed to fetch facilities with simulated location on mount:", err);
-      });
-      return;
+      initialLat = profile.simulatedLatitude;
+      initialLng = profile.simulatedLongitude;
+      precise = true;
+      setUserLocation([initialLat, initialLng]);
+      setMapCenter([initialLat, initialLng]);
+      setIsPreciseLocation(true);
     }
 
-    if (navigator.geolocation) {
+    // Always fetch facilities for initial coordinates so user never sees blank lists
+    findNearbyFacilities(initialLat, initialLng).then(results => {
+      setNearbyFacilities(results.facilities || []);
+      setGroundingSources(results.groundingSources || []);
+    }).catch(err => {
+      console.warn("Failed to fetch facilities on mount:", err);
+    });
+
+    if (!precise && navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         async (position) => {
           const { latitude, longitude } = position.coords;
           setUserLocation([latitude, longitude]);
           setMapCenter([latitude, longitude]);
+          setIsPreciseLocation(true);
           try {
             const results = await findNearbyFacilities(latitude, longitude);
             setNearbyFacilities(results.facilities || []);
             setGroundingSources(results.groundingSources || []);
           } catch (err) {
-            console.warn("Failed to fetch facilities on mount:", err);
+            console.warn("Failed to fetch facilities for precise GPS:", err);
           }
         },
         (err) => {
-          console.warn("Location access not granted on load (expected inside sandbox):", err);
+          console.warn("Precise GPS access blocked/denied (using default Kampala coordinates):", err);
         },
-        { enableHighAccuracy: false, timeout: 15000, maximumAge: 60000 }
+        { enableHighAccuracy: false, timeout: 5000, maximumAge: 60000 }
       );
     }
   }, [profile?.simulatedLocationEnabled, profile?.simulatedLatitude, profile?.simulatedLongitude]);
@@ -147,6 +156,7 @@ const Hospitals: React.FC = () => {
       const lng = profile.simulatedLongitude;
       setUserLocation([lat, lng]);
       setMapCenter([lat, lng]);
+      setIsPreciseLocation(true);
       findNearbyFacilities(lat, lng).then(results => {
         setNearbyFacilities(results.facilities || []);
         setGroundingSources(results.groundingSources || []);
@@ -171,6 +181,7 @@ const Hospitals: React.FC = () => {
         const { latitude, longitude } = position.coords;
         setUserLocation([latitude, longitude]);
         setMapCenter([latitude, longitude]);
+        setIsPreciseLocation(true);
         try {
           const results = await findNearbyFacilities(latitude, longitude);
           setNearbyFacilities(results.facilities || []);
@@ -192,6 +203,7 @@ const Hospitals: React.FC = () => {
   const handleMapClick = async ({ latLng }: { latLng: [number, number] }) => {
     setUserLocation(latLng);
     setMapCenter(latLng);
+    setIsPreciseLocation(true);
     setLocating(true);
     setError(null);
     try {
@@ -309,34 +321,34 @@ const Hospitals: React.FC = () => {
 
         {/* GPS Distance Status Banner */}
         <div className={`mb-8 p-6 rounded-3xl border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-sm ${
-          userLocation 
+          isPreciseLocation 
             ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-800 dark:text-emerald-400" 
             : "bg-amber-500/10 border-amber-500/25 text-amber-800 dark:text-amber-400"
         }`}>
           <div className="flex items-start gap-4">
             <div className={`p-3 rounded-2xl shrink-0 ${
-              userLocation ? "bg-emerald-500/15" : "bg-amber-500/15"
+              isPreciseLocation ? "bg-emerald-500/15" : "bg-amber-500/15"
             }`}>
               <MapPin className="w-6 h-6" />
             </div>
             <div>
               <h4 className="font-bold text-sm mb-1">
-                {userLocation ? 'GPS Geolocation Enabled' : 'GPS Distance Calculations Pending'}
+                {isPreciseLocation ? 'Precise GPS Coordinates Active' : 'Default Kampala Geolocation Active'}
               </h4>
               <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
-                {userLocation 
-                  ? `Active live coordinates at [${userLocation[0].toFixed(5)}, ${userLocation[1].toFixed(5)}]. Real-time, evidence-based distance formulas have been updated automatically below.`
-                  : "Allow location access to calculate standard physical distance ranges to all verified clinics, partner medical spaces, and health organizations near you."}
+                {isPreciseLocation 
+                  ? `Active precise coordinates at [${userLocation?.[0].toFixed(5)}, ${userLocation?.[1].toFixed(5)}]. Geolocation-based distance calculations have been updated dynamically.`
+                  : "Currently showing fallback medical spaces near Kampala Central (0.3476, 32.5825). Authorize precise browser location or enable Simulated Location in your Profile settings to calculate real-time distance from your actual coordinates."}
               </p>
             </div>
           </div>
-          {!userLocation && (
+          {!isPreciseLocation && (
             <button
               onClick={handleLocateNearby}
               disabled={locating}
-              className="px-5 py-2.5 bg-amber-500 hover:bg-amber-600 text-white hover:text-white rounded-xl text-xs font-bold shrink-0 transition-all shadow-md shadow-amber-500/10"
+              className="px-5 py-2.5 bg-amber-500 hover:bg-amber-600 text-white hover:text-white rounded-xl text-xs font-bold shrink-0 transition-all shadow-md shadow-amber-500/10 cursor-pointer"
             >
-              Authorize GPS Location
+              {locating ? 'Acquiring GPS...' : 'Acquire Precise GPS'}
             </button>
           )}
         </div>
