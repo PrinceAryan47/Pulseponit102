@@ -27,6 +27,21 @@ import GuestOverlay from '../components/GuestOverlay';
 import { useAuth } from '../context/AuthContext';
 import ReactMarkdown from 'react-markdown';
 
+const FALLBACK_HOSPITAL_IMAGES = [
+  "https://images.unsplash.com/photo-1587351021759-3e566b6af7cc?auto=format&fit=crop&q=80&w=800",
+  "https://images.unsplash.com/photo-1519494026892-80bbd2d6fd0d?auto=format&fit=crop&q=80&w=800",
+  "https://images.unsplash.com/photo-1586773860418-d37222d8fce3?auto=format&fit=crop&q=80&w=800",
+  "https://images.unsplash.com/photo-1512678080530-7760d81faba6?auto=format&fit=crop&q=80&w=800"
+];
+
+const getHospitalImage = (hospital: HospitalType) => {
+  if (hospital.photoURL && hospital.photoURL.trim() !== "" && !hospital.photoURL.includes("placeholder")) {
+    return hospital.photoURL;
+  }
+  const index = Math.abs(hospital.id ? hospital.id.split('').reduce((acc: number, char: string) => acc + char.charCodeAt(0), 0) : 0) % FALLBACK_HOSPITAL_IMAGES.length;
+  return FALLBACK_HOSPITAL_IMAGES[index];
+};
+
 const Hospitals: React.FC = () => {
   const { profile } = useAuth();
   const [hospitals, setHospitals] = useState<HospitalType[]>([]);
@@ -957,10 +972,15 @@ const Hospitals: React.FC = () => {
                   <div key={hospital.id} className="group cursor-pointer">
                     <div className="flex gap-4 mb-4">
                       <img 
-                        src={hospital.photoURL} 
+                        src={getHospitalImage(hospital)} 
                         alt={hospital.name} 
                         className="w-20 h-20 rounded-2xl object-cover border border-border"
                         referrerPolicy="no-referrer"
+                        onError={(e) => {
+                          const target = e.target as HTMLImageElement;
+                          const index = Math.abs(hospital.id ? hospital.id.split('').reduce((acc: number, char: string) => acc + char.charCodeAt(0), 0) : 0) % FALLBACK_HOSPITAL_IMAGES.length;
+                          target.src = FALLBACK_HOSPITAL_IMAGES[index];
+                        }}
                       />
                       <div>
                         <h3 className="font-bold text-foreground group-hover:text-primary transition-colors">{hospital.name}</h3>

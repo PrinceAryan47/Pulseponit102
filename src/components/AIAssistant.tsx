@@ -6,9 +6,24 @@ import ReactMarkdown from 'react-markdown';
 import { cn } from '../lib/utils';
 import VoiceSearch from './VoiceSearch';
 import { useAuth } from '../context/AuthContext';
+import { useNavigate, Link } from 'react-router-dom';
+
+const QUICK_NAV_LINKS = [
+  { label: 'Overview', path: '/dashboard', emoji: '📊' },
+  { label: 'Appointments', path: '/appointments', emoji: '📅' },
+  { label: 'Doctors', path: '/doctors', emoji: '🩺' },
+  { label: 'Hospitals', path: '/hospitals', emoji: '🏥' },
+  { label: 'Health Tools', path: '/health-tools', emoji: '⚡' },
+  { label: 'First Aid Guide', path: '/first-aid', emoji: '🩹' },
+  { label: 'Prescriptions', path: '/prescriptions', emoji: '💊' },
+  { label: 'Medical Records', path: '/medical-records', emoji: '📂' },
+  { label: 'Health News', path: '/articles', emoji: '📰' },
+  { label: 'My Profile', path: '/profile', emoji: '👤' },
+];
 
 const AIAssistant: React.FC = () => {
   const { profile } = useAuth();
+  const navigate = useNavigate();
   const [isOpen, setIsOpen] = useState(false);
   const [isMinimized, setIsMinimized] = useState(false);
   const [voiceEnabled, setVoiceEnabled] = useState(() => {
@@ -17,10 +32,23 @@ const AIAssistant: React.FC = () => {
   });
   const [input, setInput] = useState('');
   const [messages, setMessages] = useState<{ role: 'user' | 'assistant', content: string }[]>([
-    { role: 'assistant', content: "Hello! I'm your PulsePoint AI assistant. How can I help you navigate our health platform today?" }
+    { role: 'assistant', content: "Hello! I'm your PulsePoint AI navigation & health assistant. Click any shortcut below or ask me anything to navigate through the platform and check your stats!" }
   ]);
   const [isLoading, setIsLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  const handleQuickNav = (label: string, path: string) => {
+    let targetPath = path;
+    if (profile?.role === 'doctor' && path === '/dashboard') {
+      targetPath = '/doctor-dashboard';
+    }
+    navigate(targetPath);
+    setMessages(prev => [
+      ...prev,
+      { role: 'user', content: `Go to ${label}` },
+      { role: 'assistant', content: `I have navigated you to the **${label}** page! 🚀\n\nIs there anything else I can help you with on PulsePoint?` }
+    ]);
+  };
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -68,7 +96,7 @@ const AIAssistant: React.FC = () => {
       const genAI = new GoogleGenAI({ apiKey: '' });
       const model = "gemini-3.5-flash";
       
-      const systemInstruction = `You are the PulsePoint AI Assistant, a helpful and professional health guide. 
+      const systemInstruction = `You are the PulsePoint AI Assistant, a helpful and professional health and app navigation guide. 
       Your goal is to help users navigate the app, understand its features, and provide insights into their health metrics.
       
       User Profile Context:
@@ -90,19 +118,21 @@ const AIAssistant: React.FC = () => {
       4. TDEE (Total Daily Energy Expenditure):
          Formula: BMR * Activity Level (Sedentary: 1.2, Light: 1.375, Moderate: 1.55, Very: 1.725, Extra: 1.9)
       
-      NeonHealth Features:
-      1. Dashboard: Overview of appointments, medical records, and recent chats. Accessible via /dashboard.
+      PulsePoint Features & Navigation Paths:
+      1. Dashboard: Overview of appointments, medical records, and recent chats. Accessible via /dashboard (or /doctor-dashboard for doctors).
       2. Doctor Directory: Find specialists, book appointments, and start chats or video/audio calls. Accessible via /doctors.
-      3. Hospital Directory: Find nearby medical facilities. Accessible via /hospitals.
-      4. Health Tools: Access a comprehensive suite of tools including BMI, Calorie, Water Intake, Heart Rate, Pregnancy Due Date, Period Tracker, Sleep calculators, and a Personalized Fitness Workout Planner. Also includes an AI-powered Symptom Checker. Accessible via /health-tools.
-      5. Medical Records: View and manage your personal health history. Accessible via /medical-records.
-      6. Articles: Read health news and educational content. Accessible via /articles.
-      7. Profile: Manage personal information and settings (including weight/height). Accessible via /profile.
+      3. Hospital Directory: Find nearby medical facilities and calculate distance from current GPS coordinates. Accessible via /hospitals.
+      4. Health Tools: Access calculators (BMI, Water, Calories, Sleep, Period, Pregnancy due date, and personalized fitness workout planner). Accessible via /health-tools.
+      5. Medical Records: View and manage personal health history, records, and files. Accessible via /medical-records.
+      6. Prescriptions: View doctor-prescribed medications and active treatment instructions. Accessible via /prescriptions.
+      7. Health News: Read clinical and educational articles. Accessible via /articles.
+      8. Profile: Manage personal details and simulated GPS coordinates. Accessible via /profile.
+      9. First Aid Guide: Offline step-by-step CPR and urgent emergency guide. Accessible via /first-aid.
       
       Guidelines:
       - Be concise, professional, and empathetic.
       - If a user asks "What's my BMI?" or similar, use their profile data to calculate it. If data is missing (like weight or height), politely ask them to provide it or update their profile at /profile.
-      - If a user asks how to do something, provide the direct path or link (e.g., "You can find doctors at /doctors").
+      - If a user asks how to do something or go somewhere, ALWAYS provide the path formatted as a Markdown link, for example: [Go to Appointments](/appointments) or [Go to Health Tools](/health-tools). This allows them to click it and instantly navigate without page reloads.
       - Do not provide specific medical diagnoses. Instead, suggest they consult a doctor via the Doctor Directory.
       - Use Markdown for formatting (bolding, lists).`;
 
@@ -204,7 +234,36 @@ const AIAssistant: React.FC = () => {
                           : "bg-white dark:bg-slate-800 text-[rgb(var(--foreground))] rounded-tl-none border border-slate-100 dark:border-slate-700"
                       )}>
                         <div className="markdown-body prose prose-sm dark:prose-invert max-w-none">
-                          <ReactMarkdown>{msg.content}</ReactMarkdown>
+                          <ReactMarkdown
+                            components={{
+                              a: ({ href, children, ...props }) => {
+                                if (href && href.startsWith('/')) {
+                                  return (
+                                    <Link
+                                      to={href}
+                                      className="text-neon-blue hover:underline font-bold"
+                                      {...(props as any)}
+                                    >
+                                      {children}
+                                    </Link>
+                                  );
+                                }
+                                return (
+                                  <a
+                                    href={href}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-neon-blue hover:underline font-bold"
+                                    {...props}
+                                  >
+                                    {children}
+                                  </a>
+                                );
+                              }
+                            }}
+                          >
+                            {msg.content}
+                          </ReactMarkdown>
                         </div>
                       </div>
                     </div>
@@ -218,6 +277,20 @@ const AIAssistant: React.FC = () => {
                       </div>
                     </div>
                   )}
+                </div>
+
+                {/* Quick Navigation Chips */}
+                <div className="px-4 py-2 bg-slate-100 dark:bg-slate-900/80 border-t border-slate-200 dark:border-slate-700 flex items-center gap-2 overflow-x-auto no-scrollbar scroll-smooth">
+                  {QUICK_NAV_LINKS.map((link) => (
+                    <button
+                      key={link.path}
+                      onClick={() => handleQuickNav(link.label, link.path)}
+                      className="flex items-center gap-1.5 px-3 py-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-full text-xs font-medium text-slate-700 dark:text-slate-300 whitespace-nowrap hover:bg-neon-blue hover:text-slate-900 dark:hover:bg-neon-blue dark:hover:text-slate-900 hover:border-neon-blue transition-all cursor-pointer shadow-sm shrink-0"
+                    >
+                      <span>{link.emoji}</span>
+                      <span>{link.label}</span>
+                    </button>
+                  ))}
                 </div>
 
                 {/* Input */}

@@ -7,7 +7,7 @@ export const UserStatusManager: React.FC = () => {
   const { user, profile, isAuthReady } = useAuth();
   
   useEffect(() => {
-    if (!user || !isAuthReady) return;
+    if (!user || !isAuthReady || !profile) return;
     
     const userRef = doc(db, 'users', user.uid);
     
@@ -60,7 +60,7 @@ export const UserStatusManager: React.FC = () => {
       }
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [user?.uid, isAuthReady]);
+  }, [user?.uid, isAuthReady, !!profile]);
   
   return null;
 };

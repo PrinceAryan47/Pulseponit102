@@ -901,10 +901,24 @@ const AdminDashboard: React.FC = () => {
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-3">
                         <div className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center border border-slate-200 dark:border-slate-700 overflow-hidden">
-                          {hospital.photoURL ? (
-                            <img src={hospital.photoURL} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                          {hospital.photoURL && hospital.photoURL.trim() !== "" ? (
+                            <img 
+                              src={hospital.photoURL} 
+                              alt="" 
+                              className="w-full h-full object-cover" 
+                              referrerPolicy="no-referrer" 
+                              onError={(e) => {
+                                const target = e.target as HTMLImageElement;
+                                target.src = 'https://images.unsplash.com/photo-1519494026892-80bbd2d6fd0d?auto=format&fit=crop&q=80&w=80';
+                              }}
+                            />
                           ) : (
-                            <Hospital className="w-5 h-5 text-slate-400" />
+                            <img 
+                              src='https://images.unsplash.com/photo-1519494026892-80bbd2d6fd0d?auto=format&fit=crop&q=80&w=80' 
+                              alt="" 
+                              className="w-full h-full object-cover" 
+                              referrerPolicy="no-referrer" 
+                            />
                           )}
                         </div>
                         <div>
@@ -1000,7 +1014,16 @@ const AdminDashboard: React.FC = () => {
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-3">
                         <div className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center border border-slate-200 dark:border-slate-700 overflow-hidden">
-                          <img src={article.imageURL} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                          <img 
+                            src={article.imageURL || 'https://images.unsplash.com/photo-1530026405186-ed1ea0ac7a63?auto=format&fit=crop&q=80&w=80'} 
+                            alt="" 
+                            className="w-full h-full object-cover" 
+                            referrerPolicy="no-referrer" 
+                            onError={(e) => {
+                              const target = e.target as HTMLImageElement;
+                              target.src = 'https://images.unsplash.com/photo-1530026405186-ed1ea0ac7a63?auto=format&fit=crop&q=80&w=80';
+                            }}
+                          />
                         </div>
                         <div>
                           <p className="font-bold text-[rgb(var(--foreground))] line-clamp-1">{article.title}</p>
@@ -1229,7 +1252,16 @@ const AdminDashboard: React.FC = () => {
                 {generatedNews.map((news, i) => (
                   <div key={i} className="flex gap-6 p-6 bg-slate-50 dark:bg-slate-900/50 rounded-3xl border border-slate-100 dark:border-slate-800">
                     <div className="w-40 h-40 rounded-2xl overflow-hidden shrink-0">
-                      <img src={news.imageURL} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                      <img 
+                        src={news.imageURL || 'https://images.unsplash.com/photo-1530026405186-ed1ea0ac7a63?auto=format&fit=crop&q=80&w=400'} 
+                        alt="" 
+                        className="w-full h-full object-cover" 
+                        referrerPolicy="no-referrer" 
+                        onError={(e) => {
+                          const target = e.target as HTMLImageElement;
+                          target.src = 'https://images.unsplash.com/photo-1530026405186-ed1ea0ac7a63?auto=format&fit=crop&q=80&w=400';
+                        }}
+                      />
                     </div>
                     <div className="space-y-3 flex-grow">
                       <div className="flex items-center justify-between">

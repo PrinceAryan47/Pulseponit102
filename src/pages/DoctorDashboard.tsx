@@ -1555,7 +1555,16 @@ const ArticlesTab = () => {
         {displayArticles.length > 0 ? displayArticles.map((article) => (
           <div key={article.id} className="bg-white dark:bg-slate-800 rounded-[2.5rem] border border-slate-100 dark:border-slate-700 shadow-sm overflow-hidden flex flex-col sm:flex-row group">
             <div className="w-full sm:w-48 h-48 shrink-0 overflow-hidden">
-              <img src={article.imageURL || 'https://picsum.photos/seed/medical/400/400'} alt="" className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" referrerPolicy="no-referrer" />
+              <img 
+                src={article.imageURL || 'https://images.unsplash.com/photo-1530026405186-ed1ea0ac7a63?auto=format&fit=crop&q=80&w=400'} 
+                alt="" 
+                className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" 
+                referrerPolicy="no-referrer"
+                onError={(e) => {
+                  const target = e.target as HTMLImageElement;
+                  target.src = 'https://images.unsplash.com/photo-1530026405186-ed1ea0ac7a63?auto=format&fit=crop&q=80&w=400';
+                }}
+              />
             </div>
             <div className="p-6 flex flex-col justify-between flex-grow">
               <div>

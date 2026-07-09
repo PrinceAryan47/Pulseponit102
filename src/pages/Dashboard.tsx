@@ -838,10 +838,14 @@ Make it highly direct, inspiring, and actionable. Do not wrap it in quotes.`,
                       <div className="flex gap-4">
                         <div className="w-20 h-20 rounded-2xl overflow-hidden shrink-0">
                           <img 
-                            src={article.imageURL || 'https://picsum.photos/seed/medical/200/200'} 
+                            src={article.imageURL || 'https://images.unsplash.com/photo-1530026405186-ed1ea0ac7a63?auto=format&fit=crop&q=80&w=200'} 
                             alt="" 
                             className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
                             referrerPolicy="no-referrer"
+                            onError={(e) => {
+                              const target = e.target as HTMLImageElement;
+                              target.src = 'https://images.unsplash.com/photo-1530026405186-ed1ea0ac7a63?auto=format&fit=crop&q=80&w=200';
+                            }}
                           />
                         </div>
                         <div className="flex-grow min-w-0">

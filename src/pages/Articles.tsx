@@ -24,6 +24,22 @@ import { cn } from '../lib/utils';
 import VoiceSearch from '../components/VoiceSearch';
 import { safeFormat } from '../lib/dateUtils';
 
+const FALLBACK_ARTICLE_IMAGES = [
+  "https://images.unsplash.com/photo-1530026405186-ed1ea0ac7a63?auto=format&fit=crop&q=80&w=800",
+  "https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?auto=format&fit=crop&q=80&w=800",
+  "https://images.unsplash.com/photo-1505751172876-fa1923c5c528?auto=format&fit=crop&q=80&w=800",
+  "https://images.unsplash.com/photo-1576091160550-2173dba999ef?auto=format&fit=crop&q=80&w=800",
+  "https://images.unsplash.com/photo-1527613426441-4da17471b66d?auto=format&fit=crop&q=80&w=800"
+];
+
+const getArticleImage = (article: Article) => {
+  if (article.imageURL && article.imageURL.trim() !== "" && !article.imageURL.includes("placeholder")) {
+    return article.imageURL;
+  }
+  const index = Math.abs(article.id ? article.id.split('').reduce((acc: number, char: string) => acc + char.charCodeAt(0), 0) : 0) % FALLBACK_ARTICLE_IMAGES.length;
+  return FALLBACK_ARTICLE_IMAGES[index];
+};
+
 const Articles: React.FC = () => {
   const { profile } = useAuth();
   const navigate = useNavigate();
@@ -120,10 +136,15 @@ const Articles: React.FC = () => {
         >
           <div className="absolute inset-0 bg-gradient-to-t from-slate-900 via-slate-900/40 to-transparent z-10"></div>
           <img 
-            src={filteredArticles[0].imageURL} 
+            src={getArticleImage(filteredArticles[0])} 
             alt="" 
             className="w-full h-[500px] object-cover group-hover:scale-105 transition-transform duration-700"
             referrerPolicy="no-referrer"
+            onError={(e) => {
+              const target = e.target as HTMLImageElement;
+              const index = Math.abs(filteredArticles[0].id ? filteredArticles[0].id.split('').reduce((acc: number, char: string) => acc + char.charCodeAt(0), 0) : 0) % FALLBACK_ARTICLE_IMAGES.length;
+              target.src = FALLBACK_ARTICLE_IMAGES[index];
+            }}
           />
           <div className="absolute bottom-0 left-0 p-8 lg:p-16 z-20 max-w-3xl">
             <span className="px-4 py-1 bg-neon-blue text-slate-900 rounded-full text-xs font-bold uppercase tracking-widest mb-6 inline-block">
@@ -177,10 +198,15 @@ const Articles: React.FC = () => {
           >
             <div className="relative h-56 overflow-hidden">
               <img 
-                src={article.imageURL} 
+                src={getArticleImage(article)} 
                 alt={article.title} 
                 className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
                 referrerPolicy="no-referrer"
+                onError={(e) => {
+                  const target = e.target as HTMLImageElement;
+                  const index = Math.abs(article.id ? article.id.split('').reduce((acc: number, char: string) => acc + char.charCodeAt(0), 0) : 0) % FALLBACK_ARTICLE_IMAGES.length;
+                  target.src = FALLBACK_ARTICLE_IMAGES[index];
+                }}
               />
               <div className="absolute top-4 left-4 px-3 py-1 bg-background/90 backdrop-blur-sm rounded-full text-[10px] font-bold text-primary uppercase tracking-widest">
                 {article.category}
