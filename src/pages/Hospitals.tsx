@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Hospital as HospitalType } from '../types';
-import { collection, onSnapshot, query } from 'firebase/firestore';
+import { collection, onSnapshot, query, addDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { 
   Hospital, 
@@ -17,7 +17,8 @@ import {
   ExternalLink,
   Smile,
   FlaskConical,
-  Sparkles
+  Sparkles,
+  Database
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { findNearbyFacilities, NearbyFacility } from '../services/locationService';
@@ -64,6 +65,7 @@ const Hospitals: React.FC = () => {
   const [aiAdvice, setAiAdvice] = useState<string | null>(null);
   const [aiFacilities, setAiFacilities] = useState<NearbyFacility[] | null>(null);
   const [aiError, setAiError] = useState<string | null>(null);
+  const [embeddingId, setEmbeddingId] = useState<string | null>(null);
 
   const handleAISearchAdviceWithQuery = async (queryToSearch: string) => {
     if (!queryToSearch.trim()) return;
@@ -298,6 +300,40 @@ const Hospitals: React.FC = () => {
     const mapsUrl = `https://www.google.com/maps/dir/?api=1&${destParam}${originParam}&travelmode=driving`;
     
     window.open(mapsUrl, '_blank', 'noopener,noreferrer');
+  };
+
+  const isAlreadyPartner = (facility: NearbyFacility) => {
+    return hospitals.some(h => h.name.toLowerCase().trim() === facility.name.toLowerCase().trim());
+  };
+
+  const handleEmbedHospital = async (facility: NearbyFacility) => {
+    if (isAlreadyPartner(facility)) return;
+    setEmbeddingId(facility.name);
+    try {
+      const data = {
+        name: facility.name,
+        address: facility.address,
+        location: {
+          lat: facility.lat || userLocation?.[0] || 0.3476,
+          lng: facility.lng || userLocation?.[1] || 32.5825
+        },
+        licenseNumber: "MOH-UG-" + Math.floor(100000 + Math.random() * 900000),
+        contactPhone: "+256 414 " + Math.floor(100000 + Math.random() * 900000),
+        contactEmail: "info@" + facility.name.toLowerCase().replace(/[^a-z0-9]/g, "") + ".or.ug",
+        services: [facility.type || "general", "Emergency Care", "Outpatient Services"],
+        openingHours: "24 Hours",
+        photoURL: facility.type === 'pharmacy' 
+          ? 'https://images.unsplash.com/photo-1576091160550-2173dba999ef?auto=format&fit=crop&q=80&w=800' 
+          : 'https://images.unsplash.com/photo-1519494026892-80bbd2d6fd0d?auto=format&fit=crop&q=80&w=800'
+      };
+      
+      await addDoc(collection(db, 'hospitals'), data);
+    } catch (err: any) {
+      console.error("Error embedding hospital:", err);
+      alert("Failed to embed facility: " + err.message);
+    } finally {
+      setEmbeddingId(null);
+    }
   };
 
   if (loading) {
@@ -834,13 +870,31 @@ const Hospitals: React.FC = () => {
                                 </div>
                               )}
                             </div>
-                            <div className="mt-4 pt-4 border-t border-border/60">
+                            <div className="mt-4 pt-4 border-t border-border/60 flex flex-col sm:flex-row gap-2">
                               <button 
                                 onClick={() => handleRedirectToMaps(facility)}
-                                className="w-full py-3 bg-indigo-600 text-white rounded-xl font-bold transition-all text-sm flex items-center justify-center gap-2 hover:bg-indigo-700 shadow-lg shadow-indigo-600/20 cursor-pointer"
+                                className="flex-1 py-3 bg-indigo-600 text-white rounded-xl font-bold transition-all text-sm flex items-center justify-center gap-2 hover:bg-indigo-700 shadow-lg shadow-indigo-600/20 cursor-pointer"
                               >
                                 <Navigation className="w-4 h-4 animate-pulse" />
-                                Get Directions (Google Maps)
+                                Get Directions
+                              </button>
+                              <button
+                                onClick={() => handleEmbedHospital(facility)}
+                                disabled={embeddingId === facility.name || isAlreadyPartner(facility)}
+                                className={`flex-1 py-3 px-4 rounded-xl font-bold text-sm flex items-center justify-center gap-2 border transition-all cursor-pointer ${
+                                  isAlreadyPartner(facility)
+                                    ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20'
+                                    : 'bg-transparent text-indigo-600 dark:text-indigo-400 border-indigo-500/20 hover:bg-indigo-500/5'
+                                }`}
+                              >
+                                <Database className="w-4 h-4" />
+                                {embeddingId === facility.name ? (
+                                  <>Embedding...</>
+                                ) : isAlreadyPartner(facility) ? (
+                                  <>Saved Partner 🤝</>
+                                ) : (
+                                  <>Embed in DB</>
+                                )}
                               </button>
                             </div>
                           </motion.div>
@@ -940,13 +994,31 @@ const Hospitals: React.FC = () => {
                           </div>
                         )}
                       </div>
-                      <div className="mt-4 pt-4 border-t border-border/60">
+                      <div className="mt-4 pt-4 border-t border-border/60 flex flex-col sm:flex-row gap-2">
                         <button 
                           onClick={() => handleRedirectToMaps(facility)}
-                          className="w-full py-3 bg-primary text-primary-foreground rounded-xl font-bold transition-all text-sm flex items-center justify-center gap-2 hover:bg-primary/90 shadow-lg shadow-primary/20"
+                          className="flex-1 py-3 bg-primary text-primary-foreground rounded-xl font-bold transition-all text-sm flex items-center justify-center gap-2 hover:bg-primary/90 shadow-lg shadow-primary/20 cursor-pointer"
                         >
                           <Navigation className="w-4 h-4 animate-pulse" />
-                          Get Directions (Google Maps)
+                          Get Directions
+                        </button>
+                        <button
+                          onClick={() => handleEmbedHospital(facility)}
+                          disabled={embeddingId === facility.name || isAlreadyPartner(facility)}
+                          className={`flex-1 py-3 px-4 rounded-xl font-bold text-sm flex items-center justify-center gap-2 border transition-all cursor-pointer ${
+                            isAlreadyPartner(facility)
+                              ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20'
+                              : 'bg-transparent text-primary dark:text-primary-foreground border-primary/20 hover:bg-primary/5'
+                          }`}
+                        >
+                          <Database className="w-4 h-4" />
+                          {embeddingId === facility.name ? (
+                            <>Embedding...</>
+                          ) : isAlreadyPartner(facility) ? (
+                            <>Saved Partner 🤝</>
+                          ) : (
+                            <>Embed in DB</>
+                          )}
                         </button>
                       </div>
                     </motion.div>

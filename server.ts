@@ -35,19 +35,182 @@ function getAdminDb(): admin.firestore.Firestore | null {
   return adminDb;
 }
 
+const DEFAULT_HOSPITALS = [
+  {
+    name: "Mulago National Referral Hospital",
+    licenseNumber: "HOSP-UG-001",
+    address: "Mulago Hill, Kampala, Uganda",
+    contactPhone: "+256 414 554001",
+    contactEmail: "info@mulago.or.ug",
+    services: ["General Surgery", "Internal Medicine", "Pediatrics", "Obstetrics & Gynecology", "Emergency"],
+    openingHours: "24/7",
+    photoURL: "https://images.unsplash.com/photo-1587350859728-117699f4a1ec?auto=format&fit=crop&q=80&w=800",
+    location: { lat: 0.3378, lng: 32.5761 }
+  },
+  {
+    name: "Nakasero Hospital",
+    licenseNumber: "HOSP-UG-002",
+    address: "Plot 14A Akii Bua Rd, Kampala, Uganda",
+    contactPhone: "+256 312 531300",
+    contactEmail: "info@nhl.co.ug",
+    services: ["Cardiology", "Neurology", "Oncology", "Emergency", "Diagnostics"],
+    openingHours: "24/7",
+    photoURL: "https://images.unsplash.com/photo-1519494026892-80bbd2d6fd0d?auto=format&fit=crop&q=80&w=800",
+    location: { lat: 0.3265, lng: 32.5815 }
+  },
+  {
+    name: "International Hospital Kampala (IHK)",
+    licenseNumber: "HOSP-UG-004",
+    address: "Plot 4686 Barnabas Rd, Namuwongo, Kampala",
+    contactPhone: "+256 312 200400",
+    contactEmail: "info@img.co.ug",
+    services: ["Emergency Medicine", "Intensive Care", "Surgery", "Maternity", "ICU"],
+    openingHours: "24/7",
+    photoURL: "https://images.unsplash.com/photo-1516549655169-df83a0774514?auto=format&fit=crop&q=80&w=800",
+    location: { lat: 0.3015, lng: 32.6105 }
+  },
+  {
+    name: "St. Francis Hospital Nsambya",
+    licenseNumber: "HOSP-UG-005",
+    address: "Nsambya Hill, Kampala, Uganda",
+    contactPhone: "+256 414 267012",
+    contactEmail: "info@nsambyahospital.or.ug",
+    services: ["Obstetrics", "Gynecology", "Pediatrics", "Surgery", "Maternity"],
+    openingHours: "24/7",
+    photoURL: "https://images.unsplash.com/photo-1512678080530-7760d81faba6?auto=format&fit=crop&q=80&w=800",
+    location: { lat: 0.3012, lng: 32.5878 }
+  },
+  {
+    name: "Case Hospital",
+    licenseNumber: "HOSP-UG-003",
+    address: "Plot 69/71 Buganda Rd, Kampala, Uganda",
+    contactPhone: "+256 312 250700",
+    contactEmail: "info@casemedicalcentre.com",
+    services: ["Dermatology", "Orthopedics", "Radiology", "General Practice", "Emergency", "Dental"],
+    openingHours: "24/7",
+    photoURL: "https://images.unsplash.com/photo-1538108197017-c13466739195?auto=format&fit=crop&q=80&w=800",
+    location: { lat: 0.3242, lng: 32.5786 }
+  },
+  {
+    name: "Uganda Martyrs Hospital Lubaga",
+    licenseNumber: "HOSP-UG-006",
+    address: "Lubaga Hill, Kampala, Uganda",
+    contactPhone: "+256 414 270221",
+    contactEmail: "info@lubagahospital.org",
+    services: ["General Medicine", "Surgery", "Maternity", "Pediatrics"],
+    openingHours: "24/7",
+    photoURL: "https://images.unsplash.com/photo-1504439468489-c8920d796a29?auto=format&fit=crop&q=80&w=800",
+    location: { lat: 0.3025, lng: 32.5535 }
+  },
+  {
+    name: "Mengo Hospital",
+    licenseNumber: "HOSP-UG-007",
+    address: "Namirembe Hill, Kampala, Uganda",
+    contactPhone: "+256 414 270222",
+    contactEmail: "info@mengohospital.org",
+    services: ["Dental", "Eye Care", "Surgery", "Maternity", "Pediatrics"],
+    openingHours: "24/7",
+    photoURL: "https://images.unsplash.com/photo-1519494026892-80bbd2d6fd0d?auto=format&fit=crop&q=80&w=800",
+    location: { lat: 0.3125, lng: 32.5595 }
+  },
+  {
+    name: "Kibuli Muslim Hospital",
+    licenseNumber: "HOSP-UG-008",
+    address: "Kibuli Hill, Kampala, Uganda",
+    contactPhone: "+256 414 235296",
+    contactEmail: "info@kibulihospital.org",
+    services: ["General Medicine", "Surgery", "Maternity", "Diagnostics"],
+    openingHours: "24/7",
+    photoURL: "https://images.unsplash.com/photo-1516549655169-df83a0774514?auto=format&fit=crop&q=80&w=800",
+    location: { lat: 0.3085, lng: 32.5975 }
+  },
+  {
+    name: "Mbarara Regional Referral Hospital",
+    licenseNumber: "HOSP-UG-009",
+    address: "Mbarara-Kabale Road, Mbarara, Uganda",
+    contactPhone: "+256 485 420020",
+    contactEmail: "info@mbararahospital.or.ug",
+    services: ["Major teaching and referral hospital", "Spacious diagnostic and surgical wards"],
+    openingHours: "24/7",
+    photoURL: "https://images.unsplash.com/photo-1519494026892-80bbd2d6fd0d?auto=format&fit=crop&q=80&w=800",
+    location: { lat: -0.6151, lng: 30.6558 }
+  },
+  {
+    name: "Gulu Regional Referral Hospital",
+    licenseNumber: "HOSP-UG-010",
+    address: "Hospital Road, Gulu, Uganda",
+    contactPhone: "+256 471 432021",
+    contactEmail: "info@guluhospital.or.ug",
+    services: ["Primary public referral health center", "24/7 critical emergency and pediatric departments"],
+    openingHours: "24/7",
+    photoURL: "https://images.unsplash.com/photo-1519494026892-80bbd2d6fd0d?auto=format&fit=crop&q=80&w=800",
+    location: { lat: 2.7725, lng: 32.3006 }
+  },
+  {
+    name: "Jinja Regional Referral Hospital",
+    licenseNumber: "HOSP-UG-011",
+    address: "Clifton Road, Jinja, Uganda",
+    contactPhone: "+256 434 120022",
+    contactEmail: "info@jinjahospital.or.ug",
+    services: ["Large-scale public medical center", "Fully equipped maternity and surgical operations"],
+    openingHours: "24/7",
+    photoURL: "https://images.unsplash.com/photo-1519494026892-80bbd2d6fd0d?auto=format&fit=crop&q=80&w=800",
+    location: { lat: 0.4283, lng: 33.2045 }
+  },
+  {
+    name: "St. Mary's Hospital Lacor",
+    licenseNumber: "HOSP-UG-012",
+    address: "Gulu-Nimule Road, Gulu, Uganda",
+    contactPhone: "+256 471 435002",
+    contactEmail: "info@lacorhospital.org",
+    services: ["Mission-based private hospital", "Affordable care, prompt treatment, and complete laboratory diagnostics"],
+    openingHours: "24/7",
+    photoURL: "https://images.unsplash.com/photo-1519494026892-80bbd2d6fd0d?auto=format&fit=crop&q=80&w=800",
+    location: { lat: 2.7611, lng: 32.2589 }
+  },
+  {
+    name: "Fort Portal Regional Referral Hospital",
+    licenseNumber: "HOSP-UG-013",
+    address: "Fort Portal-Kasese Road, Fort Portal, Uganda",
+    contactPhone: "+256 483 422023",
+    contactEmail: "info@fortportalhospital.or.ug",
+    services: ["Strategic referral center", "Professional clinical staff and emergency triage"],
+    openingHours: "24/7",
+    photoURL: "https://images.unsplash.com/photo-1519494026892-80bbd2d6fd0d?auto=format&fit=crop&q=80&w=800",
+    location: { lat: 0.6525, lng: 30.2747 }
+  },
+  {
+    name: "Mbale Regional Referral Hospital",
+    licenseNumber: "HOSP-UG-014",
+    address: "Pallisa Road, Mbale, Uganda",
+    contactPhone: "+256 454 433024",
+    contactEmail: "info@mbalehospital.or.ug",
+    services: ["Leading tertiary hospital", "Highly active outpatient and neonatal clinics"],
+    openingHours: "24/7",
+    photoURL: "https://images.unsplash.com/photo-1519494026892-80bbd2d6fd0d?auto=format&fit=crop&q=80&w=800",
+    location: { lat: 1.0744, lng: 34.1758 }
+  }
+];
+
 async function getHospitalsFromDb(): Promise<any[]> {
   const db = getAdminDb();
-  if (!db) return [];
+  if (!db) {
+    console.log("Firebase Admin DB not initialized. Returning default hospitals fallback.");
+    return DEFAULT_HOSPITALS;
+  }
   try {
     const snap = await db.collection("hospitals").get();
     const list: any[] = [];
     snap.forEach(doc => {
       list.push({ id: doc.id, ...doc.data() });
     });
+    if (list.length === 0) {
+      return DEFAULT_HOSPITALS;
+    }
     return list;
-  } catch (err) {
-    console.error("Failed to fetch hospitals from Firestore in server.ts:", err);
-    return [];
+  } catch (err: any) {
+    console.log("Note: Server-side Firebase Admin read is unavailable. Gracefully serving default hospitals fallback.");
+    return DEFAULT_HOSPITALS;
   }
 }
 
@@ -58,99 +221,8 @@ async function seedHospitalsIfEmpty() {
     const snap = await db.collection("hospitals").limit(1).get();
     if (snap.empty) {
       console.log("No hospitals found in Firestore database. Seeding Partner Hospitals automatically...");
-      const hospitals = [
-        {
-          name: "Mulago National Referral Hospital",
-          licenseNumber: "HOSP-UG-001",
-          address: "Mulago Hill, Kampala, Uganda",
-          contactPhone: "+256 414 554001",
-          contactEmail: "info@mulago.or.ug",
-          services: ["General Surgery", "Internal Medicine", "Pediatrics", "Obstetrics & Gynecology", "Emergency"],
-          openingHours: "24/7",
-          photoURL: "https://images.unsplash.com/photo-1587350859728-117699f4a1ec?auto=format&fit=crop&q=80&w=800",
-          location: { lat: 0.3378, lng: 32.5761 }
-        },
-        {
-          name: "Nakasero Hospital",
-          licenseNumber: "HOSP-UG-002",
-          address: "Plot 14A Akii Bua Rd, Kampala, Uganda",
-          contactPhone: "+256 312 531300",
-          contactEmail: "info@nhl.co.ug",
-          services: ["Cardiology", "Neurology", "Oncology", "Emergency", "Diagnostics"],
-          openingHours: "24/7",
-          photoURL: "https://images.unsplash.com/photo-1519494026892-80bbd2d6fd0d?auto=format&fit=crop&q=80&w=800",
-          location: { lat: 0.3265, lng: 32.5815 }
-        },
-        {
-          name: "International Hospital Kampala (IHK)",
-          licenseNumber: "HOSP-UG-004",
-          address: "Plot 4686 Barnabas Rd, Namuwongo, Kampala",
-          contactPhone: "+256 312 200400",
-          contactEmail: "info@img.co.ug",
-          services: ["Emergency Medicine", "Intensive Care", "Surgery", "Maternity", "ICU"],
-          openingHours: "24/7",
-          photoURL: "https://images.unsplash.com/photo-1516549655169-df83a0774514?auto=format&fit=crop&q=80&w=800",
-          location: { lat: 0.3015, lng: 32.6105 }
-        },
-        {
-          name: "St. Francis Hospital Nsambya",
-          licenseNumber: "HOSP-UG-005",
-          address: "Nsambya Hill, Kampala, Uganda",
-          contactPhone: "+256 414 267012",
-          contactEmail: "info@nsambyahospital.or.ug",
-          services: ["Obstetrics", "Gynecology", "Pediatrics", "Surgery", "Maternity"],
-          openingHours: "24/7",
-          photoURL: "https://images.unsplash.com/photo-1512678080530-7760d81faba6?auto=format&fit=crop&q=80&w=800",
-          location: { lat: 0.3012, lng: 32.5878 }
-        },
-        {
-          name: "Case Hospital",
-          licenseNumber: "HOSP-UG-003",
-          address: "Plot 69/71 Buganda Rd, Kampala, Uganda",
-          contactPhone: "+256 312 250700",
-          contactEmail: "info@casemedicalcentre.com",
-          services: ["Dermatology", "Orthopedics", "Radiology", "General Practice", "Emergency", "Dental"],
-          openingHours: "24/7",
-          photoURL: "https://images.unsplash.com/photo-1538108197017-c13466739195?auto=format&fit=crop&q=80&w=800",
-          location: { lat: 0.3242, lng: 32.5786 }
-        },
-        {
-          name: "Uganda Martyrs Hospital Lubaga",
-          licenseNumber: "HOSP-UG-006",
-          address: "Lubaga Hill, Kampala, Uganda",
-          contactPhone: "+256 414 270221",
-          contactEmail: "info@lubagahospital.org",
-          services: ["General Medicine", "Surgery", "Maternity", "Pediatrics"],
-          openingHours: "24/7",
-          photoURL: "https://images.unsplash.com/photo-1504439468489-c8920d796a29?auto=format&fit=crop&q=80&w=800",
-          location: { lat: 0.3025, lng: 32.5535 }
-        },
-        {
-          name: "Mengo Hospital",
-          licenseNumber: "HOSP-UG-007",
-          address: "Namirembe Hill, Kampala, Uganda",
-          contactPhone: "+256 414 270222",
-          contactEmail: "info@mengohospital.org",
-          services: ["Dental", "Eye Care", "Surgery", "Maternity", "Pediatrics"],
-          openingHours: "24/7",
-          photoURL: "https://images.unsplash.com/photo-1519494026892-80bbd2d6fd0d?auto=format&fit=crop&q=80&w=800",
-          location: { lat: 0.3125, lng: 32.5595 }
-        },
-        {
-          name: "Kibuli Muslim Hospital",
-          licenseNumber: "HOSP-UG-008",
-          address: "Kibuli Hill, Kampala, Uganda",
-          contactPhone: "+256 414 235296",
-          contactEmail: "info@kibulihospital.org",
-          services: ["General Medicine", "Surgery", "Maternity", "Diagnostics"],
-          openingHours: "24/7",
-          photoURL: "https://images.unsplash.com/photo-1516549655169-df83a0774514?auto=format&fit=crop&q=80&w=800",
-          location: { lat: 0.3085, lng: 32.5975 }
-        }
-      ];
-      
       const batch = db.batch();
-      for (const hosp of hospitals) {
+      for (const hosp of DEFAULT_HOSPITALS) {
         const ref = db.collection("hospitals").doc();
         batch.set(ref, hosp);
       }
@@ -159,8 +231,12 @@ async function seedHospitalsIfEmpty() {
     } else {
       console.log("Hospitals collection already has records in Firestore.");
     }
-  } catch (err) {
-    console.error("Auto-seeding hospitals failed in server.ts:", err);
+  } catch (err: any) {
+    if (err?.message?.includes("PERMISSION_DENIED") || err?.code === 7) {
+      console.log("Note: Server-side Firebase Admin lacks write permissions for auto-seeding. Default fallback hospitals list will be served gracefully on backend requests.");
+    } else {
+      console.log("Auto-seeding database check notice:", err?.message || err);
+    }
   }
 }
 
@@ -1461,6 +1537,60 @@ Our backend clinical intelligence network is temporarily offline. Please contact
         lat: 0.3320,
         lng: 32.5730,
         reviews: ["Well-stocked, highly reliable 24-hour chemist and dispensary."]
+      },
+      {
+        name: "Mbarara Regional Referral Hospital",
+        address: "Mbarara-Kabale Road, Mbarara, Uganda",
+        type: "hospital" as const,
+        mapsUrl: `https://www.google.com/maps/search/?api=1&query=Mbarara+Regional+Referral+Hospital`,
+        lat: -0.6151,
+        lng: 30.6558,
+        reviews: ["Major teaching and referral hospital in Western Uganda.", "Spacious diagnostic and surgical wards."]
+      },
+      {
+        name: "Gulu Regional Referral Hospital",
+        address: "Hospital Road, Gulu, Uganda",
+        type: "hospital" as const,
+        mapsUrl: `https://www.google.com/maps/search/?api=1&query=Gulu+Regional+Referral+Hospital`,
+        lat: 2.7725,
+        lng: 32.3006,
+        reviews: ["Primary public referral health center in Northern Uganda.", "24/7 critical emergency and pediatric departments."]
+      },
+      {
+        name: "Jinja Regional Referral Hospital",
+        address: "Clifton Road, Jinja, Uganda",
+        type: "hospital" as const,
+        mapsUrl: `https://www.google.com/maps/search/?api=1&query=Jinja+Regional+Referral+Hospital`,
+        lat: 0.4283,
+        lng: 33.2045,
+        reviews: ["Large-scale public medical center in Eastern Uganda.", "Fully equipped maternity and surgical operations."]
+      },
+      {
+        name: "St. Mary's Hospital Lacor",
+        address: "Gulu-Nimule Road, Gulu, Uganda",
+        type: "hospital" as const,
+        mapsUrl: `https://www.google.com/maps/search/?api=1&query=St.+Marys+Hospital+Lacor+Gulu`,
+        lat: 2.7611,
+        lng: 32.2589,
+        reviews: ["Highly regarded mission-based private hospital with premium facilities.", "Affordable care, prompt treatment, and complete laboratory diagnostics."]
+      },
+      {
+        name: "Fort Portal Regional Referral Hospital",
+        address: "Fort Portal-Kasese Road, Fort Portal, Uganda",
+        type: "hospital" as const,
+        mapsUrl: `https://www.google.com/maps/search/?api=1&query=Fort+Portal+Regional+Referral+Hospital`,
+        lat: 0.6525,
+        lng: 30.2747,
+        reviews: ["Strategic referral center serving the Rwenzori sub-region.", "Professional clinical staff and emergency triage."]
+      },
+      {
+        name: "Mbale Regional Referral Hospital",
+        address: "Pallisa Road, Mbale, Uganda",
+        type: "hospital" as const,
+        mapsUrl: `https://www.google.com/maps/search/?api=1&query=Mbale+Regional+Referral+Hospital`,
+        lat: 1.0744,
+        lng: 34.1758,
+        reviews: ["Leading tertiary hospital in Mount Elgon region.", "Highly active outpatient and neonatal clinics."]
       }
     ];
 

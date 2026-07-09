@@ -30,6 +30,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const unsubscribeAuth = onAuthStateChanged(auth, (firebaseUser) => {
       setUser(firebaseUser);
       setIsAuthReady(true);
+      if (firebaseUser) {
+        if (typeof window !== 'undefined') {
+          localStorage.removeItem('firestoreQuotaExceeded');
+          (window as any).firestoreQuotaExceeded = false;
+        }
+      }
       if (!firebaseUser) {
         setProfile(null);
         setLoading(false);

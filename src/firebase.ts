@@ -69,8 +69,7 @@ if (typeof window !== 'undefined') {
       msg.includes('resource-exhausted') || 
       msg.includes('exhausted') || 
       code.includes('resource-exhausted') || 
-      code.includes('quota') ||
-      code.includes('permission-denied')
+      code.includes('quota')
     ) {
       if (!(window as any).firestoreQuotaExceeded) {
         console.warn("Global interception: Firestore quota limit exceeded. Seamlessly activating demo fallback.");
