@@ -26,13 +26,19 @@ import {
   Smartphone,
   Eye,
   EyeOff,
-  Compass
+  Compass,
+  Copy,
+  Check,
+  Database,
+  UserCheck
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 const Profile: React.FC = () => {
-  const { profile } = useAuth();
-  const [activeTab, setActiveTab] = useState<'personal' | 'security' | 'permissions'>('personal');
+  const { profile, user, isSuperAdmin, refreshProfile } = useAuth();
+  const [activeTab, setActiveTab] = useState<'account' | 'personal' | 'security' | 'permissions'>('account');
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [copiedUid, setCopiedUid] = useState(false);
 
   // Personal Info Form State
   const [formData, setFormData] = useState({
@@ -333,6 +339,30 @@ const Profile: React.FC = () => {
     }
   };
 
+  const handleCopyUid = () => {
+    if (profile?.uid) {
+      navigator.clipboard.writeText(profile.uid);
+      setCopiedUid(true);
+      setTimeout(() => setCopiedUid(false), 2000);
+    }
+  };
+
+  const handleSyncFromFirebase = async () => {
+    setIsSyncing(true);
+    setError('');
+    try {
+      const refreshed = await refreshProfile();
+      if (refreshed) {
+        setSuccess(true);
+        setTimeout(() => setSuccess(false), 3000);
+      }
+    } catch (err: any) {
+      setError(err.message || 'Failed to sync with Firebase');
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
   // Profile update handler
   const handleUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -533,10 +563,25 @@ const Profile: React.FC = () => {
               </button>
             </div>
             <h2 className="text-xl font-bold text-foreground mb-1">{profile.fullName || "User"}</h2>
-            <p className="text-sm text-primary font-bold uppercase tracking-widest mb-4">{profile.role}</p>
-            <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
-              <Mail className="w-4 h-4 text-muted-foreground/60" />
-              {profile.email}
+            <div className="flex items-center justify-center gap-2 mb-3">
+              {isSuperAdmin && (
+                <span className="px-2.5 py-0.5 bg-amber-500/15 border border-amber-500/30 text-amber-500 text-[10px] font-black uppercase rounded-full tracking-wider">
+                  Super Admin
+                </span>
+              )}
+              <span className={`px-2.5 py-0.5 text-[10px] font-black uppercase rounded-full tracking-wider ${
+                profile.role === 'admin' 
+                  ? 'bg-red-500/15 text-red-500 border border-red-500/30'
+                  : profile.role === 'doctor'
+                  ? 'bg-purple-500/15 text-purple-500 border border-purple-500/30'
+                  : 'bg-primary/15 text-primary border border-primary/30'
+              }`}>
+                {profile.role}
+              </span>
+            </div>
+            <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground break-all">
+              <Mail className="w-3.5 h-3.5 text-muted-foreground/60 shrink-0" />
+              <span>{profile.email}</span>
             </div>
           </div>
 
@@ -544,6 +589,18 @@ const Profile: React.FC = () => {
           <div className="bg-card p-6 rounded-[2rem] border border-border shadow-sm space-y-1.5">
             <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-widest px-4 mb-3">Profile Directory</h3>
             
+            <button 
+              onClick={() => setActiveTab('account')}
+              className={`w-full flex items-center gap-3 px-4 py-3.5 text-sm font-bold rounded-2xl transition-all ${
+                activeTab === 'account' 
+                  ? 'bg-primary text-primary-foreground shadow-lg shadow-primary/20' 
+                  : 'text-foreground/70 hover:bg-muted'
+              }`}
+            >
+              <UserCheck className="w-4 h-4" />
+              Account Overview
+            </button>
+
             <button 
               onClick={() => setActiveTab('personal')}
               className={`w-full flex items-center gap-3 px-4 py-3.5 text-sm font-bold rounded-2xl transition-all ${
@@ -598,6 +655,247 @@ const Profile: React.FC = () => {
               <AlertCircle className="w-5 h-5 shrink-0" />
               {error}
             </div>
+          )}
+
+          {/* TAB CONTENT: ACCOUNT OVERVIEW & SYNC */}
+          {activeTab === 'account' && (
+            <motion.div 
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="space-y-8"
+            >
+              {/* Account Credentials Card */}
+              <div className="bg-card p-8 lg:p-10 rounded-[2.5rem] border border-border shadow-sm">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8 pb-6 border-b border-border">
+                  <div className="flex items-center gap-3">
+                    <div className="p-3 bg-primary/10 text-primary rounded-2xl">
+                      <Database className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <h2 className="text-xl font-bold text-foreground">Firebase Account Information</h2>
+                      <p className="text-xs text-muted-foreground">Real-time credentials and cloud synchronization status.</p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleSyncFromFirebase}
+                    disabled={isSyncing}
+                    className="px-5 py-2.5 bg-primary text-primary-foreground font-bold rounded-2xl shadow-lg shadow-primary/20 hover:bg-neon-blue-dark transition-all flex items-center gap-2 text-xs uppercase tracking-wider disabled:opacity-50"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
+                    {isSyncing ? 'Syncing...' : 'Sync Live Data'}
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Account UID */}
+                  <div className="p-5 bg-muted/40 rounded-2xl border border-border">
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Account ID (UID)</span>
+                      <button
+                        onClick={handleCopyUid}
+                        className="p-1 text-muted-foreground hover:text-primary transition-colors flex items-center gap-1 text-[11px] font-bold"
+                        title="Copy UID"
+                      >
+                        {copiedUid ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+                        <span>{copiedUid ? 'Copied' : 'Copy'}</span>
+                      </button>
+                    </div>
+                    <p className="font-mono text-xs text-foreground font-semibold truncate select-all">{profile.uid}</p>
+                  </div>
+
+                  {/* Registered Email */}
+                  <div className="p-5 bg-muted/40 rounded-2xl border border-border">
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Primary Email</span>
+                      <span className="flex items-center gap-1 text-[11px] font-bold text-emerald-500">
+                        <CheckCircle2 className="w-3 h-3" />
+                        Verified
+                      </span>
+                    </div>
+                    <p className="text-sm font-bold text-foreground truncate">{profile.email}</p>
+                  </div>
+
+                  {/* Account Role */}
+                  <div className="p-5 bg-muted/40 rounded-2xl border border-border">
+                    <span className="block text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">Account Role</span>
+                    <div className="flex items-center gap-2">
+                      <span className={`px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider ${
+                        profile.role === 'admin' 
+                          ? 'bg-red-500/15 text-red-500 border border-red-500/30'
+                          : profile.role === 'doctor'
+                          ? 'bg-purple-500/15 text-purple-500 border border-purple-500/30'
+                          : 'bg-primary/15 text-primary border border-primary/30'
+                      }`}>
+                        {profile.role}
+                      </span>
+                      {isSuperAdmin && (
+                        <span className="px-3 py-1 bg-amber-500/15 text-amber-500 border border-amber-500/30 text-xs font-black uppercase rounded-full tracking-wider">
+                          Super Administrator
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Account Status */}
+                  <div className="p-5 bg-muted/40 rounded-2xl border border-border">
+                    <span className="block text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">Account Status</span>
+                    <div className="flex items-center gap-2 text-emerald-500">
+                      <CheckCircle2 className="w-4 h-4" />
+                      <span className="text-sm font-bold capitalize">{profile.status || 'Active & Approved'}</span>
+                    </div>
+                  </div>
+
+                  {/* Registration Date */}
+                  <div className="p-5 bg-muted/40 rounded-2xl border border-border">
+                    <span className="block text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1.5">Member Since</span>
+                    <p className="text-sm font-semibold text-foreground">
+                      {profile.createdAt 
+                        ? (typeof (profile.createdAt as any).toDate === 'function'
+                          ? (profile.createdAt as any).toDate().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
+                          : new Date(profile.createdAt).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }))
+                        : 'Active Account'}
+                    </p>
+                  </div>
+
+                  {/* Cloud Database Connection */}
+                  <div className="p-5 bg-muted/40 rounded-2xl border border-border">
+                    <span className="block text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1.5">Firestore Database</span>
+                    <div className="flex items-center gap-2">
+                      <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></div>
+                      <p className="text-xs font-mono text-foreground font-semibold">ai-studio-2c06ddec-6489-487d-8e1a-9fb253ac0c74</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Doctor-Specific Workspace Snapshot if applicable */}
+                {profile.role === 'doctor' && (
+                  <div className="mt-6 p-5 bg-purple-500/5 border border-purple-500/20 rounded-2xl">
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-purple-400 mb-3">Doctor Credentials & Workplace</h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
+                      <div>
+                        <span className="text-muted-foreground block mb-0.5">Specialization</span>
+                        <p className="font-bold text-foreground">{profile.specialization || 'Not specified'}</p>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground block mb-0.5">License Number</span>
+                        <p className="font-bold text-foreground font-mono">{profile.licenseNumber || 'Not specified'}</p>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground block mb-0.5">Affiliated Hospital</span>
+                        <p className="font-bold text-foreground">{profile.hospitalName || 'Independent Practitioner'}</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Quick Update Account Information Form */}
+              <div className="bg-card p-8 lg:p-10 rounded-[2.5rem] border border-border shadow-sm">
+                <div className="flex items-center gap-3 mb-6 pb-4 border-b border-border">
+                  <div className="p-3 bg-primary/10 text-primary rounded-2xl">
+                    <User className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-bold text-foreground">Update Account Details</h3>
+                    <p className="text-xs text-muted-foreground">Changes are saved directly to Cloud Firestore.</p>
+                  </div>
+                </div>
+
+                <form onSubmit={handleUpdate} className="space-y-6">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                    <div>
+                      <label className="block text-xs font-bold text-foreground/70 uppercase tracking-wider mb-2">Display Name</label>
+                      <input
+                        type="text"
+                        name="fullName"
+                        value={formData.fullName}
+                        onChange={handleChange}
+                        className="w-full px-5 py-3.5 bg-muted/50 border border-border rounded-2xl focus:ring-2 focus:ring-primary outline-none transition-all text-foreground text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-foreground/70 uppercase tracking-wider mb-2">Phone Number</label>
+                      <input
+                        type="tel"
+                        name="phoneNumber"
+                        value={formData.phoneNumber}
+                        onChange={handleChange}
+                        placeholder="+256 700 000000"
+                        className="w-full px-5 py-3.5 bg-muted/50 border border-border rounded-2xl focus:ring-2 focus:ring-primary outline-none transition-all text-foreground text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-foreground/70 uppercase tracking-wider mb-2">Gender</label>
+                      <select
+                        name="gender"
+                        value={formData.gender}
+                        onChange={handleChange}
+                        className="w-full px-5 py-3.5 bg-muted/50 border border-border rounded-2xl focus:ring-2 focus:ring-primary outline-none transition-all text-foreground text-sm"
+                      >
+                        <option value="">Select Gender</option>
+                        <option value="male">Male</option>
+                        <option value="female">Female</option>
+                        <option value="other">Other</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-foreground/70 uppercase tracking-wider mb-2">Age</label>
+                      <input
+                        type="number"
+                        name="age"
+                        value={formData.age}
+                        onChange={handleChange}
+                        placeholder="Age in years"
+                        className="w-full px-5 py-3.5 bg-muted/50 border border-border rounded-2xl focus:ring-2 focus:ring-primary outline-none transition-all text-foreground text-sm"
+                      />
+                    </div>
+                  </div>
+
+                  {profile.role === 'doctor' && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 pt-4 border-t border-border">
+                      <div>
+                        <label className="block text-xs font-bold text-foreground/70 uppercase tracking-wider mb-2">Specialization</label>
+                        <input
+                          type="text"
+                          name="specialization"
+                          value={formData.specialization}
+                          onChange={handleChange}
+                          placeholder="e.g. Cardiology"
+                          className="w-full px-5 py-3.5 bg-muted/50 border border-border rounded-2xl focus:ring-2 focus:ring-primary outline-none transition-all text-foreground text-sm"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-bold text-foreground/70 uppercase tracking-wider mb-2">Years of Experience</label>
+                        <input
+                          type="number"
+                          name="experience"
+                          value={formData.experience}
+                          onChange={handleChange}
+                          placeholder="Years"
+                          className="w-full px-5 py-3.5 bg-muted/50 border border-border rounded-2xl focus:ring-2 focus:ring-primary outline-none transition-all text-foreground text-sm"
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="flex justify-end pt-4">
+                    <button
+                      type="submit"
+                      disabled={loading}
+                      className="px-8 py-3.5 bg-primary text-primary-foreground font-black rounded-2xl shadow-xl shadow-primary/20 hover:bg-neon-blue-dark transition-all flex items-center gap-2 uppercase tracking-wider text-sm disabled:opacity-50"
+                    >
+                      {loading ? (
+                        <div className="w-4 h-4 border-2 border-primary-foreground border-t-transparent rounded-full animate-spin" />
+                      ) : (
+                        <Save className="w-4 h-4" />
+                      )}
+                      {loading ? 'Saving...' : 'Save Account Information'}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </motion.div>
           )}
 
           {/* TAB CONTENT: PERSONAL INFO */}

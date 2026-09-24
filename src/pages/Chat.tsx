@@ -20,10 +20,12 @@ const VoiceMessagePlayer: React.FC<{ src: string; duration?: number; isMeOnLayou
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [audioDuration, setAudioDuration] = useState(duration || 0);
+  const [playbackSpeed, setPlaybackSpeed] = useState(1);
 
   useEffect(() => {
     const audio = new Audio(src);
     audioRef.current = audio;
+    audio.playbackRate = playbackSpeed;
 
     const onTimeUpdate = () => setCurrentTime(audio.currentTime);
     const onEnded = () => {
@@ -48,6 +50,12 @@ const VoiceMessagePlayer: React.FC<{ src: string; duration?: number; isMeOnLayou
     };
   }, [src]);
 
+  useEffect(() => {
+    if (audioRef.current) {
+      audioRef.current.playbackRate = playbackSpeed;
+    }
+  }, [playbackSpeed]);
+
   const togglePlay = () => {
     if (!audioRef.current) return;
     if (isPlaying) {
@@ -59,44 +67,88 @@ const VoiceMessagePlayer: React.FC<{ src: string; duration?: number; isMeOnLayou
     }
   };
 
+  const handleSpeedChange = () => {
+    setPlaybackSpeed(prev => {
+      if (prev === 1) return 1.25;
+      if (prev === 1.25) return 1.5;
+      if (prev === 1.5) return 2;
+      return 1;
+    });
+  };
+
+  const handleSliderChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = parseFloat(e.target.value);
+    setCurrentTime(val);
+    if (audioRef.current) {
+      audioRef.current.currentTime = val;
+    }
+  };
+
   const formatSecs = (s: number) => {
-    const min = Math.floor(s / 60);
+    if (!s || isNaN(s) || s === Infinity) return '0:00';
+    const h = Math.floor(s / 3600);
+    const min = Math.floor((s % 3600) / 60);
     const sec = Math.floor(s % 60);
+    if (h > 0) {
+      return `${h}:${min < 10 ? '0' : ''}${min}:${sec < 10 ? '0' : ''}${sec}`;
+    }
     return `${min}:${sec < 10 ? '0' : ''}${sec}`;
   };
 
   return (
     <div className={cn(
-      "flex items-center gap-3 p-3 rounded-2xl w-64 max-w-full",
-      isMeOnLayout ? "bg-slate-900 text-white" : "bg-slate-100 dark:bg-slate-900 text-slate-800 dark:text-white"
+      "flex flex-col gap-2.5 p-3.5 rounded-2xl w-80 max-w-full border shadow-sm transition-all",
+      isMeOnLayout 
+        ? "bg-slate-900 border-slate-800 text-white" 
+        : "bg-slate-50 dark:bg-slate-900/60 border-slate-200/60 dark:border-slate-800 text-slate-800 dark:text-white"
     )}>
-      <button 
-        type="button"
-        onClick={togglePlay}
-        className="w-10 h-10 rounded-full bg-neon-blue text-slate-900 flex items-center justify-center transition-all hover:scale-105 shadow shrink-0"
-      >
-        {isPlaying ? (
-          <span className="w-3.5 h-3.5 flex gap-0.5 items-center justify-center">
-            <span className="w-1 h-3 bg-slate-900 animate-pulse inline-block rounded-full"></span>
-            <span className="w-1 h-3.5 bg-slate-900 animate-pulse inline-block rounded-full [animation-delay:0.2s]"></span>
-            <span className="w-1 h-3 bg-slate-900 animate-pulse inline-block rounded-full [animation-delay:0.4s]"></span>
-          </span>
-        ) : (
-          <Play className="w-4 h-4 text-slate-900 ml-0.5 fill-slate-900" />
-        )}
-      </button>
+      <div className="flex items-center gap-3">
+        <button 
+          type="button"
+          onClick={togglePlay}
+          className="w-10 h-10 rounded-full bg-neon-blue text-slate-900 flex items-center justify-center transition-all hover:scale-105 active:scale-95 shadow shrink-0 cursor-pointer"
+        >
+          {isPlaying ? (
+            <Pause className="w-4 h-4 text-slate-900 fill-slate-900" />
+          ) : (
+            <Play className="w-4 h-4 text-slate-900 ml-0.5 fill-slate-900" />
+          )}
+        </button>
 
-      <div className="flex-grow min-w-0">
-        <div className="flex items-center justify-between gap-2 mb-1.5Packed">
-          <span className="text-[10px] font-bold uppercase tracking-wider text-neon-blue">Voice Note</span>
-          <span className="text-[10px] opacity-60 font-mono text-slate-400">{formatSecs(currentTime)} / {formatSecs(audioDuration || 0)}</span>
+        <div className="flex-grow min-w-0">
+          <div className="flex items-center justify-between gap-2 mb-1">
+            <span className="text-[10px] font-black uppercase tracking-wider text-neon-blue flex items-center gap-1">
+              <span className="w-1.5 h-1.5 bg-neon-blue rounded-full animate-pulse" />
+              Voice Note
+            </span>
+            <button 
+              type="button"
+              onClick={handleSpeedChange}
+              className="text-[10px] font-bold bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 px-2 py-0.5 rounded transition-all cursor-pointer select-none"
+            >
+              {playbackSpeed}x
+            </button>
+          </div>
+          <div className="flex items-center justify-between text-[10px] opacity-75 font-mono text-slate-500 dark:text-slate-400">
+            <span>{formatSecs(currentTime)}</span>
+            <span>{formatSecs(audioDuration || 0)}</span>
+          </div>
         </div>
-        <div className="w-full h-1.5 bg-slate-700/30 dark:bg-slate-600/30 rounded-full overflow-hidden relative">
-          <div 
-            className="h-full bg-neon-blue rounded-full"
-            style={{ width: `${(currentTime / (audioDuration || 1)) * 100}%` }}
-          />
-        </div>
+      </div>
+
+      <div className="px-1 py-1 flex items-center">
+        <input 
+          type="range"
+          min={0}
+          max={audioDuration || 1}
+          step={0.1}
+          value={currentTime}
+          onChange={handleSliderChange}
+          className="w-full h-1.5 accent-neon-blue bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer focus:outline-none transition-all"
+          style={{
+            background: `linear-gradient(to right, #00f0ff 0%, #00f0ff ${(currentTime / (audioDuration || 1)) * 100}%, ${isMeOnLayout ? '#334155' : '#cbd5e1'} ${(currentTime / (audioDuration || 1)) * 100}%, ${isMeOnLayout ? '#334155' : '#cbd5e1'} 100%)`
+          }}
+        />
       </div>
     </div>
   );
@@ -187,7 +239,11 @@ const Chat: React.FC = () => {
   const startRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mediaRecorder = new MediaRecorder(stream);
+      let options: any = { audioBitsPerSecond: 16000 };
+      if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
+        options.mimeType = 'audio/webm;codecs=opus';
+      }
+      const mediaRecorder = new MediaRecorder(stream, options);
       mediaRecorderRef.current = mediaRecorder;
       audioChunksRef.current = [];
 
@@ -255,7 +311,7 @@ const Chat: React.FC = () => {
           let uploadStalledTimeout = setTimeout(() => {
             console.warn("Audio storage upload stalled (timeout), cancelling and falling back to base64...");
             uploadTask.cancel();
-          }, 300);
+          }, 30000); // 30 seconds to allow heavy uploads over various connection speeds
 
           uploadTask.on('state_changed', 
             (snapshot) => {
@@ -314,7 +370,16 @@ const Chat: React.FC = () => {
       setRecordingDuration(0);
 
       recordingTimerRef.current = setInterval(() => {
-        setRecordingDuration(prev => prev + 1);
+        setRecordingDuration(prev => {
+          if (prev >= 3600) {
+            clearInterval(recordingTimerRef.current);
+            if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
+              mediaRecorderRef.current.stop();
+            }
+            return 3600;
+          }
+          return prev + 1;
+        });
       }, 1000);
 
     } catch (error) {
@@ -481,6 +546,11 @@ const Chat: React.FC = () => {
     const file = e.target.files?.[0];
     if (!file || !roomId || !profile) return;
 
+    if (file.size > 1024 * 1024 * 1024) {
+      alert(`The selected file is too large (${(file.size / 1024 / 1024).toFixed(2)}MB). The maximum supported file size is 1GB.`);
+      return;
+    }
+
     setUploadingFile(true);
     setUploadProgress(10); // Start progress bar
 
@@ -542,7 +612,7 @@ const Chat: React.FC = () => {
       let uploadStalledTimeout = setTimeout(() => {
         console.warn("File storage upload stalled (timeout), cancelling and falling back to base64...");
         uploadTask.cancel();
-      }, 300);
+      }, 30000); // 30 seconds to allow heavy file uploads to initialize
 
       uploadTask.on('state_changed', 
         (snapshot) => {
@@ -556,7 +626,7 @@ const Chat: React.FC = () => {
           clearTimeout(uploadStalledTimeout);
           console.warn("Storage upload failed, attempting backend database fallback:", error);
           if (file.size > 800 * 1024) {
-            alert(`File sharing failed. Firebase Storage is not enabled on your project, and this file (${(file.size / 1024 / 1024).toFixed(2)}MB) exceeds the 800KB offline limit. Please compress or link a smaller file.`);
+            alert(`File sharing failed. This file (${(file.size / 1024 / 1024).toFixed(2)}MB) exceeds the 800KB offline database limit. Please ensure your Firebase Storage is fully configured and active to transfer files up to 1GB.`);
             setUploadingFile(false);
             setUploadProgress(0);
             return;
@@ -577,7 +647,7 @@ const Chat: React.FC = () => {
     } catch (err) {
       console.warn("Could not initiate Storage upload, using database fallback route:", err);
       if (file.size > 800 * 1024) {
-        alert(`Storage is not configured or offline, and this file exceeds the 800KB database fallback limit.`);
+        alert(`Storage is not configured or offline, and this file exceeds the 800KB database fallback limit. Large uploads up to 1GB require an active Firebase Storage service.`);
         setUploadingFile(false);
         setUploadProgress(0);
         return;
@@ -886,7 +956,9 @@ const Chat: React.FC = () => {
                 <span className="w-2.5 h-2.5 bg-red-500 rounded-full animate-ping shrink-0" />
                 <span className="font-bold text-red-500 uppercase tracking-widest text-[10px]">Recording Voice Note</span>
                 <span className="font-mono text-slate-500 dark:text-slate-400 font-bold pl-2 border-l border-slate-300 dark:border-slate-700">
-                  {Math.floor(recordingDuration / 60)}:{(recordingDuration % 60) < 10 ? '0' : ''}{recordingDuration % 60}
+                  {recordingDuration >= 3600 
+                    ? `${Math.floor(recordingDuration / 3600)}:${Math.floor((recordingDuration % 3600) / 60) < 10 ? '0' : ''}${Math.floor((recordingDuration % 3600) / 60)}` 
+                    : Math.floor(recordingDuration / 60)}:{(recordingDuration % 60) < 10 ? '0' : ''}{recordingDuration % 60}
                 </span>
               </div>
               <div className="flex items-center gap-2">

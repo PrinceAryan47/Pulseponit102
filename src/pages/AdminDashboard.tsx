@@ -26,7 +26,11 @@ import {
   RefreshCw,
   Plus,
   Trash2,
-  Globe
+  Globe,
+  Edit2,
+  Save,
+  Copy,
+  Check
 } from 'lucide-react';
 import { collection, query, getDocs, getDoc, setDoc, serverTimestamp, updateDoc, doc, where, orderBy, limit, getCountFromServer, deleteDoc, addDoc, onSnapshot } from 'firebase/firestore';
 import { auth, db } from '../firebase';
@@ -174,6 +178,23 @@ const AdminDashboard: React.FC = () => {
   const [generatedNews, setGeneratedNews] = useState<GeneratedArticle[]>([]);
   const [showNewsPreview, setShowNewsPreview] = useState(false);
 
+  // User Account Detail & Edit Modal State
+  const [selectedUser, setSelectedUser] = useState<UserProfile | null>(null);
+  const [isEditingUser, setIsEditingUser] = useState(false);
+  const [userEditForm, setUserEditForm] = useState({
+    fullName: '',
+    phoneNumber: '',
+    role: 'patient' as 'patient' | 'doctor' | 'admin',
+    status: 'approved' as 'approved' | 'pending' | 'rejected',
+    specialization: '',
+    licenseNumber: '',
+    hospitalId: '',
+    hospitalName: '',
+  });
+  const [isSavingUser, setIsSavingUser] = useState(false);
+  const [isRefreshingData, setIsRefreshingData] = useState(false);
+  const [copiedModalUid, setCopiedModalUid] = useState(false);
+
   useEffect(() => {
     setLoading(true);
     let unsubUsers = () => {};
@@ -296,6 +317,80 @@ const AdminDashboard: React.FC = () => {
 
   const fetchData = async () => {
     // This is now handled by onSnapshot in useEffect
+  };
+
+  const handleOpenUserDetail = (userProfile: UserProfile) => {
+    setSelectedUser(userProfile);
+    setUserEditForm({
+      fullName: userProfile.fullName || '',
+      phoneNumber: userProfile.phoneNumber || '',
+      role: (userProfile.role as any) || 'patient',
+      status: (userProfile.status as any) || 'approved',
+      specialization: userProfile.specialization || '',
+      licenseNumber: userProfile.licenseNumber || '',
+      hospitalId: userProfile.hospitalId || '',
+      hospitalName: userProfile.hospitalName || '',
+    });
+    setIsEditingUser(false);
+  };
+
+  const handleSaveUserAccount = async () => {
+    if (!selectedUser) return;
+    setIsSavingUser(true);
+    try {
+      const userRef = doc(db, 'users', selectedUser.uid);
+      const updatePayload: any = {
+        fullName: userEditForm.fullName,
+        phoneNumber: userEditForm.phoneNumber,
+        role: userEditForm.role,
+        status: userEditForm.status,
+      };
+
+      if (userEditForm.role === 'doctor') {
+        updatePayload.specialization = userEditForm.specialization;
+        updatePayload.licenseNumber = userEditForm.licenseNumber;
+        updatePayload.hospitalId = userEditForm.hospitalId;
+        const matchedHospital = hospitals.find(h => h.id === userEditForm.hospitalId);
+        updatePayload.hospitalName = matchedHospital ? matchedHospital.name : userEditForm.hospitalName;
+        updatePayload.licenseVerificationStatus = userEditForm.status === 'approved' ? 'verified' : (userEditForm.status === 'rejected' ? 'rejected' : 'pending');
+        updatePayload.hospitalApprovalStatus = userEditForm.status;
+      }
+
+      await updateDoc(userRef, updatePayload);
+      
+      setSelectedUser({ ...selectedUser, ...updatePayload });
+      setAlertConfig({ isOpen: true, message: `Account for ${userEditForm.fullName} updated successfully!`, type: 'success' });
+      setIsEditingUser(false);
+    } catch (err: any) {
+      console.error("Error updating user account:", err);
+      setAlertConfig({ isOpen: true, message: err.message || "Failed to update user account.", type: 'error' });
+    } finally {
+      setIsSavingUser(false);
+    }
+  };
+
+  const handleRefreshAllData = async () => {
+    setIsRefreshingData(true);
+    try {
+      const [uSnap, hSnap, aSnap] = await Promise.all([
+        getDocs(query(collection(db, 'users'), orderBy('createdAt', 'desc'))),
+        getDocs(collection(db, 'hospitals')),
+        getDocs(query(collection(db, 'articles'), orderBy('createdAt', 'desc')))
+      ]);
+      setUsers(uSnap.docs.map(d => ({ uid: d.id, ...d.data() } as UserProfile)));
+      setHospitals(hSnap.docs.map(d => ({ id: d.id, ...d.data() } as HospitalType)));
+      setArticles(aSnap.docs.map(d => ({ id: d.id, ...d.data() } as unknown as Article)));
+      setAlertConfig({ 
+        isOpen: true, 
+        message: `Firebase refreshed! Verified ${uSnap.size} accounts, ${hSnap.size} hospitals, and ${aSnap.size} articles.`, 
+        type: 'success' 
+      });
+    } catch (err: any) {
+      console.error("Error refreshing data:", err);
+      setAlertConfig({ isOpen: true, message: err.message || "Failed to refresh Firebase data.", type: 'error' });
+    } finally {
+      setIsRefreshingData(false);
+    }
   };
 
   const handleVerifyDoctor = async (userId: string, status: 'approved' | 'rejected') => {
@@ -499,6 +594,15 @@ const AdminDashboard: React.FC = () => {
               {isGeneratingNews ? 'Analyzing...' : 'AI News Analyzer'}
             </button>
           )}
+          <button 
+            onClick={handleRefreshAllData}
+            disabled={isRefreshingData}
+            className="px-5 py-3 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 font-black rounded-2xl hover:bg-slate-200 dark:hover:bg-slate-700 transition-all flex items-center gap-2 uppercase tracking-tighter text-xs"
+            title="Fetch latest data from Cloud Firestore"
+          >
+            <RefreshCw className={cn("w-4 h-4", isRefreshingData && "animate-spin text-neon-blue")} />
+            {isRefreshingData ? 'Syncing...' : 'Refresh Firebase'}
+          </button>
           <button 
             onClick={fetchSystemStats}
             disabled={isGeneratingReport}
@@ -842,7 +946,11 @@ const AdminDashboard: React.FC = () => {
                     </td>
                     <td className="px-6 py-4 text-right">
                       <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button className="p-2 text-slate-400 hover:text-neon-blue hover:bg-neon-blue/10 rounded-lg transition-all">
+                        <button 
+                          onClick={() => handleOpenUserDetail(user)}
+                          className="p-2 text-slate-400 hover:text-neon-blue hover:bg-neon-blue/10 rounded-lg transition-all"
+                          title="View & Edit Account Details"
+                        >
                           <Eye className="w-4 h-4" />
                         </button>
                         {user.role === 'doctor' && user.status === 'pending' && (
@@ -1408,6 +1516,293 @@ const AdminDashboard: React.FC = () => {
           </div>
         )}
       </AnimatePresence>
+      {/* User Account Details & Edit Modal */}
+      <AnimatePresence>
+        {selectedUser && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-sm overflow-y-auto">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="bg-white dark:bg-slate-900 rounded-[2.5rem] p-8 max-w-2xl w-full shadow-2xl border border-slate-200 dark:border-slate-800 my-8"
+            >
+              {/* Modal Header */}
+              <div className="flex items-start justify-between gap-4 pb-6 border-b border-slate-100 dark:border-slate-800 mb-6">
+                <div className="flex items-center gap-4">
+                  <div className="w-16 h-16 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center border border-slate-200 dark:border-slate-700 overflow-hidden shrink-0">
+                    {selectedUser.photoURL ? (
+                      <img src={selectedUser.photoURL} alt="" className="w-full h-full object-cover" />
+                    ) : (
+                      <User className="w-8 h-8 text-slate-400" />
+                    )}
+                  </div>
+                  <div>
+                    <h3 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">{selectedUser.fullName}</h3>
+                    <p className="text-sm text-slate-500 font-medium">{selectedUser.email}</p>
+                    <div className="flex items-center gap-2 mt-2">
+                      <span className={cn(
+                        "px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider",
+                        selectedUser.role === 'admin' ? "bg-red-500/10 text-red-500" :
+                        selectedUser.role === 'doctor' ? "bg-purple-500/10 text-purple-500" : "bg-blue-500/10 text-blue-500"
+                      )}>
+                        {selectedUser.role}
+                      </span>
+                      <span className={cn(
+                        "px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider",
+                        selectedUser.status === 'approved' || selectedUser.role === 'patient' ? "bg-emerald-500/10 text-emerald-500" :
+                        selectedUser.status === 'pending' ? "bg-amber-500/10 text-amber-500" : "bg-rose-500/10 text-rose-500"
+                      )}>
+                        {selectedUser.status || 'Active'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => setSelectedUser(null)}
+                  className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* View/Edit Mode Toggle */}
+              <div className="flex bg-slate-100 dark:bg-slate-800/60 p-1.5 rounded-2xl mb-6">
+                <button
+                  type="button"
+                  onClick={() => setIsEditingUser(false)}
+                  className={cn(
+                    "flex-1 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all",
+                    !isEditingUser ? "bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm" : "text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
+                  )}
+                >
+                  Account Information
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsEditingUser(true)}
+                  className={cn(
+                    "flex-1 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center justify-center gap-1.5",
+                    isEditingUser ? "bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm" : "text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
+                  )}
+                >
+                  <Edit2 className="w-3.5 h-3.5" />
+                  Edit Account
+                </button>
+              </div>
+
+              {!isEditingUser ? (
+                /* READ-ONLY ACCOUNT DETAILS */
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="p-4 bg-slate-50 dark:bg-slate-800/40 rounded-2xl border border-slate-100 dark:border-slate-800">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Account UID</span>
+                        <button
+                          onClick={() => {
+                            if (selectedUser.uid) {
+                              navigator.clipboard.writeText(selectedUser.uid);
+                              setCopiedModalUid(true);
+                              setTimeout(() => setCopiedModalUid(false), 2000);
+                            }
+                          }}
+                          className="text-[10px] text-neon-blue font-bold flex items-center gap-1"
+                        >
+                          {copiedModalUid ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
+                          {copiedModalUid ? 'Copied' : 'Copy'}
+                        </button>
+                      </div>
+                      <p className="font-mono text-xs text-slate-700 dark:text-slate-300 truncate select-all">{selectedUser.uid}</p>
+                    </div>
+
+                    <div className="p-4 bg-slate-50 dark:bg-slate-800/40 rounded-2xl border border-slate-100 dark:border-slate-800">
+                      <span className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1">Phone Number</span>
+                      <p className="text-sm font-bold text-slate-700 dark:text-slate-300">{selectedUser.phoneNumber || 'Not provided'}</p>
+                    </div>
+
+                    <div className="p-4 bg-slate-50 dark:bg-slate-800/40 rounded-2xl border border-slate-100 dark:border-slate-800">
+                      <span className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1">Created Date</span>
+                      <p className="text-sm font-bold text-slate-700 dark:text-slate-300">{formatDate(selectedUser.createdAt)}</p>
+                    </div>
+
+                    <div className="p-4 bg-slate-50 dark:bg-slate-800/40 rounded-2xl border border-slate-100 dark:border-slate-800">
+                      <span className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1">Online Presence</span>
+                      <div className="flex items-center gap-2">
+                        <div className={cn("w-2.5 h-2.5 rounded-full", selectedUser.isOnline ? "bg-emerald-500 animate-pulse" : "bg-slate-400")} />
+                        <span className="text-sm font-bold text-slate-700 dark:text-slate-300">{selectedUser.isOnline ? 'Online Now' : 'Offline'}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {selectedUser.role === 'doctor' && (
+                    <div className="p-4 bg-purple-500/5 rounded-2xl border border-purple-500/20 space-y-2">
+                      <h4 className="text-xs font-bold uppercase tracking-wider text-purple-400">Doctor Credentials</h4>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                        <div>
+                          <span className="text-slate-400 block mb-0.5">Specialization</span>
+                          <p className="font-bold text-slate-800 dark:text-slate-200">{selectedUser.specialization || 'General'}</p>
+                        </div>
+                        <div>
+                          <span className="text-slate-400 block mb-0.5">License Number</span>
+                          <p className="font-bold text-slate-800 dark:text-slate-200 font-mono">{selectedUser.licenseNumber || 'None'}</p>
+                        </div>
+                        <div>
+                          <span className="text-slate-400 block mb-0.5">Hospital</span>
+                          <p className="font-bold text-slate-800 dark:text-slate-200">{selectedUser.hospitalName || 'Unassigned'}</p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="flex justify-end pt-4 gap-3">
+                    <button
+                      onClick={() => setSelectedUser(null)}
+                      className="px-6 py-3 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 font-black rounded-2xl hover:bg-slate-200 dark:hover:bg-slate-700 transition-all uppercase tracking-wider text-xs"
+                    >
+                      Close
+                    </button>
+                    <button
+                      onClick={() => setIsEditingUser(true)}
+                      className="px-6 py-3 bg-primary text-primary-foreground font-black rounded-2xl hover:bg-primary/90 transition-all flex items-center gap-2 uppercase tracking-wider text-xs shadow-lg shadow-primary/20"
+                    >
+                      <Edit2 className="w-3.5 h-3.5" />
+                      Edit Account Info
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                /* EDIT ACCOUNT DETAILS FORM */
+                <form onSubmit={(e) => { e.preventDefault(); handleSaveUserAccount(); }} className="space-y-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5">Full Name</label>
+                      <input
+                        type="text"
+                        value={userEditForm.fullName}
+                        onChange={(e) => setUserEditForm({ ...userEditForm, fullName: e.target.value })}
+                        className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl font-bold text-sm focus:outline-none focus:ring-2 focus:ring-neon-blue/20"
+                        required
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5">Phone Number</label>
+                      <input
+                        type="tel"
+                        value={userEditForm.phoneNumber}
+                        onChange={(e) => setUserEditForm({ ...userEditForm, phoneNumber: e.target.value })}
+                        placeholder="+256..."
+                        className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl font-bold text-sm focus:outline-none focus:ring-2 focus:ring-neon-blue/20"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5">Account Role</label>
+                      <select
+                        value={userEditForm.role}
+                        onChange={(e) => setUserEditForm({ ...userEditForm, role: e.target.value as any })}
+                        className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl font-bold text-sm focus:outline-none focus:ring-2 focus:ring-neon-blue/20"
+                      >
+                        <option value="patient">Patient</option>
+                        <option value="doctor">Doctor</option>
+                        <option value="admin">Administrator</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5">Account Status</label>
+                      <select
+                        value={userEditForm.status}
+                        onChange={(e) => setUserEditForm({ ...userEditForm, status: e.target.value as any })}
+                        className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl font-bold text-sm focus:outline-none focus:ring-2 focus:ring-neon-blue/20"
+                      >
+                        <option value="approved">Approved / Active</option>
+                        <option value="pending">Pending Review</option>
+                        <option value="rejected">Rejected</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Doctor Fields */}
+                  {userEditForm.role === 'doctor' && (
+                    <div className="pt-3 border-t border-slate-100 dark:border-slate-800 space-y-3">
+                      <h4 className="text-xs font-bold uppercase tracking-wider text-purple-400">Doctor Credentials Configuration</h4>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5">Specialization</label>
+                          <input
+                            type="text"
+                            value={userEditForm.specialization}
+                            onChange={(e) => setUserEditForm({ ...userEditForm, specialization: e.target.value })}
+                            placeholder="e.g. Cardiology"
+                            className="w-full px-4 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl font-bold text-xs"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5">Medical License No.</label>
+                          <input
+                            type="text"
+                            value={userEditForm.licenseNumber}
+                            onChange={(e) => setUserEditForm({ ...userEditForm, licenseNumber: e.target.value })}
+                            placeholder="e.g. LIC-12345"
+                            className="w-full px-4 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl font-bold text-xs"
+                          />
+                        </div>
+
+                        <div className="sm:col-span-2">
+                          <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5">Assigned Hospital</label>
+                          <select
+                            value={userEditForm.hospitalId}
+                            onChange={(e) => {
+                              const hId = e.target.value;
+                              const match = hospitals.find(h => h.id === hId);
+                              setUserEditForm({
+                                ...userEditForm,
+                                hospitalId: hId,
+                                hospitalName: match ? match.name : ''
+                              });
+                            }}
+                            className="w-full px-4 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl font-bold text-xs"
+                          >
+                            <option value="">Select Hospital</option>
+                            {hospitals.map(h => (
+                              <option key={h.id} value={h.id}>{h.name}</option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Action buttons */}
+                  <div className="flex justify-end pt-4 gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setIsEditingUser(false)}
+                      className="px-6 py-3 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 font-black rounded-2xl hover:bg-slate-200 dark:hover:bg-slate-700 transition-all uppercase tracking-wider text-xs"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={isSavingUser}
+                      className="px-8 py-3 bg-neon-blue text-slate-900 font-black rounded-2xl hover:bg-neon-blue-dark transition-all flex items-center gap-2 uppercase tracking-wider text-xs shadow-lg shadow-neon-blue/20 disabled:opacity-50"
+                    >
+                      {isSavingUser ? (
+                        <div className="w-4 h-4 border-2 border-slate-900 border-t-transparent rounded-full animate-spin" />
+                      ) : (
+                        <Save className="w-4 h-4" />
+                      )}
+                      {isSavingUser ? 'Saving...' : 'Save to Firebase'}
+                    </button>
+                  </div>
+                </form>
+              )}
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
       {/* Custom Confirmation Modal */}
       {modalConfig.isOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-sm">

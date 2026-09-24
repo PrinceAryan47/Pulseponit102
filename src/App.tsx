@@ -41,11 +41,10 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
 };
 
 const SuperAdminRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { user, loading } = useAuth();
-  const admins = ["mafialord1247@gmail.com", "mafia.lord1247@gmail.com", "prince47aryan@gmail.com"];
+  const { user, loading, isSuperAdmin } = useAuth();
   
   if (loading) return <LoadingScreen />;
-  if (!user || !admins.includes(user.email || '')) return <Navigate to="/" />;
+  if (!user || !isSuperAdmin) return <Navigate to="/" />;
   return <>{children}</>;
 };
 

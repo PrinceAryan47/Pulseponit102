@@ -64,7 +64,7 @@ const pageVariants = {
 };
 
 const Layout: React.FC = () => {
-  const { user, profile } = useAuth();
+  const { user, profile, isSuperAdmin } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
   const location = useLocation();
@@ -182,9 +182,6 @@ const Layout: React.FC = () => {
     }
     setDeferredPrompt(null);
   };
-
-  const admins = ["mafialord1247@gmail.com", "mafia.lord1247@gmail.com", "prince47aryan@gmail.com"];
-  const isSuperAdmin = user && admins.includes(user.email || '');
 
   const isDashboardRoute = user && (
     location.pathname.startsWith('/dashboard') || 
@@ -378,7 +375,14 @@ const Layout: React.FC = () => {
               <Link to="/profile" className="flex items-center gap-3 group">
                 <div className="text-right hidden sm:block">
                   <p className="text-sm font-bold text-foreground">{profile?.fullName}</p>
-                  <p className="text-xs text-muted-foreground capitalize">{profile?.role}</p>
+                  <div className="flex items-center justify-end gap-1.5">
+                    {isSuperAdmin && (
+                      <span className="px-1.5 py-0.5 bg-amber-500/15 text-amber-500 text-[10px] font-black uppercase rounded tracking-wider">
+                        Admin
+                      </span>
+                    )}
+                    <p className="text-xs text-muted-foreground capitalize">{profile?.role}</p>
+                  </div>
                 </div>
                 {profile?.photoURL ? (
                   <img src={profile.photoURL} alt="" className="w-9 h-9 rounded-full object-cover border-2 border-border" />
@@ -541,7 +545,14 @@ const Layout: React.FC = () => {
                   <Link to="/profile" className="flex items-center gap-3 group">
                     <div className="text-right hidden lg:block">
                       <p className="text-sm font-semibold text-foreground leading-tight">{profile?.fullName || 'User'}</p>
-                      <p className="text-xs text-muted-foreground capitalize">{profile?.role || 'Patient'}</p>
+                      <div className="flex items-center justify-end gap-1.5">
+                        {isSuperAdmin && (
+                          <span className="px-1.5 py-0.5 bg-amber-500/15 text-amber-500 text-[10px] font-black uppercase rounded tracking-wider">
+                            Admin
+                          </span>
+                        )}
+                        <p className="text-xs text-muted-foreground capitalize">{profile?.role || 'Patient'}</p>
+                      </div>
                     </div>
                     {profile?.photoURL ? (
                       <img src={profile.photoURL} alt="" className="w-9 h-9 rounded-full object-cover border-2 border-border" />

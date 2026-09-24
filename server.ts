@@ -1,13 +1,23 @@
 import "dotenv/config";
 import express from "express";
 import { createServer as createViteServer } from "vite";
+import fs from "fs";
 import path from "path";
 import { createServer } from "http";
 import { Server, Socket } from "socket.io";
 import { GoogleGenAI } from "@google/genai";
 import admin from "firebase-admin";
 import { getFirestore } from "firebase-admin/firestore";
-import firebaseConfig from "./firebase-applet-config.json";
+
+let firebaseConfig: any = {};
+try {
+  const configPath = path.resolve(process.cwd(), "firebase-applet-config.json");
+  if (fs.existsSync(configPath)) {
+    firebaseConfig = JSON.parse(fs.readFileSync(configPath, "utf-8"));
+  }
+} catch (e) {
+  console.warn("Could not read firebase-applet-config.json:", e);
+}
 
 // Initialize Firebase Admin lazily and safely
 let adminDb: admin.firestore.Firestore | null = null;

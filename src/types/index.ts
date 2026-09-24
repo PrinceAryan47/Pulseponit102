@@ -1,4 +1,4 @@
-export type UserRole = 'patient' | 'doctor';
+export type UserRole = 'patient' | 'doctor' | 'admin';
 export type UserStatus = 'pending' | 'approved' | 'rejected';
 
 export interface UserProfile {
