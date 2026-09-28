@@ -192,7 +192,7 @@ export function generateSymptomCheckerFallback(criteria: {
     firstaid = `## First Aid & Critical Warning Red Flags
 - **Difficulty Breathing**: Immediate medical attention is required if there is shortness of breath, wheezing, or feelings of chest tightness.
 - **Persistent High Fever**: Fever above 103°F (39.4°C) that does not reduce with medication.
-- **Emergency Indicators**: Bluish lips or face, confusion, or inability to stay awake are critical emergency indicators. Call emergency services (911/112) immediately.`;
+- **Emergency Indicators**: Bluish lips or face, confusion, or inability to stay awake are critical emergency indicators. Call emergency services (999/112) immediately.`;
 
     resources = `## Doctor Screening Checkpoints & Verified Sources
 ### Questions for Your Doctor:
@@ -303,7 +303,7 @@ export function generateSymptomCheckerFallback(criteria: {
 - **Daily Recovery Routines**: Include active stretching, joint mobility routines, and 10 minutes of controlled diaphragmatic breathing daily.`;
 
     firstaid = `## First Aid & Critical Warning Red Flags
-- **Acute Systemic Signs**: Sudden facial drooping, unilateral limb weakness, or severe speech difficulty require calling 911/112 immediately.
+- **Acute Systemic Signs**: Sudden facial drooping, unilateral limb weakness, or severe speech difficulty require calling 999/112 immediately.
 - **Unexplained Shortness of Breath**: Sudden onset of breathing difficulty or crushing chest pain radiating to the neck, jaw, or arm.
 - **Loss of Orientation**: Feeling faint, sudden confusion, visual gaps, or inability to stand.`;
 

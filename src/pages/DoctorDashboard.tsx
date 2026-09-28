@@ -51,6 +51,8 @@ import { checkAndTriggerAutoNews } from '../services/newsSchedulerService';
 import { safeFormat } from '../lib/dateUtils';
 import { useSocket } from '../context/SocketContext';
 import { downloadPrescriptionPDF } from '../components/PrescriptionPDF';
+import { MedicalRecordDetailsModal } from '../components/MedicalRecordDetailsModal';
+import { downloadMedicalRecordPDF } from '../utils/medicalDocumentUtils';
 
 // Tab Components
 const OverviewTab = ({ 
@@ -952,6 +954,9 @@ const MedicalRecordsTab = () => {
   const [records, setRecords] = useState<MedicalRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedRecord, setSelectedRecord] = useState<MedicalRecord | null>(null);
+  const [isDetailsOpen, setIsDetailsOpen] = useState(false);
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!profile) return;
@@ -976,11 +981,26 @@ const MedicalRecordsTab = () => {
     r.doctorName?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  const handleDownloadPDF = async (rec: MedicalRecord) => {
+    setDownloadingId(rec.id);
+    try {
+      await downloadMedicalRecordPDF({
+        record: rec,
+        patientName: rec.patientName || 'Patient Record',
+      });
+    } catch (err) {
+      console.error("Download error:", err);
+      alert("Failed to generate report PDF.");
+    } finally {
+      setDownloadingId(null);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="bg-card p-8 rounded-[3rem] border border-border shadow-sm">
         <div className="flex items-center justify-between mb-8">
-          <h2 className="text-xl font-bold text-foreground">Patient Health Timeline</h2>
+          <h2 className="text-xl font-bold text-foreground">Patient Health Timeline & Records</h2>
           <div className="flex gap-2">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -1005,7 +1025,7 @@ const MedicalRecordsTab = () => {
                 <div className="flex items-center justify-center w-10 h-10 rounded-full border border-background bg-muted text-muted-foreground shadow shrink-0 md:order-1 md:group-odd:-translate-x-1/2 md:group-even:translate-x-1/2">
                   <FileText className="w-5 h-5" />
                 </div>
-                <div className="w-[calc(100%-4rem)] md:w-[45%] bg-card p-6 rounded-3xl border border-border shadow-sm">
+                <div className="w-[calc(100%-4rem)] md:w-[45%] bg-card p-6 rounded-3xl border border-border shadow-sm hover:shadow-md transition-all">
                   <div className="flex items-center justify-between mb-2">
                     <time className="text-xs font-bold text-primary uppercase">{safeFormat(record.date, 'MMMM dd, yyyy')}</time>
                     <span className="px-2 py-0.5 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 rounded text-[10px] font-bold uppercase tracking-wider">Record</span>
@@ -1014,9 +1034,27 @@ const MedicalRecordsTab = () => {
                   <p className="text-sm text-muted-foreground line-clamp-2">
                     {record.prescription || record.notes || 'No additional details provided.'}
                   </p>
-                  <div className="mt-4 flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <button className="text-xs font-bold text-primary hover:underline">View Details</button>
+                  <div className="mt-4 flex items-center justify-between pt-3 border-t border-border">
+                    <div className="flex items-center gap-3">
+                      <button 
+                        onClick={() => {
+                          setSelectedRecord(record);
+                          setIsDetailsOpen(true);
+                        }}
+                        className="text-xs font-bold text-primary hover:underline inline-flex items-center gap-1"
+                      >
+                        <span>View Details</span>
+                        <ChevronRight className="w-3.5 h-3.5" />
+                      </button>
+                      <button 
+                        onClick={() => handleDownloadPDF(record)}
+                        disabled={downloadingId === record.id}
+                        className="text-xs font-bold text-muted-foreground hover:text-foreground inline-flex items-center gap-1"
+                        title="Download official PDF report"
+                      >
+                        <Download className="w-3.5 h-3.5" />
+                        <span>{downloadingId === record.id ? 'Generating...' : 'Download PDF'}</span>
+                      </button>
                     </div>
                     <span className="text-[10px] text-muted-foreground font-medium">Dr. {record.doctorName}</span>
                   </div>
@@ -1028,6 +1066,17 @@ const MedicalRecordsTab = () => {
           </div>
         )}
       </div>
+
+      <MedicalRecordDetailsModal
+        record={selectedRecord}
+        isOpen={isDetailsOpen}
+        onClose={() => setIsDetailsOpen(false)}
+        currentUser={profile}
+        onRecordUpdated={(updated) => {
+          setSelectedRecord(updated);
+          setRecords(prev => prev.map(r => r.id === updated.id ? updated : r));
+        }}
+      />
     </div>
   );
 };

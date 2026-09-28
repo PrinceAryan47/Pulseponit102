@@ -89,6 +89,14 @@ export interface Appointment {
   meetingLink?: string;
 }
 
+export interface MedicalAttachment {
+  name: string;
+  url: string;
+  type?: string;
+  size?: number;
+  uploadedAt?: string;
+}
+
 export interface MedicalRecord {
   id: string;
   patientId: string;
@@ -98,10 +106,12 @@ export interface MedicalRecord {
   prescription?: string;
   labResults?: string;
   notes?: string;
-  attachments?: string[];
+  attachments?: (string | MedicalAttachment)[];
+  documents?: MedicalAttachment[];
   
   // Joined data
   doctorName?: string;
+  patientName?: string;
 }
 
 export interface Article {

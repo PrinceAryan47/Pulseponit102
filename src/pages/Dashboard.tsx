@@ -21,7 +21,8 @@ import {
   Sparkles,
   BookOpen,
   LifeBuoy,
-  Globe
+  Globe,
+  Download
 } from 'lucide-react';
 import { collection, query, where, onSnapshot, orderBy, limit, updateDoc, doc, getDoc, setDoc, serverTimestamp, addDoc } from 'firebase/firestore';
 import { db } from '../firebase';
@@ -35,6 +36,8 @@ import { cn } from '../lib/utils';
 import { createNotification } from '../services/notificationService';
 import { safeFormat } from '../lib/dateUtils';
 import { handleFirestoreError, OperationType } from '../lib/firestore-helpers';
+import { MedicalRecordDetailsModal } from '../components/MedicalRecordDetailsModal';
+import { downloadMedicalRecordPDF } from '../utils/medicalDocumentUtils';
 
 const StatCard = React.memo(({ icon: Icon, label, value, trend, colorClass }: any) => (
   <div className="bg-card p-6 rounded-3xl border border-border shadow-sm hover:shadow-md transition-all">
@@ -68,6 +71,8 @@ const Dashboard: React.FC = () => {
   const [latestNews, setLatestNews] = useState<Article[]>([]);
   const [accessRequests, setAccessRequests] = useState<any[]>([]);
   const [healthReports, setHealthReports] = useState<any[]>([]);
+  const [selectedRecordModal, setSelectedRecordModal] = useState<MedicalRecord | null>(null);
+  const [downloadingRecId, setDownloadingRecId] = useState<string | null>(null);
   const navigate = useNavigate();
 
   const handleDownloadReport = () => {
@@ -771,24 +776,56 @@ Make it highly direct, inspiring, and actionable. Do not wrap it in quotes.`,
 
               {/* Recent Records */}
               <div className="bg-card p-8 rounded-3xl border border-border shadow-sm">
-                <h2 className="text-xl font-bold text-foreground mb-6">Recent Records</h2>
-                <div className="space-y-4">
+                <div className="flex items-center justify-between mb-6">
+                  <h2 className="text-xl font-bold text-foreground">Recent Records</h2>
+                  <span className="text-xs font-bold text-primary">Digital Health</span>
+                </div>
+                <div className="space-y-3">
                   {records.length > 0 ? records.map(rec => (
-                    <div key={rec.id} className="flex items-start gap-3 p-3 rounded-2xl hover:bg-muted/50 transition-colors cursor-pointer">
-                      <div className="w-10 h-10 bg-muted rounded-xl flex items-center justify-center shrink-0">
-                        <FileText className="w-5 h-5 text-muted-foreground" />
+                    <div 
+                      key={rec.id} 
+                      onClick={() => setSelectedRecordModal(rec)}
+                      className="group flex items-center justify-between p-3 rounded-2xl hover:bg-muted/50 transition-all cursor-pointer border border-transparent hover:border-border"
+                    >
+                      <div className="flex items-center gap-3 overflow-hidden">
+                        <div className="w-10 h-10 bg-primary/10 rounded-xl flex items-center justify-center shrink-0 text-primary group-hover:scale-105 transition-transform">
+                          <FileText className="w-5 h-5" />
+                        </div>
+                        <div className="overflow-hidden">
+                          <p className="text-sm font-bold text-foreground line-clamp-1">{rec.diagnosis}</p>
+                          <p className="text-xs text-muted-foreground">{safeFormat(rec.date, 'MMM dd, yyyy')}</p>
+                        </div>
                       </div>
-                      <div>
-                        <p className="text-sm font-bold text-foreground line-clamp-1">{rec.diagnosis}</p>
-                        <p className="text-xs text-muted-foreground">{safeFormat(rec.date, 'MMM dd, yyyy')}</p>
-                      </div>
+
+                      <button
+                        onClick={async (e) => {
+                          e.stopPropagation();
+                          setDownloadingRecId(rec.id);
+                          try {
+                            await downloadMedicalRecordPDF({
+                              record: rec,
+                              patientName: profile?.fullName || 'Verified Patient',
+                              patientAge: profile?.age || 'N/A',
+                              patientGender: profile?.gender || 'N/A'
+                            });
+                          } catch (err) {
+                            console.error(err);
+                          } finally {
+                            setDownloadingRecId(null);
+                          }
+                        }}
+                        className="p-2 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-xl transition-all shrink-0 ml-2"
+                        title="Download Record PDF"
+                      >
+                        <Download className="w-4 h-4" />
+                      </button>
                     </div>
                   )) : (
                     <p className="text-sm text-muted-foreground text-center py-4">No recent records</p>
                   )}
                 </div>
                 <Link to="/medical-records" className="mt-6 block text-center text-sm font-bold text-muted-foreground hover:text-primary transition-colors">
-                  View All Records
+                  View All Records & Documents
                 </Link>
               </div>
 
@@ -976,6 +1013,18 @@ Make it highly direct, inspiring, and actionable. Do not wrap it in quotes.`,
           </div>
         )}
       </AnimatePresence>
+
+      {/* Medical Record Details & Documents Modal */}
+      <MedicalRecordDetailsModal
+        record={selectedRecordModal}
+        isOpen={!!selectedRecordModal}
+        onClose={() => setSelectedRecordModal(null)}
+        currentUser={profile}
+        onRecordUpdated={(updated) => {
+          setSelectedRecordModal(updated);
+          setRecords(prev => prev.map(r => r.id === updated.id ? updated : r));
+        }}
+      />
     </GuestOverlay>
   );
 };

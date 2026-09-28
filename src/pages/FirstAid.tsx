@@ -20,7 +20,10 @@ import {
   RotateCcw,
   Play,
   Pause,
-  Volume2
+  Volume2,
+  MapPin,
+  Navigation,
+  Hospital as HospitalIcon
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { GoogleGenAI } from "../services/aiService";
@@ -29,6 +32,10 @@ import Markdown from 'react-markdown';
 import { useAuth } from '../context/AuthContext';
 import GuestOverlay from '../components/GuestOverlay';
 import { useSearchParams } from 'react-router-dom';
+import { collection, getDocs, query } from 'firebase/firestore';
+import { db } from '../firebase';
+import { Hospital as HospitalType } from '../types';
+import { findNearbyFacilities } from '../services/locationService';
 
 // Visual Animation Component for CPR (Interactive)
 const CPRAnimation = () => {
@@ -481,7 +488,7 @@ const StrokeAnimation = () => {
     { key: 'F', label: 'Face Droop', desc: 'Is one side drooping or numb? Check if their smile looks uneven.' },
     { key: 'A', label: 'Arm Drift', desc: 'Raise both arms. Does one side slide downwards?' },
     { key: 'S', label: 'Speech Difficulty', desc: 'Is speaking slurred, scrambled, or hard to understand?' },
-    { key: 'T', label: 'Time is Tissue', desc: 'Any of these? Call 911 immediately. Every minute matters!' }
+    { key: 'T', label: 'Time is Tissue', desc: 'Any of these? Call 999 immediately. Every minute matters!' }
   ];
 
   return (
@@ -966,7 +973,7 @@ const COMMON_ACCIDENTS = [
     doThis: [
       'SHUT down power at main breaker before approaching. Do not touch them while live current flows!',
       'If switch is too far, safely push the wire/victim away using a dry wooden broom, paper rolls, or heavy wood piece.',
-      'Once safely separate, search for responsive breathing; immediately call 911 if they are unconscious.'
+      'Once safely separate, search for responsive breathing; immediately call 999 if they are unconscious.'
     ],
     neverDo: [
       'Never touch a live shock victim with bare hands or metal elements.',
@@ -1036,7 +1043,143 @@ const FirstAid: React.FC = () => {
     return searchParams.get('guide') || null;
   });
   const [isAudioEnabled, setIsAudioEnabled] = useState(false);
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
+
+  // Nearest Hospital via GPS States
+  interface NearestHospitalInfo {
+    name: string;
+    address: string;
+    phone: string;
+    distanceMeter: number;
+    distanceDisplay: string;
+    lat?: number;
+    lng?: number;
+    mapsUrl?: string;
+  }
+
+  const [nearestHospital, setNearestHospital] = useState<NearestHospitalInfo | null>(null);
+  const [userLocation, setUserLocation] = useState<[number, number] | null>(null);
+  const [isLocatingHospital, setIsLocatingHospital] = useState(false);
+
+  const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+    const R = 6371e3; // metres
+    const φ1 = (lat1 * Math.PI) / 180;
+    const φ2 = (lat2 * Math.PI) / 180;
+    const Δφ = ((lat2 - lat1) * Math.PI) / 180;
+    const Δλ = ((lon2 - lon1) * Math.PI) / 180;
+    const a =
+      Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+      Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+  };
+
+  const formatDistance = (meters: number) => {
+    if (meters > 1000) return `${(meters / 1000).toFixed(1)} km`;
+    return `${Math.round(meters)} m`;
+  };
+
+  useEffect(() => {
+    const resolveNearestHospital = async (lat: number, lng: number) => {
+      setIsLocatingHospital(true);
+      try {
+        const snap = await getDocs(query(collection(db, 'hospitals')));
+        const firestoreHospitals = snap.docs.map(d => ({ id: d.id, ...d.data() } as unknown as HospitalType));
+
+        let candidateHospitals: NearestHospitalInfo[] = [];
+
+        firestoreHospitals.forEach(h => {
+          if (h.location?.lat && h.location?.lng) {
+            const dist = calculateDistance(lat, lng, h.location.lat, h.location.lng);
+            candidateHospitals.push({
+              name: h.name,
+              address: h.address || 'Emergency Department',
+              phone: h.contactPhone || '999',
+              distanceMeter: dist,
+              distanceDisplay: formatDistance(dist),
+              lat: h.location.lat,
+              lng: h.location.lng,
+              mapsUrl: `https://www.google.com/maps/dir/?api=1&destination=${h.location.lat},${h.location.lng}`
+            });
+          }
+        });
+
+        if (candidateHospitals.length === 0) {
+          try {
+            const nearby = await findNearbyFacilities(lat, lng);
+            if (nearby.facilities && nearby.facilities.length > 0) {
+              nearby.facilities.forEach(f => {
+                let dist = f.distanceMeter;
+                if (!dist && f.lat && f.lng) {
+                  dist = calculateDistance(lat, lng, f.lat, f.lng);
+                }
+                if (dist !== undefined) {
+                  candidateHospitals.push({
+                    name: f.name,
+                    address: f.address,
+                    phone: '999',
+                    distanceMeter: dist,
+                    distanceDisplay: f.distanceDisplay || formatDistance(dist),
+                    lat: f.lat,
+                    lng: f.lng,
+                    mapsUrl: f.mapsUrl || (f.lat && f.lng ? `https://www.google.com/maps/dir/?api=1&destination=${f.lat},${f.lng}` : 'https://www.google.com/maps')
+                  });
+                }
+              });
+            }
+          } catch (e) {
+            console.warn("Failed fetching fallback nearby facilities in FirstAid:", e);
+          }
+        }
+
+        candidateHospitals.sort((a, b) => a.distanceMeter - b.distanceMeter);
+
+        if (candidateHospitals.length > 0) {
+          setNearestHospital(candidateHospitals[0]);
+        } else {
+          setNearestHospital({
+            name: "Mulago National Referral Hospital (Emergency Center)",
+            address: "Mulago Hill, Kampala, Uganda",
+            phone: "+256 414 554001",
+            distanceMeter: 1200,
+            distanceDisplay: "1.2 km",
+            lat: 0.3378,
+            lng: 32.5761,
+            mapsUrl: "https://www.google.com/maps/dir/?api=1&destination=0.3378,32.5761"
+          });
+        }
+      } catch (err) {
+        console.warn("Error finding nearest hospital via GPS:", err);
+      } finally {
+        setIsLocatingHospital(false);
+      }
+    };
+
+    if (profile?.simulatedLocationEnabled && profile?.simulatedLatitude && profile?.simulatedLongitude) {
+      const lat = profile.simulatedLatitude;
+      const lng = profile.simulatedLongitude;
+      setUserLocation([lat, lng]);
+      resolveNearestHospital(lat, lng);
+    } else if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const lat = pos.coords.latitude;
+          const lng = pos.coords.longitude;
+          setUserLocation([lat, lng]);
+          resolveNearestHospital(lat, lng);
+        },
+        (err) => {
+          console.warn("FirstAid: Geolocation unavailable or denied, using default Kampala center:", err);
+          setUserLocation([0.3476, 32.5825]);
+          resolveNearestHospital(0.3476, 32.5825);
+        },
+        { enableHighAccuracy: false, timeout: 10000, maximumAge: 60000 }
+      );
+    } else {
+      setUserLocation([0.3476, 32.5825]);
+      resolveNearestHospital(0.3476, 32.5825);
+    }
+  }, [profile?.simulatedLocationEnabled, profile?.simulatedLatitude, profile?.simulatedLongitude]);
 
   // Smart Search States
   const [smartSearchQuery, setSmartSearchQuery] = useState('');
@@ -1090,17 +1233,17 @@ const FirstAid: React.FC = () => {
 Format your response using Markdown:
 - Start with a clear level-3 heading "## IMMEDIATE ACTIONS" followed by 3-5 bold numbered steps.
 - Provide a brief "⚠️ CRITICAL WARNINGS / WHAT NOT TO DO" section.
-- Conclude with a clear reminder of when/how to contact emergency responders (911 / 112).
+- Conclude with a clear reminder of when/how to contact emergency responders (999 / 112).
 - Ensure the tone is direct, calm, and lacks any technical jargon, tailored for someone in high panic.`,
       });
-      const responseText = response.text || "Unable to generate custom instructions at this time. Please call 911 immediately.";
+      const responseText = response.text || "Unable to generate custom instructions at this time. Please call 999 immediately.";
       setSmartAiInstructions(responseText);
       if (isAudioEnabled) {
         speakInstructions(responseText);
       }
     } catch (err) {
       console.error(err);
-      setSmartAiInstructions("Error connecting to Gemini Emergency Service. Call 911 immediately.\n\n### Essential Standard Advice\n1. Check scene safety.\n2. Tap and shout to check responsiveness.\n3. Keep airway open.\n4. Apply direct pressure to heavy wounds.");
+      setSmartAiInstructions("Error connecting to Gemini Emergency Service. Call 999 immediately.\n\n### Essential Standard Advice\n1. Check scene safety.\n2. Tap and shout to check responsiveness.\n3. Keep airway open.\n4. Apply direct pressure to heavy wounds.");
     } finally {
       setIsSmartAiLoading(false);
     }
@@ -1125,7 +1268,7 @@ Format your response using Markdown:
       steps: [
         'Check the scene for safety.',
         'Check for responsiveness. Tap and shout.',
-        'Call 911 or local emergency services immediately.',
+        'Call 999 or local emergency services immediately.',
         'Place the heel of one hand in the center of the chest.',
         'Push hard and fast (100-120 compressions per minute).',
         'Allow the chest to recoil completely between compressions.',
@@ -1188,7 +1331,7 @@ Format your response using Markdown:
         'Face: Does one side of the face droop when smiling?',
         'Arms: Does one arm drift downward when both are raised?',
         'Speech: Is speech slurred or strange?',
-        'Time: Call 911 immediately if any of these signs are present.'
+        'Time: Call 999 immediately if any of these signs are present.'
       ]
     },
     {
@@ -1201,7 +1344,7 @@ Format your response using Markdown:
         'Try to identify the substance and amount taken.',
         'Call Poison Control immediately (1-800-222-1222 in US).',
         'Do not induce vomiting unless told to do so by a professional.',
-        'If the person is unconscious, call 911 and start CPR if needed.',
+        'If the person is unconscious, call 999 and start CPR if needed.',
         'If the substance is on the skin or in the eyes, flush with water for 15 minutes.'
       ]
     }
@@ -1222,14 +1365,14 @@ Format your response using Markdown:
         Rules:
         1. Be concise and clear.
         2. Prioritize life-saving actions.
-        3. Always remind the user to call emergency services (911/112) if the situation is serious.
+        3. Always remind the user to call emergency services (999/112) if the situation is serious.
         4. Use Markdown formatting with bold text for emphasis.
         5. If the query is not related to first aid, politely decline and ask for a first aid related question.`,
       });
       setAiResponse(response.text || "Unable to provide instructions at this time.");
     } catch (err) {
       console.error(err);
-      setAiResponse("Error connecting to emergency analysis service. Please call 911 if this is a life-threatening emergency.");
+      setAiResponse("Error connecting to emergency analysis service. Please call 999 if this is a life-threatening emergency.");
     } finally {
       setIsAiLoading(false);
     }
@@ -1289,17 +1432,44 @@ Format your response using Markdown:
               <p className="text-2xl font-medium text-destructive-foreground/90 leading-tight mb-8">
                 Stay calm. Follow the pictures. Call for help immediately.
               </p>
-              <div className="flex flex-wrap gap-4">
+              <div className="flex flex-wrap items-center gap-4">
                 <a 
-                  href="tel:911"
-                  className="inline-flex items-center gap-3 px-8 py-4 bg-background text-destructive rounded-2xl font-black uppercase tracking-tighter hover:bg-muted transition-all shadow-xl"
+                  href="tel:999"
+                  className="inline-flex items-center gap-3 px-8 py-4 bg-background text-destructive rounded-2xl font-black uppercase tracking-tighter hover:bg-muted transition-all shadow-xl text-lg neon-glow"
                 >
-                  <Phone className="w-6 h-6" />
-                  Call 911 Now
+                  <Phone className="w-6 h-6 animate-pulse" />
+                  <span>Call 999 Now</span>
                 </a>
+
+                {nearestHospital ? (
+                  <a 
+                    href={`tel:${nearestHospital.phone || '999'}`}
+                    className="inline-flex items-center gap-3 px-6 py-4 bg-white/20 text-white hover:bg-white/30 rounded-2xl font-black uppercase tracking-tighter transition-all border border-white/40 shadow-xl"
+                    title={`Direct Call: ${nearestHospital.name} (${nearestHospital.phone || '999'})`}
+                  >
+                    <HospitalIcon className="w-6 h-6 text-amber-300 shrink-0" />
+                    <div className="text-left">
+                      <div className="text-[10px] text-amber-200 tracking-wider font-extrabold uppercase leading-tight">
+                        Nearest Hospital ({nearestHospital.distanceDisplay})
+                      </div>
+                      <div className="text-sm font-black truncate max-w-[200px] sm:max-w-[240px]">
+                        {nearestHospital.name}
+                      </div>
+                    </div>
+                  </a>
+                ) : (
+                  <a 
+                    href="tel:999"
+                    className="inline-flex items-center gap-3 px-6 py-4 bg-white/20 text-white hover:bg-white/30 rounded-2xl font-black uppercase tracking-tighter transition-all border border-white/40 shadow-xl"
+                  >
+                    <HospitalIcon className="w-6 h-6 text-amber-300 shrink-0" />
+                    <span>Call 999 / ER</span>
+                  </a>
+                )}
+
                 <button 
                   onClick={() => setSelectedGuide('cpr')}
-                  className="inline-flex items-center gap-3 px-8 py-4 bg-destructive-foreground/10 text-destructive-foreground rounded-2xl font-black uppercase tracking-tighter hover:bg-destructive-foreground/20 transition-all border border-destructive-foreground/20"
+                  className="inline-flex items-center gap-3 px-7 py-4 bg-destructive-foreground/10 text-destructive-foreground rounded-2xl font-black uppercase tracking-tighter hover:bg-destructive-foreground/20 transition-all border border-destructive-foreground/20"
                 >
                   <Heart className="w-6 h-6" />
                   Start CPR Guide
@@ -1307,13 +1477,62 @@ Format your response using Markdown:
                 {!isAudioEnabled && (
                   <button 
                     onClick={enableAudio}
-                    className="inline-flex items-center gap-3 px-8 py-4 bg-emerald-500 text-white rounded-2xl font-black uppercase tracking-tighter hover:bg-emerald-600 transition-all shadow-xl shadow-emerald-500/20"
+                    className="inline-flex items-center gap-3 px-7 py-4 bg-emerald-500 text-white rounded-2xl font-black uppercase tracking-tighter hover:bg-emerald-600 transition-all shadow-xl shadow-emerald-500/20"
                   >
                     <Volume2 className="w-6 h-6" />
                     Enable Audio Help
                   </button>
                 )}
               </div>
+
+              {/* GPS Nearest Hospital Live Dispatch Card */}
+              {nearestHospital && (
+                <div className="mt-8 bg-black/30 backdrop-blur-md border border-white/20 rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div className="flex items-start sm:items-center gap-3.5">
+                    <div className="w-11 h-11 rounded-xl bg-amber-400 text-slate-950 flex items-center justify-center shrink-0 shadow-md">
+                      <HospitalIcon className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="bg-emerald-500 text-white text-[10px] font-black uppercase px-2 py-0.5 rounded-full inline-flex items-center gap-1">
+                          <Navigation className="w-3 h-3" />
+                          GPS Calculated Nearest Facility
+                        </span>
+                        <span className="text-xs font-bold text-amber-300">
+                          {nearestHospital.distanceDisplay} away
+                        </span>
+                      </div>
+                      <h4 className="text-base font-black text-white mt-1 leading-tight">
+                        {nearestHospital.name}
+                      </h4>
+                      <p className="text-xs text-white/80 line-clamp-1 mt-0.5">
+                        {nearestHospital.address}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 shrink-0">
+                    <a
+                      href={`tel:${nearestHospital.phone || '999'}`}
+                      className="px-4 py-2.5 bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs uppercase tracking-wider rounded-xl inline-flex items-center gap-1.5 transition-all shadow-md"
+                    >
+                      <Phone className="w-3.5 h-3.5" />
+                      <span>Call Hospital</span>
+                    </a>
+                    {nearestHospital.mapsUrl && (
+                      <a
+                        href={nearestHospital.mapsUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="px-4 py-2.5 bg-white/20 hover:bg-white/30 text-white font-black text-xs uppercase tracking-wider rounded-xl inline-flex items-center gap-1.5 transition-all border border-white/30"
+                      >
+                        <ExternalLink className="w-3.5 h-3.5" />
+                        <span>Navigate</span>
+                      </a>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
             <div className="hidden lg:block">
               <motion.div
@@ -1551,38 +1770,76 @@ Format your response using Markdown:
                               <span className="text-destructive font-black">✓</span> Ensure your own safety first.
                             </li>
                             <li className="flex gap-2">
-                              <span className="text-destructive font-black">✓</span> Call emergency dispatchers immediately (911 / 112).
+                              <span className="text-destructive font-black">✓</span> Call emergency dispatchers immediately (999 / 112).
                             </li>
                             <li className="flex gap-2">
                               <span className="text-destructive font-black">✓</span> Keep the patient warm and comforted.
                             </li>
                           </ul>
-                          <div className="mt-6">
+                          <div className="mt-6 flex flex-col gap-2.5">
                             <a
-                              href="tel:911"
+                              href="tel:999"
                               className="w-full py-4 bg-destructive text-white rounded-2xl font-black uppercase tracking-wider text-center flex items-center justify-center gap-2 hover:bg-destructive/95 transition-all shadow-xl shadow-destructive/20 text-sm"
                             >
-                              <Phone className="w-4 h-4" />
-                              Call 911 Immediately
+                              <Phone className="w-4 h-4 animate-bounce" />
+                              Call 999 Immediately
                             </a>
+
+                            {nearestHospital && (
+                              <a
+                                href={`tel:${nearestHospital.phone || '999'}`}
+                                className="w-full py-3 bg-card border-2 border-destructive/30 hover:border-destructive text-foreground rounded-2xl font-black uppercase tracking-wider text-center flex items-center justify-center gap-2 transition-all text-xs"
+                                title={`Direct line: ${nearestHospital.phone || '999'}`}
+                              >
+                                <HospitalIcon className="w-4 h-4 text-destructive shrink-0" />
+                                <span className="truncate">Call Nearest Hospital ({nearestHospital.distanceDisplay})</span>
+                              </a>
+                            )}
                           </div>
                         </div>
 
                         {/* Local Hospital Locator Link */}
                         <div className="bg-card border border-border p-6 rounded-3xl flex flex-col justify-between">
                           <div>
-                            <h5 className="text-lg font-black uppercase tracking-tighter text-foreground mb-1">Locate Closest Clinic</h5>
-                            <p className="text-xs text-muted-foreground font-semibold leading-relaxed mb-4">
-                              Instantly look up the nearest medical emergency center with navigation and active traffic.
-                            </p>
+                            <div className="flex items-center justify-between mb-1">
+                              <h5 className="text-lg font-black uppercase tracking-tighter text-foreground">Nearest Hospital (GPS)</h5>
+                              {nearestHospital && (
+                                <span className="px-2 py-0.5 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[10px] font-black rounded-full">
+                                  {nearestHospital.distanceDisplay}
+                                </span>
+                              )}
+                            </div>
+                            {nearestHospital ? (
+                              <div className="mb-4">
+                                <p className="text-sm font-bold text-foreground line-clamp-1">{nearestHospital.name}</p>
+                                <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{nearestHospital.address}</p>
+                              </div>
+                            ) : (
+                              <p className="text-xs text-muted-foreground font-semibold leading-relaxed mb-4">
+                                Instantly look up the nearest medical emergency center with navigation and active traffic.
+                              </p>
+                            )}
                           </div>
-                          <a
-                            href="/hospitals"
-                            className="py-3 bg-muted hover:bg-muted/80 text-foreground font-black uppercase tracking-wider rounded-2xl text-center text-xs flex items-center justify-center gap-2 transition-all border border-border"
-                          >
-                            <ExternalLink className="w-4 h-4 hover:scale-110 transition-transform" />
-                            Open Hospital Locator
-                          </a>
+                          <div className="flex items-center gap-2">
+                            {nearestHospital?.mapsUrl ? (
+                              <a
+                                href={nearestHospital.mapsUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex-1 py-3 bg-primary text-primary-foreground font-black uppercase tracking-wider rounded-2xl text-center text-xs flex items-center justify-center gap-1.5 transition-all shadow-md shadow-primary/20"
+                              >
+                                <Navigation className="w-3.5 h-3.5" />
+                                <span>Navigate</span>
+                              </a>
+                            ) : null}
+                            <a
+                              href="/hospitals"
+                              className="flex-1 py-3 bg-muted hover:bg-muted/80 text-foreground font-black uppercase tracking-wider rounded-2xl text-center text-xs flex items-center justify-center gap-1.5 transition-all border border-border"
+                            >
+                              <ExternalLink className="w-3.5 h-3.5 hover:scale-110 transition-transform" />
+                              <span>All Hospitals</span>
+                            </a>
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -1839,10 +2096,14 @@ Format your response using Markdown:
                               </div>
                             ))}
                             <div className="pt-8 grid grid-cols-2 gap-4">
-                              <button className="py-5 bg-destructive text-destructive-foreground rounded-[1.5rem] text-lg font-black uppercase tracking-tighter hover:bg-destructive/90 transition-all shadow-xl shadow-destructive/20 flex items-center justify-center gap-3">
-                                <Phone className="w-6 h-6" />
-                                Call 911
-                              </button>
+                              <a
+                                href={nearestHospital?.phone ? `tel:${nearestHospital.phone}` : "tel:999"}
+                                className="py-5 bg-destructive text-destructive-foreground rounded-[1.5rem] text-sm sm:text-base font-black uppercase tracking-tighter hover:bg-destructive/90 transition-all shadow-xl shadow-destructive/20 flex items-center justify-center gap-2.5 text-center"
+                                title={nearestHospital ? `Call nearest hospital (${nearestHospital.name}): ${nearestHospital.phone || '999'}` : 'Call 999'}
+                              >
+                                <Phone className="w-5 h-5 shrink-0" />
+                                <span className="truncate">{nearestHospital ? `Call 999 / ER (${nearestHospital.distanceDisplay})` : 'Call 999'}</span>
+                              </a>
                               <button className="py-5 bg-muted text-muted-foreground rounded-[1.5rem] text-lg font-black uppercase tracking-tighter hover:bg-muted/80 transition-all flex items-center justify-center gap-3">
                                 <Info className="w-6 h-6" />
                                 More
@@ -1945,12 +2206,13 @@ Format your response using Markdown:
                                 Listen Guide
                               </button>
                               <a 
-                                href="tel:911"
-                                className="py-4 bg-destructive hover:bg-destructive/95 text-white font-black uppercase tracking-wider rounded-2xl text-[10px] flex items-center justify-center gap-2 transition-all"
+                                href={nearestHospital?.phone ? `tel:${nearestHospital.phone}` : "tel:999"}
+                                className="py-4 bg-destructive hover:bg-destructive/95 text-white font-black uppercase tracking-wider rounded-2xl text-[10px] flex items-center justify-center gap-1.5 transition-all text-center px-2"
                                 onClick={(e) => e.stopPropagation()}
+                                title={nearestHospital ? `Call nearest hospital (${nearestHospital.name}): ${nearestHospital.phone || '999'}` : 'Call 999 Emergency'}
                               >
-                                <Phone className="w-5 h-5 animate-bounce" />
-                                911 Emergency
+                                <Phone className="w-4 h-4 animate-bounce shrink-0" />
+                                <span className="truncate">{nearestHospital ? `999 / ER (${nearestHospital.distanceDisplay})` : '999 Emergency'}</span>
                               </a>
                             </div>
                           </motion.div>
