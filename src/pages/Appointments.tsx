@@ -12,17 +12,19 @@ import {
   ArrowLeft,
   X,
   ChevronRight,
-  Video
+  Video,
+  ShieldCheck
 } from 'lucide-react';
 import { collection, query, where, onSnapshot, orderBy, updateDoc, doc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../firebase';
-import { Appointment } from '../types';
+import { Appointment, UserProfile } from '../types';
 import { format } from 'date-fns';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '../lib/utils';
 import { createNotification } from '../services/notificationService';
 import { safeFormat } from '../lib/dateUtils';
+import { DoctorConsentRequestModal } from '../components/DoctorConsentRequestModal';
 
 const AppointmentCard = React.memo(({ app, profile, onReview, onChat }: { 
   app: Appointment, 
@@ -138,6 +140,7 @@ const Appointments: React.FC = () => {
   const [doctorReply, setDoctorReply] = useState('');
   const [meetingLink, setMeetingLink] = useState('');
   const [isUpdating, setIsUpdating] = useState(false);
+  const [consentPatient, setConsentPatient] = useState<UserProfile | null>(null);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -350,6 +353,27 @@ const Appointments: React.FC = () => {
                     </div>
                   </div>
 
+                  {profile?.role === 'doctor' && (
+                    <div className="pt-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setConsentPatient({
+                            uid: selectedAppointment.patientId,
+                            fullName: selectedAppointment.patientName || 'Patient',
+                            email: '',
+                            role: 'patient',
+                            createdAt: ''
+                          } as UserProfile);
+                        }}
+                        className="w-full py-3 px-4 bg-primary/10 hover:bg-primary/20 text-primary rounded-2xl text-xs font-bold transition-all flex items-center justify-center gap-2 border border-primary/20"
+                      >
+                        <ShieldCheck className="w-4 h-4 text-primary" />
+                        <span>Request Patient Data & Records Access Consent</span>
+                      </button>
+                    </div>
+                  )}
+
                   <div className="flex gap-4 pt-4">
                     {selectedAppointment.status === 'pending' ? (
                       <>
@@ -385,6 +409,16 @@ const Appointments: React.FC = () => {
           </div>
         )}
       </AnimatePresence>
+
+      {/* Doctor Consent Request Modal */}
+      {consentPatient && profile && (
+        <DoctorConsentRequestModal
+          isOpen={!!consentPatient}
+          onClose={() => setConsentPatient(null)}
+          patient={consentPatient}
+          doctorProfile={profile}
+        />
+      )}
     </div>
   );
 };

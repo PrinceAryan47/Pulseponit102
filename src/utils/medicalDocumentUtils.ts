@@ -279,6 +279,8 @@ export const downloadMedicalAttachment = async (
   }
 };
 
+export const downloadAttachmentFile = downloadMedicalAttachment;
+
 /**
  * Helper to download a Blob object in the browser
  */

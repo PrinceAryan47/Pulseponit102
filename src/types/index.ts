@@ -135,12 +135,39 @@ export interface Article {
   }[];
 }
 
+export type ConsentScope = 'personal_details' | 'medical_history' | 'allergies_conditions' | 'prescriptions' | 'documents_scans';
+
+export interface AccessRequest {
+  id: string;
+  patientId: string;
+  patientName: string;
+  doctorId: string;
+  doctorName: string;
+  doctorSpecialization?: string;
+  doctorHospital?: string;
+  status: 'pending' | 'approved' | 'rejected' | 'revoked';
+  requestedScopes?: ConsentScope[];
+  purpose?: string;
+  customNote?: string;
+  duration?: string;
+  grantedScopes?: ConsentScope[];
+  patientSignature?: string;
+  createdAt: string;
+  updatedAt: string;
+  respondedAt?: string;
+}
+
 export interface Notification {
   id: string;
   userId: string;
   title: string;
   message: string;
-  type: 'appointment' | 'message' | 'alert';
+  type: 'appointment' | 'message' | 'alert' | 'consent_request';
   read: boolean;
-  createdAt: string;
+  createdAt: any;
+  requestId?: string;
+  doctorId?: string;
+  doctorName?: string;
+  requestedScopes?: ConsentScope[];
+  purpose?: string;
 }

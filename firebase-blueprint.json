@@ -157,7 +157,7 @@
     },
     "AccessRequest": {
       "title": "AccessRequest",
-      "description": "Patient consent for doctor to read their medical records",
+      "description": "Patient consent for doctor to read their medical records and personal data",
       "type": "object",
       "properties": {
         "id": { "type": "string" },
@@ -165,9 +165,18 @@
         "patientName": { "type": "string" },
         "doctorId": { "type": "string" },
         "doctorName": { "type": "string" },
-        "status": { "type": "string", "enum": ["pending", "approved", "rejected"] },
+        "doctorSpecialization": { "type": "string" },
+        "doctorHospital": { "type": "string" },
+        "requestedScopes": { "type": "array", "items": { "type": "string" } },
+        "purpose": { "type": "string" },
+        "customNote": { "type": "string" },
+        "duration": { "type": "string" },
+        "grantedScopes": { "type": "array", "items": { "type": "string" } },
+        "patientSignature": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "approved", "rejected", "revoked"] },
         "createdAt": { "type": "string", "format": "date-time" },
-        "updatedAt": { "type": "string", "format": "date-time" }
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "respondedAt": { "type": "string", "format": "date-time" }
       },
       "required": ["patientId", "doctorId", "status"]
     },

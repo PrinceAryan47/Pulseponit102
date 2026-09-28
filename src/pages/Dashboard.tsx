@@ -22,7 +22,8 @@ import {
   BookOpen,
   LifeBuoy,
   Globe,
-  Download
+  Download,
+  ShieldCheck
 } from 'lucide-react';
 import { collection, query, where, onSnapshot, orderBy, limit, updateDoc, doc, getDoc, setDoc, serverTimestamp, addDoc } from 'firebase/firestore';
 import { db } from '../firebase';
@@ -38,6 +39,7 @@ import { safeFormat } from '../lib/dateUtils';
 import { handleFirestoreError, OperationType } from '../lib/firestore-helpers';
 import { MedicalRecordDetailsModal } from '../components/MedicalRecordDetailsModal';
 import { downloadMedicalRecordPDF } from '../utils/medicalDocumentUtils';
+import { PatientConsentModal } from '../components/PatientConsentModal';
 
 const StatCard = React.memo(({ icon: Icon, label, value, trend, colorClass }: any) => (
   <div className="bg-card p-6 rounded-3xl border border-border shadow-sm hover:shadow-md transition-all">
@@ -70,6 +72,7 @@ const Dashboard: React.FC = () => {
   const [isUpdating, setIsUpdating] = useState(false);
   const [latestNews, setLatestNews] = useState<Article[]>([]);
   const [accessRequests, setAccessRequests] = useState<any[]>([]);
+  const [selectedConsentForModal, setSelectedConsentForModal] = useState<any | null>(null);
   const [healthReports, setHealthReports] = useState<any[]>([]);
   const [selectedRecordModal, setSelectedRecordModal] = useState<MedicalRecord | null>(null);
   const [downloadingRecId, setDownloadingRecId] = useState<string | null>(null);
@@ -600,16 +603,32 @@ Make it highly direct, inspiring, and actionable. Do not wrap it in quotes.`,
                         </div>
                         <div>
                           <h3 className="font-bold text-foreground">Dr. {req.doctorName || 'Specialist'}</h3>
-                          <p className="text-xs text-muted-foreground uppercase font-semibold tracking-wider">{req.doctorSpecialization || 'Medical Professional'}</p>
-                          <p className="text-sm text-foreground/80 mt-1">
-                            Requests consent to securely view your complete medical history and treatment records.
+                          <p className="text-xs text-muted-foreground uppercase font-semibold tracking-wider">
+                            {req.doctorSpecialization || 'Medical Professional'} {req.doctorHospital ? `• ${req.doctorHospital}` : ''}
                           </p>
+                          <p className="text-sm text-foreground/80 mt-1">
+                            {req.purpose ? (
+                              <span>Purpose: <strong>{req.purpose}</strong></span>
+                            ) : (
+                              <span>Requests consent to securely view your complete medical history and treatment records.</span>
+                            )}
+                          </p>
+                          {req.customNote && (
+                            <p className="text-xs text-muted-foreground italic mt-0.5">"{req.customNote}"</p>
+                          )}
                         </div>
                       </div>
                       <div className="flex items-center gap-2 self-end sm:self-center">
                         <button 
+                          onClick={() => setSelectedConsentForModal(req)}
+                          className="px-3.5 py-2 bg-primary/10 text-primary hover:bg-primary/20 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5"
+                        >
+                          <ShieldCheck className="w-3.5 h-3.5" />
+                          <span>Review Form</span>
+                        </button>
+                        <button 
                           onClick={() => handleRejectAccess(req)}
-                          className="px-4 py-2 bg-red-500/10 text-red-600 hover:bg-red-500/20 rounded-xl text-xs font-bold transition-all"
+                          className="px-3 py-2 bg-red-500/10 text-red-600 hover:bg-red-500/20 rounded-xl text-xs font-bold transition-all"
                         >
                           Decline
                         </button>
@@ -617,7 +636,7 @@ Make it highly direct, inspiring, and actionable. Do not wrap it in quotes.`,
                           onClick={() => handleApproveAccess(req)}
                           className="px-4 py-2 bg-primary text-primary-foreground hover:bg-neon-blue-dark rounded-xl text-xs font-bold transition-all shadow-md shadow-primary/20"
                         >
-                          Approve & Share
+                          Approve
                         </button>
                       </div>
                     </div>
@@ -1025,6 +1044,16 @@ Make it highly direct, inspiring, and actionable. Do not wrap it in quotes.`,
           setRecords(prev => prev.map(r => r.id === updated.id ? updated : r));
         }}
       />
+
+      {/* Patient Consent Form Modal */}
+      {selectedConsentForModal && (
+        <PatientConsentModal
+          isOpen={!!selectedConsentForModal}
+          onClose={() => setSelectedConsentForModal(null)}
+          request={selectedConsentForModal}
+          onSuccess={() => setSelectedConsentForModal(null)}
+        />
+      )}
     </GuestOverlay>
   );
 };

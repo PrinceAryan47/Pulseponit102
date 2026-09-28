@@ -39,7 +39,8 @@ import {
   X,
   Video,
   Sparkles,
-  Edit
+  Edit,
+  ShieldCheck
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '../lib/utils';
@@ -53,6 +54,8 @@ import { useSocket } from '../context/SocketContext';
 import { downloadPrescriptionPDF } from '../components/PrescriptionPDF';
 import { MedicalRecordDetailsModal } from '../components/MedicalRecordDetailsModal';
 import { downloadMedicalRecordPDF } from '../utils/medicalDocumentUtils';
+import { DoctorConsentRequestModal } from '../components/DoctorConsentRequestModal';
+import { PatientDataDetailsModal } from '../components/PatientDataDetailsModal';
 
 // Tab Components
 const OverviewTab = ({ 
@@ -296,8 +299,10 @@ const PatientsTab = () => {
   const [accessRequests, setAccessRequests] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // States for viewing patient history
+  // States for viewing patient history and requesting/viewing consent data
   const [selectedHistoryPatient, setSelectedHistoryPatient] = useState<UserProfile | null>(null);
+  const [selectedPatientForConsent, setSelectedPatientForConsent] = useState<UserProfile | null>(null);
+  const [selectedPatientForData, setSelectedPatientForData] = useState<UserProfile | null>(null);
   const [patientHistoryRecords, setPatientHistoryRecords] = useState<MedicalRecord[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
 
@@ -474,32 +479,50 @@ const PatientsTab = () => {
                 {/* Consent/History View Actions */}
                 {accessStatus === 'approved' && (
                   <button 
-                    onClick={() => setSelectedHistoryPatient(patient)}
-                    className="w-full py-2.5 bg-emerald-500 text-white rounded-xl text-xs font-bold hover:opacity-90 transition-all flex items-center justify-center gap-2"
+                    onClick={() => setSelectedPatientForData(patient)}
+                    className="w-full py-2.5 bg-emerald-500 text-white rounded-xl text-xs font-bold hover:opacity-90 transition-all flex items-center justify-center gap-2 shadow-sm"
                   >
-                    <FileText className="w-3 h-3" />
-                    View General History
+                    <ShieldCheck className="w-3.5 h-3.5" />
+                    View Personal Data & History
                   </button>
                 )}
 
-                {(accessStatus === 'none' || accessStatus === 'rejected') && (
+                {accessStatus === 'none' && (
                   <button 
-                    onClick={() => handleRequestAccess(patient)}
-                    className="w-full py-2.5 bg-primary text-primary-foreground rounded-xl text-xs font-bold hover:opacity-90 transition-all flex items-center justify-center gap-2"
+                    onClick={() => setSelectedPatientForConsent(patient)}
+                    className="w-full py-2.5 bg-primary text-primary-foreground rounded-xl text-xs font-bold hover:bg-neon-blue-dark transition-all flex items-center justify-center gap-2 shadow-sm"
                   >
-                    <Stethoscope className="w-3 h-3" />
-                    Request Records Access
+                    <ShieldCheck className="w-3.5 h-3.5" />
+                    Send Data Consent Form
+                  </button>
+                )}
+
+                {accessStatus === 'rejected' && (
+                  <button 
+                    onClick={() => setSelectedPatientForConsent(patient)}
+                    className="w-full py-2.5 bg-primary text-primary-foreground rounded-xl text-xs font-bold hover:bg-neon-blue-dark transition-all flex items-center justify-center gap-2 shadow-sm"
+                  >
+                    <ShieldCheck className="w-3.5 h-3.5" />
+                    Re-request Consent Form
                   </button>
                 )}
 
                 {accessStatus === 'pending' && (
-                  <button 
-                    disabled
-                    className="w-full py-2.5 bg-amber-500/10 text-amber-500 rounded-xl text-xs font-bold flex items-center justify-center gap-2 cursor-not-allowed"
-                  >
-                    <Clock className="w-3 h-3" />
-                    Awaiting Patient Consent
-                  </button>
+                  <div className="space-y-1.5">
+                    <button 
+                      disabled
+                      className="w-full py-2 bg-amber-500/10 text-amber-500 rounded-xl text-xs font-bold flex items-center justify-center gap-2 cursor-not-allowed"
+                    >
+                      <Clock className="w-3 h-3 animate-pulse" />
+                      Awaiting Patient Consent
+                    </button>
+                    <button
+                      onClick={() => setSelectedPatientForConsent(patient)}
+                      className="w-full py-1 text-[11px] font-bold text-primary hover:underline text-center block"
+                    >
+                      Update / Resend Form
+                    </button>
+                  </div>
                 )}
               </div>
             </div>
@@ -589,6 +612,27 @@ const PatientsTab = () => {
           </div>
         )}
       </AnimatePresence>
+
+      {/* Doctor Consent Request Form Modal */}
+      {selectedPatientForConsent && profile && (
+        <DoctorConsentRequestModal
+          isOpen={!!selectedPatientForConsent}
+          onClose={() => setSelectedPatientForConsent(null)}
+          patient={selectedPatientForConsent}
+          doctorProfile={profile}
+          existingRequest={accessRequests.find(r => r.patientId === selectedPatientForConsent.uid)}
+        />
+      )}
+
+      {/* Patient Data & Details Modal for Authorized Patients */}
+      {selectedPatientForData && (
+        <PatientDataDetailsModal
+          isOpen={!!selectedPatientForData}
+          onClose={() => setSelectedPatientForData(null)}
+          patient={selectedPatientForData}
+          consentRequest={accessRequests.find(r => r.patientId === selectedPatientForData.uid)}
+        />
+      )}
     </div>
   );
 };

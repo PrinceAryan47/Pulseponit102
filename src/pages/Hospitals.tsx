@@ -105,135 +105,6 @@ const Hospitals: React.FC = () => {
     }
   };
 
-  // Fetch hospitals from database
-  useEffect(() => {
-    const q = query(collection(db, 'hospitals'));
-    const unsubscribe = onSnapshot(q, (snap) => {
-      const data = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as unknown as HospitalType));
-      setHospitals(data);
-      setLoading(false);
-    }, (err) => {
-      console.error("Error fetching hospitals:", err);
-      setLoading(false);
-    });
-    return () => unsubscribe();
-  }, []);
-
-  // Automatically fetch user location on mount
-  useEffect(() => {
-    let initialLat = 0.3476;
-    let initialLng = 32.5825;
-    let precise = false;
-
-    if (profile?.simulatedLocationEnabled && profile?.simulatedLatitude && profile?.simulatedLongitude) {
-      initialLat = profile.simulatedLatitude;
-      initialLng = profile.simulatedLongitude;
-      precise = true;
-      setUserLocation([initialLat, initialLng]);
-      setMapCenter([initialLat, initialLng]);
-      setIsPreciseLocation(true);
-    }
-
-    // Always fetch facilities for initial coordinates so user never sees blank lists
-    findNearbyFacilities(initialLat, initialLng).then(results => {
-      setNearbyFacilities(results.facilities || []);
-      setGroundingSources(results.groundingSources || []);
-    }).catch(err => {
-      console.warn("Failed to fetch facilities on mount:", err);
-    });
-
-    if (!precise && navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        async (position) => {
-          const { latitude, longitude } = position.coords;
-          setUserLocation([latitude, longitude]);
-          setMapCenter([latitude, longitude]);
-          setIsPreciseLocation(true);
-          try {
-            const results = await findNearbyFacilities(latitude, longitude);
-            setNearbyFacilities(results.facilities || []);
-            setGroundingSources(results.groundingSources || []);
-          } catch (err) {
-            console.warn("Failed to fetch facilities for precise GPS:", err);
-          }
-        },
-        (err) => {
-          console.warn("Precise GPS access blocked/denied (using default Kampala coordinates):", err);
-        },
-        { enableHighAccuracy: false, timeout: 5000, maximumAge: 60000 }
-      );
-    }
-  }, [profile?.simulatedLocationEnabled, profile?.simulatedLatitude, profile?.simulatedLongitude]);
-
-  const handleLocateNearby = () => {
-    if (profile?.simulatedLocationEnabled && profile?.simulatedLatitude && profile?.simulatedLongitude) {
-      setLocating(true);
-      setError(null);
-      const lat = profile.simulatedLatitude;
-      const lng = profile.simulatedLongitude;
-      setUserLocation([lat, lng]);
-      setMapCenter([lat, lng]);
-      setIsPreciseLocation(true);
-      findNearbyFacilities(lat, lng).then(results => {
-        setNearbyFacilities(results.facilities || []);
-        setGroundingSources(results.groundingSources || []);
-      }).catch(err => {
-        setError("Failed to find nearby facilities. Please try again.");
-      }).finally(() => {
-        setLocating(false);
-      });
-      return;
-    }
-
-    if (!navigator.geolocation) {
-      setError("Geolocation is not supported by your browser.");
-      return;
-    }
-
-    setLocating(true);
-    setError(null);
-
-    navigator.geolocation.getCurrentPosition(
-      async (position) => {
-        const { latitude, longitude } = position.coords;
-        setUserLocation([latitude, longitude]);
-        setMapCenter([latitude, longitude]);
-        setIsPreciseLocation(true);
-        try {
-          const results = await findNearbyFacilities(latitude, longitude);
-          setNearbyFacilities(results.facilities || []);
-          setGroundingSources(results.groundingSources || []);
-        } catch (err) {
-          setError("Failed to find nearby facilities. Please try again.");
-        } finally {
-          setLocating(false);
-        }
-      },
-      (err) => {
-        setLocating(false);
-        setError("Location access denied or timed out. Feel free to enable Simulated Location in your Profile settings to test this feature instantly!");
-      },
-      { enableHighAccuracy: false, timeout: 15000, maximumAge: 60000 }
-    );
-  };
-
-  const handleMapClick = async ({ latLng }: { latLng: [number, number] }) => {
-    setUserLocation(latLng);
-    setMapCenter(latLng);
-    setIsPreciseLocation(true);
-    setLocating(true);
-    setError(null);
-    try {
-      const results = await findNearbyFacilities(latLng[0], latLng[1]);
-      setNearbyFacilities(results.facilities || []);
-      setGroundingSources(results.groundingSources || []);
-    } catch (err) {
-      setError("Failed to fetch facilities for this clicked location. Please try again.");
-    } finally {
-      setLocating(false);
-    }
-  };
-
   const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
     const R = 6371e3; // metres
     const φ1 = lat1 * Math.PI/180;
@@ -247,6 +118,183 @@ const Hospitals: React.FC = () => {
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
 
     return R * c; // in metres
+  };
+
+  const buildFallbackFacilitiesFromHospitals = (hList: HospitalType[], lat: number, lng: number): NearbyFacility[] => {
+    return hList.map(h => {
+      let dist: number | undefined;
+      let distDisplay: string | undefined;
+      if (h.location?.lat && h.location?.lng) {
+        dist = calculateDistance(lat, lng, h.location.lat, h.location.lng);
+        distDisplay = dist > 1000 ? `${(dist / 1000).toFixed(1)} km` : `${Math.round(dist)} m`;
+      }
+      return {
+        name: h.name,
+        address: h.address,
+        type: 'hospital',
+        mapsUrl: h.location?.lat && h.location?.lng 
+          ? `https://www.google.com/maps/dir/?api=1&destination=${h.location.lat},${h.location.lng}`
+          : `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(h.name + ', ' + h.address)}`,
+        lat: h.location?.lat,
+        lng: h.location?.lng,
+        distanceMeter: dist,
+        distanceDisplay: distDisplay
+      };
+    }).sort((a, b) => (a.distanceMeter || 999999) - (b.distanceMeter || 999999));
+  };
+
+  const loadFacilitiesForCoords = async (lat: number, lng: number, fallbackHospitalList?: HospitalType[]) => {
+    try {
+      const results = await findNearbyFacilities(lat, lng);
+      if (results.facilities && results.facilities.length > 0) {
+        setNearbyFacilities(results.facilities);
+        setGroundingSources(results.groundingSources || []);
+      } else {
+        const hSource = fallbackHospitalList || hospitals;
+        if (hSource && hSource.length > 0) {
+          const fallback = buildFallbackFacilitiesFromHospitals(hSource, lat, lng);
+          setNearbyFacilities(fallback);
+        }
+      }
+    } catch (err) {
+      console.warn("API facilities query failed, using verified partner facilities:", err);
+      const hSource = fallbackHospitalList || hospitals;
+      if (hSource && hSource.length > 0) {
+        const fallback = buildFallbackFacilitiesFromHospitals(hSource, lat, lng);
+        setNearbyFacilities(fallback);
+      }
+    }
+  };
+
+  // Fetch hospitals from database
+  useEffect(() => {
+    const q = query(collection(db, 'hospitals'));
+    const unsubscribe = onSnapshot(q, (snap) => {
+      const data = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as unknown as HospitalType));
+      setHospitals(data);
+      setLoading(false);
+
+      // If nearby facilities haven't loaded yet, initialize them immediately from Firestore hospitals
+      setNearbyFacilities(prev => {
+        if (prev.length === 0 && data.length > 0) {
+          const lat = userLocation ? userLocation[0] : 0.3476;
+          const lng = userLocation ? userLocation[1] : 32.5825;
+          return buildFallbackFacilitiesFromHospitals(data, lat, lng);
+        }
+        return prev;
+      });
+    }, (err) => {
+      console.error("Error fetching hospitals:", err);
+      setLoading(false);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // Automatically fetch user location on mount with high compatibility for Edge, Firefox, and Chrome
+  useEffect(() => {
+    let initialLat = 0.3476;
+    let initialLng = 32.5825;
+    let precise = false;
+
+    if (profile?.simulatedLocationEnabled && profile?.simulatedLatitude && profile?.simulatedLongitude) {
+      initialLat = profile.simulatedLatitude;
+      initialLng = profile.simulatedLongitude;
+      precise = true;
+      setUserLocation([initialLat, initialLng]);
+      setMapCenter([initialLat, initialLng]);
+      setIsPreciseLocation(true);
+      loadFacilitiesForCoords(initialLat, initialLng);
+      return;
+    }
+
+    // Always fetch facilities for initial coordinates so user never sees blank lists
+    loadFacilitiesForCoords(initialLat, initialLng);
+
+    if (!precise && navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        async (position) => {
+          const { latitude, longitude } = position.coords;
+          setUserLocation([latitude, longitude]);
+          setMapCenter([latitude, longitude]);
+          setIsPreciseLocation(true);
+          await loadFacilitiesForCoords(latitude, longitude);
+        },
+        (err) => {
+          console.warn("Browser GPS access blocked/delayed (using Kampala coordinates fallback):", err);
+          loadFacilitiesForCoords(initialLat, initialLng);
+        },
+        // Low accuracy is faster and works across Edge Windows services & Firefox privacy protections
+        { enableHighAccuracy: false, timeout: 15000, maximumAge: 300000 }
+      );
+    }
+  }, [profile?.simulatedLocationEnabled, profile?.simulatedLatitude, profile?.simulatedLongitude]);
+
+  const handleLocateNearby = () => {
+    if (profile?.simulatedLocationEnabled && profile?.simulatedLatitude && profile?.simulatedLongitude) {
+      setLocating(true);
+      setError(null);
+      const lat = profile.simulatedLatitude;
+      const lng = profile.simulatedLongitude;
+      setUserLocation([lat, lng]);
+      setMapCenter([lat, lng]);
+      setIsPreciseLocation(true);
+      loadFacilitiesForCoords(lat, lng).finally(() => {
+        setLocating(false);
+      });
+      return;
+    }
+
+    if (!navigator.geolocation) {
+      setError("Geolocation is not supported by this browser. Displaying facilities based on reference coordinates.");
+      const fallbackLat = userLocation ? userLocation[0] : 0.3476;
+      const fallbackLng = userLocation ? userLocation[1] : 32.5825;
+      loadFacilitiesForCoords(fallbackLat, fallbackLng);
+      return;
+    }
+
+    setLocating(true);
+    setError(null);
+
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        const { latitude, longitude } = position.coords;
+        setUserLocation([latitude, longitude]);
+        setMapCenter([latitude, longitude]);
+        setIsPreciseLocation(true);
+        setError(null);
+        await loadFacilitiesForCoords(latitude, longitude);
+        setLocating(false);
+      },
+      async (err) => {
+        console.warn("Geolocation denied or timed out in Edge/Firefox:", err);
+        const fallbackLat = userLocation ? userLocation[0] : 0.3476;
+        const fallbackLng = userLocation ? userLocation[1] : 32.5825;
+        setUserLocation([fallbackLat, fallbackLng]);
+        setMapCenter([fallbackLat, fallbackLng]);
+        await loadFacilitiesForCoords(fallbackLat, fallbackLng);
+        setLocating(false);
+        setError(
+          "Notice: Live GPS was blocked or timed out by browser privacy settings (common in Microsoft Edge & Firefox). We have calculated nearby facilities using reference coordinates. You can also click anywhere on the live map or toggle Simulated Location in Profile!"
+        );
+      },
+      // 15-second timeout and 5-min cache for Edge & Firefox stability
+      { enableHighAccuracy: false, timeout: 15000, maximumAge: 300000 }
+    );
+  };
+
+  const handleMapClick = async ({ latLng }: { latLng: [number, number] }) => {
+    setUserLocation(latLng);
+    setMapCenter(latLng);
+    setIsPreciseLocation(true);
+    setLocating(true);
+    setError(null);
+    try {
+      await loadFacilitiesForCoords(latLng[0], latLng[1]);
+    } catch (err) {
+      setError("Failed to fetch facilities for this clicked location. Please try again.");
+    } finally {
+      setLocating(false);
+    }
   };
 
   const getDistanceMeter = (h: HospitalType) => {
