@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Outlet, Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { auth } from '../firebase';
+import { auth, db } from '../firebase';
 import { signOut } from 'firebase/auth';
+import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { 
   Activity, 
   User, 
@@ -196,6 +197,16 @@ const Layout: React.FC = () => {
   );
 
   const handleSignOut = async () => {
+    try {
+      if (auth.currentUser) {
+        await updateDoc(doc(db, 'users', auth.currentUser.uid), {
+          isOnline: false,
+          lastSeen: serverTimestamp()
+        });
+      }
+    } catch {
+      // Safe ignore during sign-out transition
+    }
     await signOut(auth);
     navigate('/');
   };

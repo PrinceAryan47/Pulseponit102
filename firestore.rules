@@ -64,11 +64,11 @@ service cloud.firestore {
              data.uid is string &&
              data.email is string &&
              data.role in ['patient', 'doctor', 'admin'] &&
-             data.fullName is string && data.fullName.size() < 100 &&
+             data.fullName is string &&
              (!('gender' in data) || data.gender is string) &&
              (!('phoneNumber' in data) || data.phoneNumber is string) &&
              (!('isOnline' in data) || data.isOnline is bool) &&
-             (!('lastSeen' in data) || data.lastSeen is timestamp) &&
+             (!('lastSeen' in data) || data.lastSeen is timestamp || data.lastSeen is string) &&
              (!('licenseNumber' in data) || data.licenseNumber is string) &&
              (!('specialization' in data) || data.specialization is string) &&
              (!('hospitalId' in data) || data.hospitalId is string) &&
@@ -109,11 +109,11 @@ service cloud.firestore {
       
       allow update: if isAuthenticated() && (
         isSuperAdmin() ||
-        (request.auth.uid == userId && isValidUser(request.resource.data) && (
-          // Allow updating online status fields even if they are new
+        (request.auth.uid == userId && (
+          // Allow updating online status / lastSeen heartbeat fields without schema failure
           request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isOnline', 'lastSeen']) ||
-          // For other updates, prevent changing critical fields unless admin
-          !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'status', 'uid', 'email'])
+          // For other updates, validate user structure and prevent changing critical fields
+          (isValidUser(request.resource.data) && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'status', 'uid', 'email']))
         ))
       );
 

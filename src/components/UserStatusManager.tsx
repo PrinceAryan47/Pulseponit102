@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
 import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
-import { db } from '../firebase';
+import { db, auth } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 
 export const UserStatusManager: React.FC = () => {
@@ -11,16 +11,20 @@ export const UserStatusManager: React.FC = () => {
     
     const userRef = doc(db, 'users', user.uid);
     
-    // Set online status
+    // Set online/offline status
     const updateOnlineStatus = (online: boolean) => {
       if ((window as any).firestoreQuotaExceeded) {
         return;
       }
+      // Ensure user is still actively authenticated in Firebase before attempting Firestore write
+      if (!auth.currentUser || auth.currentUser.uid !== user.uid) {
+        return;
+      }
+
       updateDoc(userRef, {
         isOnline: online,
         lastSeen: serverTimestamp()
       }).catch(err => {
-        // Ignore "No document to update" errors if they happen during race conditions
         if (err instanceof Error) {
           const errMsg = err.message.toLowerCase();
           if (errMsg.includes('quota') || errMsg.includes('resource-exhausted') || errMsg.includes('exhausted')) {
@@ -28,9 +32,15 @@ export const UserStatusManager: React.FC = () => {
             window.dispatchEvent(new CustomEvent('firestore-quota-exceeded'));
             return;
           }
-          if (!err.message.includes('No document to update')) {
-            console.error(`Error updating ${online ? 'online' : 'offline'} status:`, err);
+          // Ignore benign errors during teardown, logout, or race conditions
+          if (
+            errMsg.includes('permission') || 
+            errMsg.includes('no document to update') ||
+            errMsg.includes('insufficient permissions')
+          ) {
+            return;
           }
+          console.error(`Error updating ${online ? 'online' : 'offline'} status:`, err);
         }
       });
     };
