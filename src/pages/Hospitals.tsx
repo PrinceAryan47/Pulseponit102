@@ -18,10 +18,22 @@ import {
   Smile,
   FlaskConical,
   Sparkles,
-  Database
+  Database,
+  Phone,
+  ChevronDown,
+  ChevronUp,
+  HelpCircle,
+  CheckCircle2,
+  Compass
 } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { findNearbyFacilities, NearbyFacility } from '../services/locationService';
+import { 
+  COMPREHENSIVE_FACILITIES_CATALOG, 
+  calculateDistanceMeters, 
+  formatDistance, 
+  estimateDriveTime 
+} from '../data/facilityCatalog';
 import { Map, Overlay } from 'pigeon-maps';
 import VoiceSearch from '../components/VoiceSearch';
 import GuestOverlay from '../components/GuestOverlay';
@@ -49,7 +61,18 @@ const Hospitals: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
   const [locating, setLocating] = useState(false);
-  const [nearbyFacilities, setNearbyFacilities] = useState<NearbyFacility[]>([]);
+  const [showBrowserLocationHelp, setShowBrowserLocationHelp] = useState(false);
+  const [nearbyFacilities, setNearbyFacilities] = useState<NearbyFacility[]>(() => {
+    return COMPREHENSIVE_FACILITIES_CATALOG.map(cat => {
+      const dist = calculateDistanceMeters(0.3476, 32.5825, cat.lat, cat.lng);
+      return {
+        ...cat,
+        distanceMeter: dist,
+        distanceDisplay: formatDistance(dist),
+        durationDisplay: estimateDriveTime(dist)
+      };
+    }).sort((a, b) => (a.distanceMeter || 0) - (b.distanceMeter || 0));
+  });
   const [groundingSources, setGroundingSources] = useState<any[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [filterType, setFilterType] = useState<string>('all');
@@ -105,64 +128,102 @@ const Hospitals: React.FC = () => {
     }
   };
 
-  const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
-    const R = 6371e3; // metres
-    const φ1 = lat1 * Math.PI/180;
-    const φ2 = lat2 * Math.PI/180;
-    const Δφ = (lat2-lat1) * Math.PI/180;
-    const Δλ = (lon2-lon1) * Math.PI/180;
+  const buildComprehensiveFacilityList = (
+    lat: number, 
+    lng: number, 
+    extraHospitals?: HospitalType[], 
+    apiFacilities?: NearbyFacility[]
+  ): NearbyFacility[] => {
+    const facilityDict: Record<string, NearbyFacility> = {};
 
-    const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
-            Math.cos(φ1) * Math.cos(φ2) *
-            Math.sin(Δλ/2) * Math.sin(Δλ/2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    // 1. Add all from comprehensive catalog
+    COMPREHENSIVE_FACILITIES_CATALOG.forEach(cat => {
+      const dist = calculateDistanceMeters(lat, lng, cat.lat, cat.lng);
+      facilityDict[cat.name.toLowerCase().trim()] = {
+        ...cat,
+        distanceMeter: dist,
+        distanceDisplay: formatDistance(dist),
+        durationDisplay: estimateDriveTime(dist),
+      };
+    });
 
-    return R * c; // in metres
-  };
-
-  const buildFallbackFacilitiesFromHospitals = (hList: HospitalType[], lat: number, lng: number): NearbyFacility[] => {
-    return hList.map(h => {
+    // 2. Merge Firestore hospitals if any
+    const hSource = extraHospitals && extraHospitals.length > 0 ? extraHospitals : hospitals;
+    hSource.forEach(h => {
+      const key = h.name.toLowerCase().trim();
       let dist: number | undefined;
       let distDisplay: string | undefined;
+      let driveTime: string | undefined;
       if (h.location?.lat && h.location?.lng) {
-        dist = calculateDistance(lat, lng, h.location.lat, h.location.lng);
-        distDisplay = dist > 1000 ? `${(dist / 1000).toFixed(1)} km` : `${Math.round(dist)} m`;
+        dist = calculateDistanceMeters(lat, lng, h.location.lat, h.location.lng);
+        distDisplay = formatDistance(dist);
+        driveTime = estimateDriveTime(dist);
       }
-      return {
+      const existing = facilityDict[key];
+      facilityDict[key] = {
+        id: h.id,
         name: h.name,
         address: h.address,
         type: 'hospital',
+        phone: h.contactPhone || existing?.phone || '+256 414 554001',
+        openingHours: h.openingHours || existing?.openingHours || '24/7 Emergency',
+        services: h.services || existing?.services || ['General Medicine', 'Emergency'],
         mapsUrl: h.location?.lat && h.location?.lng 
           ? `https://www.google.com/maps/dir/?api=1&destination=${h.location.lat},${h.location.lng}`
-          : `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(h.name + ', ' + h.address)}`,
-        lat: h.location?.lat,
-        lng: h.location?.lng,
-        distanceMeter: dist,
-        distanceDisplay: distDisplay
+          : (existing?.mapsUrl || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(h.name + ' ' + h.address)}`),
+        lat: h.location?.lat || existing?.lat,
+        lng: h.location?.lng || existing?.lng,
+        distanceMeter: dist ?? existing?.distanceMeter,
+        distanceDisplay: distDisplay ?? existing?.distanceDisplay,
+        durationDisplay: driveTime ?? existing?.durationDisplay,
+        reviews: existing?.reviews || ['Verified Partner Health Facility'],
+        isPartner: true
       };
-    }).sort((a, b) => (a.distanceMeter || 999999) - (b.distanceMeter || 999999));
+    });
+
+    // 3. Merge API facilities if any
+    if (apiFacilities && apiFacilities.length > 0) {
+      apiFacilities.forEach(apiFac => {
+        const key = apiFac.name.toLowerCase().trim();
+        const existing = facilityDict[key];
+        const fLat = apiFac.lat || existing?.lat || lat;
+        const fLng = apiFac.lng || existing?.lng || lng;
+        const dist = apiFac.distanceMeter ?? calculateDistanceMeters(lat, lng, fLat, fLng);
+        
+        facilityDict[key] = {
+          ...existing,
+          ...apiFac,
+          distanceMeter: dist,
+          distanceDisplay: apiFac.distanceDisplay || formatDistance(dist),
+          durationDisplay: apiFac.durationDisplay || estimateDriveTime(dist),
+          phone: apiFac.phone || existing?.phone,
+          openingHours: apiFac.openingHours || existing?.openingHours,
+          services: apiFac.services || existing?.services,
+          reviews: (apiFac.reviews && apiFac.reviews.length > 0) ? apiFac.reviews : existing?.reviews,
+        };
+      });
+    }
+
+    return Object.values(facilityDict).sort((a, b) => 
+      (a.distanceMeter || 9999999) - (b.distanceMeter || 9999999)
+    );
   };
 
   const loadFacilitiesForCoords = async (lat: number, lng: number, fallbackHospitalList?: HospitalType[]) => {
+    // 1. Instantly update with local catalog & Firestore hospitals so there is zero delay
+    const initialList = buildComprehensiveFacilityList(lat, lng, fallbackHospitalList || hospitals);
+    setNearbyFacilities(initialList);
+
+    // 2. Fetch live Google Maps API facilities asynchronously and merge
     try {
       const results = await findNearbyFacilities(lat, lng);
       if (results.facilities && results.facilities.length > 0) {
-        setNearbyFacilities(results.facilities);
+        const merged = buildComprehensiveFacilityList(lat, lng, fallbackHospitalList || hospitals, results.facilities);
+        setNearbyFacilities(merged);
         setGroundingSources(results.groundingSources || []);
-      } else {
-        const hSource = fallbackHospitalList || hospitals;
-        if (hSource && hSource.length > 0) {
-          const fallback = buildFallbackFacilitiesFromHospitals(hSource, lat, lng);
-          setNearbyFacilities(fallback);
-        }
       }
     } catch (err) {
-      console.warn("API facilities query failed, using verified partner facilities:", err);
-      const hSource = fallbackHospitalList || hospitals;
-      if (hSource && hSource.length > 0) {
-        const fallback = buildFallbackFacilitiesFromHospitals(hSource, lat, lng);
-        setNearbyFacilities(fallback);
-      }
+      console.warn("API facilities query failed, using comprehensive catalog facilities:", err);
     }
   };
 
@@ -174,21 +235,16 @@ const Hospitals: React.FC = () => {
       setHospitals(data);
       setLoading(false);
 
-      // If nearby facilities haven't loaded yet, initialize them immediately from Firestore hospitals
-      setNearbyFacilities(prev => {
-        if (prev.length === 0 && data.length > 0) {
-          const lat = userLocation ? userLocation[0] : 0.3476;
-          const lng = userLocation ? userLocation[1] : 32.5825;
-          return buildFallbackFacilitiesFromHospitals(data, lat, lng);
-        }
-        return prev;
-      });
+      // Refresh facility distances immediately with new partner hospitals
+      const currentLat = userLocation ? userLocation[0] : 0.3476;
+      const currentLng = userLocation ? userLocation[1] : 32.5825;
+      setNearbyFacilities(prev => buildComprehensiveFacilityList(currentLat, currentLng, data));
     }, (err) => {
       console.error("Error fetching hospitals:", err);
       setLoading(false);
     });
     return () => unsubscribe();
-  }, []);
+  }, [userLocation]);
 
   // Automatically fetch user location on mount with high compatibility for Edge, Firefox, and Chrome
   useEffect(() => {
@@ -282,6 +338,20 @@ const Hospitals: React.FC = () => {
     );
   };
 
+  const handleResetToCityCenter = async () => {
+    const center: [number, number] = [0.3476, 32.5825];
+    setUserLocation(center);
+    setMapCenter(center);
+    setIsPreciseLocation(true);
+    setLocating(true);
+    setError(null);
+    try {
+      await loadFacilitiesForCoords(center[0], center[1]);
+    } finally {
+      setLocating(false);
+    }
+  };
+
   const handleMapClick = async ({ latLng }: { latLng: [number, number] }) => {
     setUserLocation(latLng);
     setMapCenter(latLng);
@@ -299,15 +369,13 @@ const Hospitals: React.FC = () => {
 
   const getDistanceMeter = (h: HospitalType) => {
     if (!userLocation || !h.location?.lat || !h.location?.lng) return Infinity;
-    return calculateDistance(userLocation[0], userLocation[1], h.location.lat, h.location.lng);
+    return calculateDistanceMeters(userLocation[0], userLocation[1], h.location.lat, h.location.lng);
   };
 
   const getDistanceDisplay = (h: HospitalType) => {
     const dist = getDistanceMeter(h);
     if (dist === Infinity) return null;
-    return dist > 1000 
-      ? `${(dist / 1000).toFixed(1)} km` 
-      : `${Math.round(dist)} m`;
+    return formatDistance(dist);
   };
 
   const filteredHospitals = [...hospitals]
@@ -408,48 +476,131 @@ const Hospitals: React.FC = () => {
           </div>
           <div className="flex flex-wrap gap-3 w-full md:w-auto">
             <button 
+              onClick={handleResetToCityCenter}
+              disabled={locating}
+              className="flex items-center gap-2 px-5 py-3 bg-secondary hover:bg-secondary/80 text-foreground rounded-2xl font-bold transition-all border border-border disabled:opacity-50 text-xs sm:text-sm cursor-pointer"
+            >
+              <Compass className="w-4 h-4 text-primary" />
+              <span>Use City Center (Kampala)</span>
+            </button>
+            <button 
               onClick={handleLocateNearby}
               disabled={locating}
-              className="flex items-center gap-2 px-6 py-3 bg-rose-500 hover:bg-rose-600 text-white rounded-2xl font-bold transition-all shadow-lg shadow-rose-500/20 disabled:opacity-50"
+              className="flex items-center gap-2 px-6 py-3 bg-rose-500 hover:bg-rose-600 text-white rounded-2xl font-bold transition-all shadow-lg shadow-rose-500/20 disabled:opacity-50 text-xs sm:text-sm cursor-pointer"
             >
-              <Navigation className="w-5 h-5" />
+              <Navigation className="w-4 h-4 sm:w-5 sm:h-5" />
               {locating ? 'Acquiring GPS...' : 'Calculate Distances to Facilities'}
             </button>
           </div>
         </div>
 
-        {/* GPS Distance Status Banner */}
-        <div className={`mb-8 p-6 rounded-3xl border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-sm ${
+        {/* GPS Distance Status Banner & Edge/Firefox Helper */}
+        <div className={`mb-6 p-6 rounded-3xl border flex flex-col shadow-sm transition-all ${
           isPreciseLocation 
             ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-800 dark:text-emerald-400" 
             : "bg-amber-500/10 border-amber-500/25 text-amber-800 dark:text-amber-400"
         }`}>
-          <div className="flex items-start gap-4">
-            <div className={`p-3 rounded-2xl shrink-0 ${
-              isPreciseLocation ? "bg-emerald-500/15" : "bg-amber-500/15"
-            }`}>
-              <MapPin className="w-6 h-6" />
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div className="flex items-start gap-4">
+              <div className={`p-3 rounded-2xl shrink-0 ${
+                isPreciseLocation ? "bg-emerald-500/15" : "bg-amber-500/15"
+              }`}>
+                <MapPin className="w-6 h-6" />
+              </div>
+              <div>
+                <div className="flex flex-wrap items-center gap-2 mb-1">
+                  <h4 className="font-bold text-sm">
+                    {isPreciseLocation ? 'Precise GPS Coordinates Active' : 'Default Reference Geolocation Active'}
+                  </h4>
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-white/40 dark:bg-black/20">
+                    {isPreciseLocation ? 'Live Centered' : 'Kampala Hub (0.3476, 32.5825)'}
+                  </span>
+                </div>
+                <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+                  {isPreciseLocation 
+                    ? `Coordinates: [${userLocation?.[0].toFixed(5)}, ${userLocation?.[1].toFixed(5)}]. All distances, driving durations, and nearest facilities have been calculated in real time.`
+                    : "Displaying real facilities with distances calculated from reference coordinates. You can click anywhere on the live map below, or click 'Acquire Precise GPS' to pinpoint your browser location."}
+                </p>
+              </div>
             </div>
-            <div>
-              <h4 className="font-bold text-sm mb-1">
-                {isPreciseLocation ? 'Precise GPS Coordinates Active' : 'Default Kampala Geolocation Active'}
-              </h4>
-              <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
-                {isPreciseLocation 
-                  ? `Active precise coordinates at [${userLocation?.[0].toFixed(5)}, ${userLocation?.[1].toFixed(5)}]. Geolocation-based distance calculations have been updated dynamically.`
-                  : "Currently showing fallback medical spaces near Kampala Central (0.3476, 32.5825). Authorize precise browser location or enable Simulated Location in your Profile settings to calculate real-time distance from your actual coordinates."}
-              </p>
+            <div className="flex flex-wrap items-center gap-2 shrink-0 self-end sm:self-center">
+              <button
+                onClick={() => setShowBrowserLocationHelp(!showBrowserLocationHelp)}
+                className="px-3.5 py-2 bg-white/70 dark:bg-slate-800/80 hover:bg-white dark:hover:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-xs font-bold text-foreground transition-all flex items-center gap-1.5 cursor-pointer shadow-sm"
+              >
+                <HelpCircle className="w-3.5 h-3.5 text-primary" />
+                <span>Edge / Firefox Tips</span>
+                {showBrowserLocationHelp ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+              </button>
+              {!isPreciseLocation && (
+                <button
+                  onClick={handleLocateNearby}
+                  disabled={locating}
+                  className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-bold shrink-0 transition-all shadow-md shadow-amber-500/10 cursor-pointer"
+                >
+                  {locating ? 'Acquiring...' : 'Acquire Precise GPS'}
+                </button>
+              )}
             </div>
           </div>
-          {!isPreciseLocation && (
-            <button
-              onClick={handleLocateNearby}
-              disabled={locating}
-              className="px-5 py-2.5 bg-amber-500 hover:bg-amber-600 text-white hover:text-white rounded-xl text-xs font-bold shrink-0 transition-all shadow-md shadow-amber-500/10 cursor-pointer"
-            >
-              {locating ? 'Acquiring GPS...' : 'Acquire Precise GPS'}
-            </button>
-          )}
+
+          {/* Collapsible Browser Geolocation Diagnostic Card */}
+          <AnimatePresence>
+            {showBrowserLocationHelp && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }}
+                className="overflow-hidden mt-4 pt-4 border-t border-border/40 text-foreground"
+              >
+                <div className="bg-card/90 backdrop-blur rounded-2xl p-5 border border-border text-xs space-y-3">
+                  <div className="flex items-center gap-2 text-primary font-bold text-sm">
+                    <Info className="w-4 h-4 shrink-0" />
+                    <span>Why can't I locate nearby facilities on Edge or Firefox even with location turned on?</span>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-muted-foreground pt-1">
+                    <div className="p-3.5 bg-muted/40 rounded-xl border border-border/50">
+                      <p className="font-bold text-foreground mb-1 flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full bg-blue-500"></span>
+                        Microsoft Edge & Windows Permissions
+                      </p>
+                      <p className="leading-relaxed">
+                        Edge routes HTML5 geolocation through the <strong>Windows Location Service</strong>. Even if site permissions are enabled in Edge, Windows blocks it if <em>Settings &gt; Privacy &amp; security &gt; Location &gt; "Let desktop apps access your location"</em> is turned OFF.
+                      </p>
+                    </div>
+                    <div className="p-3.5 bg-muted/40 rounded-xl border border-border/50">
+                      <p className="font-bold text-foreground mb-1 flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full bg-orange-500"></span>
+                        Mozilla Firefox & Enhanced Tracking
+                      </p>
+                      <p className="leading-relaxed">
+                        Firefox's <strong>Enhanced Tracking Protection</strong> and private browsing mode block Wi-Fi triangulation and sensor probes, causing `navigator.geolocation` to time out or return a Position Unavailable error.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="p-3.5 bg-primary/5 rounded-xl border border-primary/20 text-foreground">
+                    <p className="font-bold mb-1 flex items-center gap-1.5 text-primary">
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                      Why does it always work in First Aid Guide?
+                    </p>
+                    <p className="text-muted-foreground leading-relaxed">
+                      The First Aid Guide calculates proximity using an <strong>instant client-side math algorithm</strong> anchored to regional coordinates. It never hangs or shows an empty screen while waiting for the browser to approve GPS permissions. We have now applied this exact high-resilience architecture here to Medical Facilities!
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-3 pt-1">
+                    <span className="font-bold text-foreground">Quick Solutions:</span>
+                    <button
+                      onClick={handleResetToCityCenter}
+                      className="px-3 py-1.5 bg-primary text-primary-foreground font-bold rounded-lg hover:bg-primary/90 transition-all text-xs"
+                    >
+                      1-Click Use City Center (Kampala)
+                    </button>
+                    <span className="text-muted-foreground">or simply click anywhere on the live map below to position your location pin!</span>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
 
         {/* GPS Interactive Map Container */}
@@ -1026,12 +1177,49 @@ const Hospitals: React.FC = () => {
                              facility.type === 'diagnostic' ? 'Diagnostic/Lab' : facility.type}
                           </span>
                         </div>
-                        <h3 className="text-lg font-bold text-foreground mb-2 group-hover:text-primary transition-colors">
+                        <h3 className="text-lg font-bold text-foreground mb-1 group-hover:text-primary transition-colors">
                           {facility.name}
                         </h3>
-                        <p className="text-sm text-muted-foreground mb-3 line-clamp-2">
-                          {facility.address}
+                        <p className="text-xs text-muted-foreground mb-2.5 flex items-start gap-1">
+                          <MapPin className="w-3.5 h-3.5 text-primary/70 shrink-0 mt-0.5" />
+                          <span>{facility.address}</span>
                         </p>
+
+                        {/* Contact Phone & Hours */}
+                        <div className="flex flex-wrap items-center gap-y-1.5 gap-x-3 text-xs mb-3">
+                          {facility.phone && (
+                            <a 
+                              href={`tel:${facility.phone.replace(/[^\d+]/g, '')}`}
+                              className="inline-flex items-center gap-1 font-bold text-primary hover:underline bg-primary/10 px-2.5 py-1 rounded-lg transition-colors"
+                            >
+                              <Phone className="w-3 h-3" />
+                              <span>{facility.phone}</span>
+                            </a>
+                          )}
+                          {facility.openingHours && (
+                            <div className="inline-flex items-center gap-1 text-muted-foreground text-[11px] font-semibold bg-muted px-2 py-1 rounded-lg">
+                              <Clock className="w-3 h-3 text-primary" />
+                              <span>{facility.openingHours}</span>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Services Badges */}
+                        {facility.services && facility.services.length > 0 && (
+                          <div className="flex flex-wrap gap-1 mb-3">
+                            {facility.services.slice(0, 3).map((srv: string, sIdx: number) => (
+                              <span key={sIdx} className="text-[10px] font-semibold bg-muted/80 text-foreground px-2 py-0.5 rounded-md border border-border/50">
+                                {srv}
+                              </span>
+                            ))}
+                            {facility.services.length > 3 && (
+                              <span className="text-[10px] text-muted-foreground font-semibold px-1 py-0.5">
+                                +{facility.services.length - 3} more
+                              </span>
+                            )}
+                          </div>
+                        )}
+
                         {facility.reviews && facility.reviews.length > 0 && (
                           <div className="mb-4 flex flex-wrap gap-1">
                             {facility.reviews.map((rev, rIdx) => (

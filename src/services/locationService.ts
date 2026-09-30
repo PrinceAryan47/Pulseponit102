@@ -1,4 +1,5 @@
 export interface NearbyFacility {
+  id?: string;
   name: string;
   address: string;
   type: 'hospital' | 'clinic' | 'pharmacy' | 'dental' | 'specialty' | 'diagnostic' | string;
@@ -8,7 +9,11 @@ export interface NearbyFacility {
   distanceMeter?: number;
   distanceDisplay?: string;
   durationDisplay?: string;
+  phone?: string;
+  services?: string[];
+  openingHours?: string;
   reviews?: string[];
+  isPartner?: boolean;
 }
 
 export interface NearbyFacilitiesResponse {

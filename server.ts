@@ -1264,7 +1264,7 @@ Our backend clinical intelligence network is temporarily offline. Please contact
       });
 
       const timeoutPromise = new Promise<never>((_, reject) => {
-        setTimeout(() => reject(new Error("Timeout: Gemini Maps Grounding request timed out after 45000ms")), 45000);
+        setTimeout(() => reject(new Error("Timeout: Gemini Maps Grounding request timed out after 8000ms")), 8000);
       });
 
       const response = await Promise.race([apiCallPromise, timeoutPromise]);
