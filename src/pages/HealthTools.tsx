@@ -1858,25 +1858,86 @@ const SymptomChecker = () => {
   // Triggers & Context (Section 5)
   const [triggers, setTriggers] = useState('');
 
+  // Offline Engine & Network States
+  const [networkOnline, setNetworkOnline] = useState<boolean>(() => typeof navigator !== 'undefined' ? navigator.onLine : true);
+  const [isOfflineEngine, setIsOfflineEngine] = useState<boolean>(() => typeof navigator !== 'undefined' ? !navigator.onLine : false);
+
   // Loaded Source and History states
   const [loadedSource, setLoadedSource] = useState<'ai' | 'fallback' | 'database' | null>(null);
   const [savedReports, setSavedReports] = useState<any[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
+  const [isExportingDocx, setIsExportingDocx] = useState(false);
 
-  // Fetch Saved Reports History
+  // Synchronize network online/offline events
+  useEffect(() => {
+    const handleOnline = () => {
+      setNetworkOnline(true);
+    };
+    const handleOffline = () => {
+      setNetworkOnline(false);
+      setIsOfflineEngine(true);
+    };
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+
+  const LOCAL_STORAGE_KEY = 'pulsepoint_offline_symptom_reports';
+
+  const getLocalReports = (): any[] => {
+    try {
+      const stored = localStorage.getItem(LOCAL_STORAGE_KEY);
+      return stored ? JSON.parse(stored) : [];
+    } catch {
+      return [];
+    }
+  };
+
+  const saveLocalReport = (report: any) => {
+    try {
+      const existing = getLocalReports();
+      const updated = [report, ...existing.filter(r => r.id !== report.id)].slice(0, 40);
+      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(updated));
+      return updated;
+    } catch (e) {
+      console.error("Failed to store report locally in offline mode:", e);
+      return [];
+    }
+  };
+
+  // Fetch Saved Reports History (combines Firestore and Local Storage)
   const fetchHistory = async () => {
-    if (!user) return;
     setHistoryLoading(true);
     try {
-      const q = query(
-        collection(db, 'healthReports'),
-        where('userId', '==', user.uid),
-        where('type', '==', 'symptom-checker'),
-        orderBy('createdAt', 'desc')
-      );
-      const snap = await getDocs(q);
-      const reports = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setSavedReports(reports);
+      const localReports = getLocalReports();
+      let combined: any[] = [...localReports];
+
+      if (user && networkOnline) {
+        try {
+          const q = query(
+            collection(db, 'healthReports'),
+            where('userId', '==', user.uid),
+            where('type', '==', 'symptom-checker'),
+            orderBy('createdAt', 'desc')
+          );
+          const snap = await getDocs(q);
+          const cloudReports = snap.docs.map(doc => ({ id: doc.id, isCloud: true, ...doc.data() }));
+          
+          // Merge deduplicating by timestamp/id
+          const cloudIds = new Set(cloudReports.map(c => c.id));
+          const localOnly = localReports.filter(l => !cloudIds.has(l.id));
+          combined = [...cloudReports, ...localOnly].sort((a, b) => 
+            new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+          );
+        } catch (dbErr) {
+          console.warn("Firestore unreachable, using local storage reports:", dbErr);
+        }
+      }
+
+      setSavedReports(combined);
     } catch (err) {
       console.error("Error fetching symptom checker history:", err);
     } finally {
@@ -1885,10 +1946,8 @@ const SymptomChecker = () => {
   };
 
   useEffect(() => {
-    if (user) {
-      fetchHistory();
-    }
-  }, [user]);
+    fetchHistory();
+  }, [user, networkOnline]);
 
   // Load a report from history
   const loadReport = (report: any) => {
@@ -1907,17 +1966,23 @@ const SymptomChecker = () => {
     setAnalysis(report.reportText);
     const parsed = parseAnalysis(report.reportText);
     setParsedResult(parsed);
-    setLoadedSource('database');
+    setLoadedSource(report.isCloud ? 'database' : 'fallback');
     setStep(5); // Jump to final step to view results
     setActiveResultTab('causes');
   };
 
-  // Delete a report from history
+  // Delete a report from history (handles both local storage and Firestore)
   const deleteReport = async (reportId: string, e: React.MouseEvent) => {
     e.stopPropagation();
     if (!window.confirm("Are you sure you want to delete this saved symptom assessment?")) return;
     try {
-      await deleteDoc(doc(db, 'healthReports', reportId));
+      if (reportId.startsWith('local_')) {
+        const existing = getLocalReports();
+        const filtered = existing.filter(r => r.id !== reportId);
+        localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(filtered));
+      } else {
+        await deleteDoc(doc(db, 'healthReports', reportId));
+      }
       setSavedReports(prev => prev.filter(r => r.id !== reportId));
       if (analysis && savedReports.find(r => r.id === reportId)?.reportText === analysis) {
         setAnalysis(null);
@@ -1946,6 +2011,24 @@ const SymptomChecker = () => {
     'Nausea / Vomiting', 'Fatigue / Weakness', 'Dizziness', 
     'Muscle/Body aches', 'Sore throat', 'Chills / Shivering', 
     'Diarrhea', 'Loss of taste/smell', 'Rash / Skin irritation'
+  ];
+
+  const QUICK_DURATIONS = [
+    'Sudden (< 2 hours)',
+    'Today (2-12 hours)',
+    '1 - 2 days',
+    '3 - 7 days',
+    '1 - 3 weeks',
+    'Chronic (> 1 month)'
+  ];
+
+  const QUICK_HISTORIES = [
+    'Hypertension',
+    'Type 2 Diabetes',
+    'Asthma',
+    'Heart Condition',
+    'GERD / Acid Reflux',
+    'None reported'
   ];
 
   const handleSymptomToggle = (symptomName: string) => {
@@ -2002,6 +2085,186 @@ const SymptomChecker = () => {
     return sections;
   };
 
+  const exportSymptomAssessmentDocx = async () => {
+    if (!analysis) return;
+    setIsExportingDocx(true);
+    try {
+      const parsed = parsedResult || parseAnalysis(analysis);
+      const title = `PulsePoint Clinical Symptom Assessment Report`;
+      const dateStr = new Date().toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+      });
+
+      const children: any[] = [
+        new Paragraph({
+          text: title,
+          heading: HeadingLevel.TITLE,
+          alignment: AlignmentType.CENTER,
+          spacing: { after: 200 }
+        }),
+        new Paragraph({
+          text: `Generated on ${dateStr} • Grounded in Clinical Guidelines (Mayo Clinic, CDC, NIH, NHS)`,
+          alignment: AlignmentType.CENTER,
+          spacing: { after: 400 },
+          children: [
+            new TextRun({
+              text: `\nEngine: ${loadedSource === 'ai' ? 'Live Cloud Clinical AI' : 'PulsePoint Offline Evidence-Based Database'}`,
+              italics: true,
+              size: 20,
+              color: '555555'
+            })
+          ]
+        }),
+        new Paragraph({
+          text: "Patient Assessment Profile",
+          heading: HeadingLevel.HEADING_1,
+          spacing: { before: 300, after: 150 }
+        }),
+        new Table({
+          width: { size: 100, type: WidthType.PERCENTAGE },
+          rows: [
+            new TableRow({
+              children: [
+                new TableCell({ children: [new Paragraph({ text: "Patient Age / Gender:" })] }),
+                new TableCell({ children: [new Paragraph({ text: `${age || 'Unspecified'} yrs • ${gender}${pregnancyStatus === 'yes' ? ' (Pregnant)' : ''}` })] }),
+              ]
+            }),
+            new TableRow({
+              children: [
+                new TableCell({ children: [new Paragraph({ text: "Primary Reported Symptoms:" })] }),
+                new TableCell({ children: [new Paragraph({ text: symptoms })] }),
+              ]
+            }),
+            new TableRow({
+              children: [
+                new TableCell({ children: [new Paragraph({ text: "Severity & Progression Trend:" })] }),
+                new TableCell({ children: [new Paragraph({ text: `${severity}/10 Severity • Trend: ${trend}` })] }),
+              ]
+            }),
+            new TableRow({
+              children: [
+                new TableCell({ children: [new Paragraph({ text: "Timeline / Duration:" })] }),
+                new TableCell({ children: [new Paragraph({ text: duration || 'Not specified' })] }),
+              ]
+            }),
+            new TableRow({
+              children: [
+                new TableCell({ children: [new Paragraph({ text: "Associated Symptoms:" })] }),
+                new TableCell({ children: [new Paragraph({ text: selectedSymptoms.join(', ') || 'None selected' })] }),
+              ]
+            }),
+            new TableRow({
+              children: [
+                new TableCell({ children: [new Paragraph({ text: "Reported Medical History:" })] }),
+                new TableCell({ children: [new Paragraph({ text: history || 'None reported' })] }),
+              ]
+            }),
+            new TableRow({
+              children: [
+                new TableCell({ children: [new Paragraph({ text: "Active Medications & Allergies:" })] }),
+                new TableCell({ children: [new Paragraph({ text: allergiesMedications || 'None reported' })] }),
+              ]
+            }),
+            new TableRow({
+              children: [
+                new TableCell({ children: [new Paragraph({ text: "Context / Potential Triggers:" })] }),
+                new TableCell({ children: [new Paragraph({ text: triggers || 'None reported' })] }),
+              ]
+            }),
+          ]
+        }),
+      ];
+
+      // Add each diagnostic section
+      const sectionConfigs = [
+        { label: "1. Potential Causes & Pathologies", content: parsed?.causes || "" },
+        { label: "2. Evidence-Based Treatment Pathways", content: parsed?.treatments || "" },
+        { label: "3. First Aid & Critical Warning Red Flags", content: parsed?.firstaid || "" },
+        { label: "4. Preventive Care & Lifestyle Adjustments", content: parsed?.prevention || "" },
+        { label: "5. Physician Questions & Verified Clinical Sources", content: parsed?.resources || "" }
+      ];
+
+      for (const sc of sectionConfigs) {
+        if (!sc.content.trim()) continue;
+        children.push(
+          new Paragraph({
+            text: sc.label,
+            heading: HeadingLevel.HEADING_2,
+            spacing: { before: 300, after: 120 }
+          })
+        );
+        const lines = sc.content.split('\n');
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed) continue;
+          if (trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
+            children.push(
+              new Paragraph({
+                text: trimmed.replace(/^[-*]\s+/, ''),
+                bullet: { level: 0 },
+                spacing: { after: 60 }
+              })
+            );
+          } else if (trimmed.startsWith('## ') || trimmed.startsWith('### ')) {
+            children.push(
+              new Paragraph({
+                text: trimmed.replace(/^#{2,3}\s+/, ''),
+                heading: HeadingLevel.HEADING_3,
+                spacing: { before: 140, after: 60 }
+              })
+            );
+          } else {
+            children.push(
+              new Paragraph({
+                text: trimmed,
+                spacing: { after: 80 }
+              })
+            );
+          }
+        }
+      }
+
+      // Legal Educational Disclaimer
+      children.push(
+        new Paragraph({
+          text: "\nEducational Guidance Disclaimer:",
+          heading: HeadingLevel.HEADING_3,
+          spacing: { before: 300, after: 60 }
+        }),
+        new Paragraph({
+          children: [
+            new TextRun({
+              text: "This clinical assessment is generated for educational and triage guidance purposes and does not constitute a formal in-person medical diagnosis. Always consult a qualified medical professional for acute, severe, or persistent symptoms.",
+              italics: true
+            })
+          ],
+          spacing: { after: 200 }
+        })
+      );
+
+      const docObj = new Document({
+        sections: [{ children }]
+      });
+
+      const blob = await Packer.toBlob(docObj);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `PulsePoint_Clinical_Assessment_${new Date().toISOString().slice(0, 10)}.docx`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (exportErr) {
+      console.error("Failed to generate docx symptom assessment:", exportErr);
+      alert("Unable to export docx file. Please use the Print option instead.");
+    } finally {
+      setIsExportingDocx(false);
+    }
+  };
+
   const checkSymptoms = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!symptoms.trim()) return;
@@ -2014,11 +2277,30 @@ const SymptomChecker = () => {
     let generatedText = "";
     let sourceUsed: 'ai' | 'fallback' = 'ai';
 
-    try {
-      const ai = new GoogleGenAI({ apiKey: "" });
-      const response = await ai.models.generateContent({
-        model: "gemini-3.5-flash",
-        contents: `As an advanced, clinically-grounded medical symptom checker assistant, analyze the following patient details. All potential insights and timelines must be meticulously cross-referenced against world-class clinical databases (including Mayo Clinic, National Institutes of Health (NIH) databases, Centers for Disease Control and Prevention (CDC) clinical guidance, and NHS standard guidelines) to ensure the safe, highly structured, and educational nature of the generated information.
+    const criteriaData = {
+      age: parseInt(age, 10) || 30,
+      gender,
+      pregnancyStatus,
+      symptoms,
+      severity: parseInt(severity, 10) || 5,
+      trend,
+      duration: duration || 'Unspecified',
+      selectedSymptoms,
+      history: history || 'none reported',
+      allergiesMedications: allergiesMedications || 'none reported',
+      triggers: triggers || 'none reported'
+    };
+
+    // If offline mode is toggled, or device is offline, run directly from resilient local knowledge base
+    if (isOfflineEngine || !networkOnline) {
+      generatedText = generateSymptomCheckerFallback(criteriaData);
+      sourceUsed = 'fallback';
+    } else {
+      try {
+        const ai = new GoogleGenAI();
+        const response = await ai.models.generateContent({
+          model: "gemini-3.8-flash",
+          contents: `As an advanced, clinically-grounded medical symptom checker assistant, analyze the following patient details. All potential insights, differentials, and timelines must be meticulously cross-referenced against world-class clinical databases (including Mayo Clinic, National Institutes of Health (NIH) databases, Centers for Disease Control and Prevention (CDC) clinical guidance, and NHS standard guidelines) to ensure the safe, highly structured, and educational nature of the generated information.
 
 Patient Configuration Details:
 - Age: ${age || 'Unspecified'}
@@ -2029,21 +2311,25 @@ Patient Configuration Details:
 - Progression Trend: ${trend}
 - Symptom Duration: ${duration || 'Unspecified'}
 - Associated Symptoms: ${selectedSymptoms.join(', ') || 'None selected'}
-- Pre-existing Conditions: ${history || 'None reported'}
+- Pre-existing Conditions / Medical History: ${history || 'None reported'}
 - Allergies & Active Medications: ${allergiesMedications || 'None reported'}
 - Environmental Context / Triggers: ${triggers || 'None reported'}
 
-You MUST structure your response into exactly 5 distinct sections, each preceded by its corresponding section tag EXACTLY as shown below:
+Instructions:
+1. Deeply correlate EVERY single input provided: evaluate how the duration (${duration}) impacts acute vs chronic timelines; assess whether severity (${severity}/10) warrants immediate emergency care; cross-reference pre-existing conditions (${history}) and active medications (${allergiesMedications}) for contraindications or drug side effects; assess demographic vulnerabilities (${age} yrs old, ${gender}${pregnancyStatus === 'yes' ? ', pregnant' : ''}).
+2. You MUST structure your response into exactly 5 distinct sections, each preceded by its corresponding section tag EXACTLY as shown below:
 
 [SECTION_1: POTENTIAL_CAUSES]
-## Possible Causes & Pathology
-- Provide a rigorous, educational breakdown of potential health conditions (explicitly state that these are educational possibilities, NOT a formal medical diagnosis).
-- Detail clinical practice pathways (e.g., "per Mayo Clinic diagnostic guidelines...").
+### Clinical Patient Profile & Triage Summary
+- Explicitly state the triage urgency level: 🚨 CRITICAL EMERGENCY, 🟠 URGENT CARE, 🟡 PRIMARY CARE CONSULT, or 🟢 ROUTINE / SELF-CARE.
+- Provide a clear breakdown of potential health conditions (educational possibilities, NOT a formal medical diagnosis).
+- Detail evidence-based clinical practice pathways and differential likelihoods (e.g. per Mayo Clinic, CDC, or NHS guidelines).
 
 [SECTION_2: TREATMENT_PATHWAYS]
 ## Evidence-Based Treatment Pathways
 - Detail typical therapies, over-the-counter or prescription protocols commonly used conforming to clinical standards, and home care practices.
 - Highlight when a treatment must only be done under professional supervision.
+- Highlight any medication warnings or contraindications based on the patient's reported allergies/medications (${allergiesMedications}).
 
 [SECTION_3: PREVENTION_STRATEGIES]
 ## Preventive Care & Lifestyle Adjustments
@@ -2053,7 +2339,7 @@ You MUST structure your response into exactly 5 distinct sections, each preceded
 [SECTION_4: FIRST_AID_PROTOCOLS]
 ## First Aid & Critical Warning Red Flags
 - Detail clear immediate physical first aid actions if appropriate.
-- Outline critical red-flag emergency symptoms/warning signs (e.g., chest pain, difficulty breathing, sudden numbness) that require immediate urgent/emergency clinical assistance.
+- Outline critical red-flag emergency symptoms/warning signs (e.g. chest pain, difficulty breathing, sudden numbness) that require immediate urgent/emergency clinical assistance.
 
 [SECTION_5: CLINICAL_RESOURCES]
 ## Doctor Screening Checkpoints & Verified Sources
@@ -2061,54 +2347,55 @@ You MUST structure your response into exactly 5 distinct sections, each preceded
 - Provide a verified educational directory table referencing trustworthy medical platforms (such as MayoClinic.org, CDC.gov, MedlinePlus) with specific search terms.
 
 Be professional, direct, supportive, and clear. Avoid fluff. Do not use conversational preambles or postambles outside of the sections.`,
-      });
+        });
 
-      if (response.text) {
-        generatedText = response.text;
-        sourceUsed = 'ai';
-      } else {
-        throw new Error("Empty response from clinical AI engine.");
-      }
-    } catch (err) {
-      console.warn("AI clinical analysis failed. Triggering robust local evidence-based clinical engine.", err);
-      generatedText = generateSymptomCheckerFallback({
-        age: parseInt(age, 10) || 30,
-        gender,
-        pregnancyStatus,
-        symptoms,
-        severity: parseInt(severity, 10) || 5,
-        trend,
-        duration,
-        selectedSymptoms,
-        history,
-        allergiesMedications,
-        triggers
-      });
-      sourceUsed = 'fallback';
-    } finally {
-      setAnalysis(generatedText);
-      const parsed = parseAnalysis(generatedText);
-      setParsedResult(parsed);
-      setLoadedSource(sourceUsed);
-      setLoading(false);
-      setActiveResultTab('causes');
-
-      // Save generated clinical report to Firestore for durable user persistence
-      if (generatedText && user) {
-        try {
-          await addDoc(collection(db, 'healthReports'), {
-            userId: user.uid,
-            type: 'symptom-checker',
-            inputCriteria: { age: parseInt(age, 10) || 30, gender, pregnancyStatus, symptoms, severity: parseInt(severity, 10) || 5, trend, duration, selectedSymptoms, history, allergiesMedications, triggers },
-            reportText: generatedText,
-            createdAt: new Date().toISOString()
-          });
-          fetchHistory(); // Refresh history list
-        } catch (saveErr) {
-          console.error("Error persisting generated clinical report to DB:", saveErr);
+        if (response.text && response.text.trim()) {
+          generatedText = response.text;
+          sourceUsed = 'ai';
+        } else {
+          throw new Error("Empty response from clinical AI engine.");
         }
+      } catch (err) {
+        console.warn("Live AI clinical analysis unavailable or offline. Seamlessly utilizing PulsePoint's resilient local clinical engine.", err);
+        generatedText = generateSymptomCheckerFallback(criteriaData);
+        sourceUsed = 'fallback';
       }
     }
+
+    setAnalysis(generatedText);
+    const parsed = parseAnalysis(generatedText);
+    setParsedResult(parsed);
+    setLoadedSource(sourceUsed);
+    setLoading(false);
+    setActiveResultTab('causes');
+
+    // Durable persistence: Save to localStorage for instant offline access
+    const reportItem = {
+      id: 'local_' + Date.now(),
+      userId: user?.uid || 'offline-guest',
+      type: 'symptom-checker',
+      inputCriteria: criteriaData,
+      reportText: generatedText,
+      createdAt: new Date().toISOString(),
+      isOffline: sourceUsed === 'fallback' || !networkOnline
+    };
+    saveLocalReport(reportItem);
+
+    // If online and authenticated, also save to Firestore
+    if (generatedText && user && networkOnline) {
+      try {
+        await addDoc(collection(db, 'healthReports'), {
+          userId: user.uid,
+          type: 'symptom-checker',
+          inputCriteria: criteriaData,
+          reportText: generatedText,
+          createdAt: new Date().toISOString()
+        });
+      } catch (saveErr) {
+        console.warn("Could not save to Firestore, cached safely in offline storage:", saveErr);
+      }
+    }
+    fetchHistory(); // Refresh history list
   };
 
   const handleNext = () => {
@@ -2138,9 +2425,75 @@ Be professional, direct, supportive, and clear. Avoid fluff. Do not use conversa
 
   return (
     <div id="advanced-symptom-checker" className="space-y-6">
-      <h2 id="symptom-checker-title" className="text-2xl font-bold text-[rgb(var(--foreground))] mb-2">Advanced Symptom Checker</h2>
-      <p id="symptom-checker-subtitle" className="text-slate-500 dark:text-slate-400 mb-6">Complete the five diagnostic sections to receive a comprehensive clinically-grounded report.</p>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h2 id="symptom-checker-title" className="text-2xl font-bold text-[rgb(var(--foreground))] mb-1">Advanced Symptom Checker</h2>
+          <p id="symptom-checker-subtitle" className="text-slate-500 dark:text-slate-400 text-sm">Complete the five diagnostic sections to receive a comprehensive clinically-grounded report.</p>
+        </div>
+      </div>
       
+      {/* Offline Mode & Clinical Engine Switcher */}
+      <div className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-4 sm:p-5 rounded-3xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-sm">
+        <div className="flex items-center gap-3.5">
+          <div className={cn(
+            "p-3 rounded-2xl flex items-center justify-center shrink-0",
+            isOfflineEngine ? "bg-amber-500/15 text-amber-500" : "bg-neon-blue/15 text-neon-blue"
+          )}>
+            {isOfflineEngine ? <Shield className="w-5 h-5" /> : <Sparkles className="w-5 h-5" />}
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <h4 className="font-bold text-sm text-[rgb(var(--foreground))]">
+                {isOfflineEngine ? "Offline Clinical Engine Active" : "Live Cloud AI Diagnostic Mode"}
+              </h4>
+              <span className={cn(
+                "px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider border",
+                networkOnline 
+                  ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20" 
+                  : "bg-red-500/10 text-red-500 border-red-500/20"
+              )}>
+                {networkOnline ? "Online" : "Device Offline"}
+              </span>
+            </div>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              {isOfflineEngine 
+                ? "⚡ Zero-latency local processing grounded in Mayo Clinic, CDC, NIH & NHS medical databases."
+                : "✨ Powered by Gemini 3.8 Flash with deep clinical cross-referencing and automatic offline fallback."}
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2 w-full md:w-auto justify-end">
+          <button
+            type="button"
+            onClick={() => setIsOfflineEngine(false)}
+            disabled={!networkOnline}
+            className={cn(
+              "px-4 py-2.5 rounded-xl text-xs font-bold transition-all border flex items-center gap-1.5",
+              !isOfflineEngine 
+                ? "bg-neon-blue text-slate-900 border-neon-blue shadow-sm" 
+                : "bg-background border-slate-200 dark:border-slate-800 text-slate-500 hover:text-foreground disabled:opacity-40 disabled:cursor-not-allowed"
+            )}
+            title={!networkOnline ? "Device is offline. Connect to network for Cloud AI." : "Use live AI model"}
+          >
+            <Sparkles className="w-3.5 h-3.5" /> Live Cloud AI
+          </button>
+          <button
+            type="button"
+            onClick={() => setIsOfflineEngine(true)}
+            className={cn(
+              "px-4 py-2.5 rounded-xl text-xs font-bold transition-all border flex items-center gap-1.5",
+              isOfflineEngine 
+                ? "bg-amber-500 text-slate-900 border-amber-500 shadow-sm" 
+                : "bg-background border-slate-200 dark:border-slate-800 text-slate-500 hover:text-foreground"
+            )}
+            title="Use local offline medical knowledge base"
+          >
+            <Shield className="w-3.5 h-3.5" /> ⚡ Offline Engine
+          </button>
+        </div>
+      </div>
+
       {/* Evidence-based Clinical Grounding Panel */}
       <div id="grounding-panel" className="bg-emerald-500/10 border border-emerald-500/25 p-5 rounded-3xl mb-8 flex flex-col sm:flex-row gap-4 items-start">
         <div className="p-3 bg-emerald-500/10 rounded-2xl text-emerald-600 dark:text-emerald-400 shrink-0">
@@ -2364,6 +2717,25 @@ Be professional, direct, supportive, and clear. Avoid fluff. Do not use conversa
                     className="w-full px-5 py-3.5 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-2xl focus:ring-2 focus:ring-neon-blue outline-none transition-all text-[rgb(var(--foreground))]"
                     placeholder="e.g., 3 days, 1 week, since this morning"
                   />
+                  {/* Quick Pick Duration Chips */}
+                  <div className="flex flex-wrap items-center gap-2 mt-2.5">
+                    <span className="text-[11px] text-muted-foreground mr-1">Quick pick:</span>
+                    {QUICK_DURATIONS.map((qd) => (
+                      <button
+                        key={qd}
+                        type="button"
+                        onClick={() => setDuration(qd)}
+                        className={cn(
+                          "px-2.5 py-1 text-[11px] rounded-lg border transition-all",
+                          duration === qd
+                            ? "bg-neon-blue/15 border-neon-blue text-neon-blue font-bold shadow-xs"
+                            : "bg-slate-100 dark:bg-slate-800/60 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:text-foreground"
+                        )}
+                      >
+                        {qd}
+                      </button>
+                    ))}
+                  </div>
                 </div>
 
                 <div>
@@ -2414,6 +2786,35 @@ Be professional, direct, supportive, and clear. Avoid fluff. Do not use conversa
                     className="w-full px-5 py-3.5 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-2xl focus:ring-2 focus:ring-neon-blue outline-none transition-all min-h-[90px] resize-none text-[rgb(var(--foreground))]"
                     placeholder="e.g. Hypertension, asthma, diabetes, heart condition, none..."
                   />
+                  {/* Quick Pick History Chips */}
+                  <div className="flex flex-wrap items-center gap-2 mt-2.5">
+                    <span className="text-[11px] text-muted-foreground mr-1">Common conditions:</span>
+                    {QUICK_HISTORIES.map((qh) => (
+                      <button
+                        key={qh}
+                        type="button"
+                        onClick={() => {
+                          if (qh === 'None reported') {
+                            setHistory('None reported');
+                          } else {
+                            setHistory(prev => {
+                              if (!prev || prev === 'None reported') return qh;
+                              if (prev.includes(qh)) return prev;
+                              return `${prev}, ${qh}`;
+                            });
+                          }
+                        }}
+                        className={cn(
+                          "px-2.5 py-1 text-[11px] rounded-lg border transition-all",
+                          history.includes(qh)
+                            ? "bg-purple-500/15 border-purple-500 text-purple-400 font-bold shadow-xs"
+                            : "bg-slate-100 dark:bg-slate-800/60 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:text-foreground"
+                        )}
+                      >
+                        + {qh}
+                      </button>
+                    ))}
+                  </div>
                 </div>
 
                 <div>
@@ -2500,15 +2901,20 @@ Be professional, direct, supportive, and clear. Avoid fluff. Do not use conversa
         </form>
       </div>
 
-      {/* Right: Saved Assessments History List */}
-      {user && (
+      {/* Right: Saved Assessments History List (Supports both cloud and offline local storage) */}
+      {(user || savedReports.length > 0) && (
         <div className="lg:col-span-4 bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 p-6 sm:p-8 rounded-3xl shadow-sm">
           <h3 className="font-extrabold text-xs text-foreground uppercase tracking-wider mb-4 flex items-center justify-between">
-            <span>📂 Saved Assessments</span>
+            <span className="flex items-center gap-2">
+              <span>📂 Saved Assessments</span>
+              <span className="px-2 py-0.5 rounded-full text-[10px] bg-slate-100 dark:bg-slate-800 text-muted-foreground font-normal">
+                {savedReports.length}
+              </span>
+            </span>
             {historyLoading && <span className="text-[10px] text-muted-foreground animate-pulse font-normal">Loading...</span>}
           </h3>
           {savedReports.length === 0 ? (
-            <p className="text-xs text-muted-foreground italic leading-relaxed">No saved assessments yet. Complete an assessment to save it automatically in the database.</p>
+            <p className="text-xs text-muted-foreground italic leading-relaxed">No saved assessments yet. Complete an assessment to save it automatically in the database or offline storage.</p>
           ) : (
             <div className="space-y-2.5 max-h-[450px] overflow-y-auto pr-1">
               {savedReports.map((report) => (
@@ -2518,15 +2924,27 @@ Be professional, direct, supportive, and clear. Avoid fluff. Do not use conversa
                   className={cn(
                     "group flex items-center justify-between p-3.5 rounded-xl border transition-all cursor-pointer select-none text-left",
                     analysis === report.reportText
-                      ? "bg-primary/5 border-primary/40"
+                      ? "bg-neon-blue/10 border-neon-blue/40 shadow-xs"
                       : "border-slate-100 dark:border-slate-800 bg-background hover:bg-slate-50 dark:hover:bg-slate-800 hover:border-slate-300 dark:hover:border-slate-700"
                   )}
                 >
                   <div className="flex-1 min-w-0 pr-2">
-                    <div className="flex items-center gap-1.5 mb-1">
-                      <span className="text-[10px] font-extrabold uppercase tracking-tight text-primary">
-                        Severity {report.inputCriteria?.severity}/10
+                    <div className="flex items-center gap-1.5 mb-1 flex-wrap">
+                      <span className={cn(
+                        "text-[9px] font-black uppercase tracking-tight px-1.5 py-0.5 rounded",
+                        (report.inputCriteria?.severity || 5) >= 8 
+                          ? "bg-red-500/10 text-red-500 border border-red-500/20"
+                          : (report.inputCriteria?.severity || 5) >= 5
+                          ? "bg-amber-500/10 text-amber-500 border border-amber-500/20"
+                          : "bg-emerald-500/10 text-emerald-500 border border-emerald-500/20"
+                      )}>
+                        Sev {report.inputCriteria?.severity || 5}/10
                       </span>
+                      {report.isOffline && (
+                        <span className="text-[9px] bg-slate-100 dark:bg-slate-800 text-muted-foreground px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-700">
+                          Offline
+                        </span>
+                      )}
                       <span className="text-[9px] text-muted-foreground">• {new Date(report.createdAt).toLocaleDateString()}</span>
                     </div>
                     <p className="text-xs font-bold text-foreground truncate capitalize">
@@ -2538,8 +2956,8 @@ Be professional, direct, supportive, and clear. Avoid fluff. Do not use conversa
                   </div>
                   <button
                     onClick={(e) => deleteReport(report.id, e)}
-                    className="text-muted-foreground hover:text-red-500 p-1.5 rounded-lg hover:bg-red-500/10 transition-all"
-                    title="Delete from database"
+                    className="text-muted-foreground hover:text-red-500 p-1.5 rounded-lg hover:bg-red-500/10 transition-all shrink-0"
+                    title="Delete assessment"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>
@@ -2559,28 +2977,112 @@ Be professional, direct, supportive, and clear. Avoid fluff. Do not use conversa
           animate={{ opacity: 1, y: 0 }}
           className="mt-12 bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-3xl p-6 sm:p-8 shadow-sm"
         >
+          {/* Header & Source Badges */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 border-b border-slate-100 dark:border-slate-800 pb-4">
             <div className="flex items-center gap-2.5 text-neon-blue">
-              <AlertCircle className="w-6 h-6" />
-              <h3 className="text-xl font-bold text-[rgb(var(--foreground))]">Clinical Triage & Symptom Breakdown</h3>
+              <AlertCircle className="w-6 h-6 shrink-0" />
+              <div>
+                <h3 className="text-xl font-bold text-[rgb(var(--foreground))]">Clinical Triage & Symptom Breakdown</h3>
+                <p className="text-xs text-muted-foreground">Comprehensive multi-factor health evaluation based on entered criteria.</p>
+              </div>
             </div>
-            <div className="flex items-center gap-2">
+            
+            <div className="flex flex-wrap items-center gap-2">
               {loadedSource === 'database' && (
-                <span className="flex items-center gap-1.5 px-2.5 py-1 bg-emerald-500/10 border border-emerald-500/20 text-[10px] font-bold text-emerald-500 rounded-md">
-                  <CheckCircle2 className="w-3 h-3" /> DB Loaded
+                <span className="flex items-center gap-1.5 px-3 py-1 bg-emerald-500/10 border border-emerald-500/20 text-xs font-bold text-emerald-500 rounded-xl">
+                  <CheckCircle2 className="w-3.5 h-3.5" /> Cloud Loaded
                 </span>
               )}
               {loadedSource === 'fallback' && (
-                <span className="flex items-center gap-1.5 px-2.5 py-1 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-[10px] font-bold text-muted-foreground rounded-md">
-                  <Shield className="w-3 h-3" /> Offline
+                <span className="flex items-center gap-1.5 px-3 py-1 bg-amber-500/10 border border-amber-500/20 text-xs font-bold text-amber-500 rounded-xl">
+                  <Shield className="w-3.5 h-3.5" /> ⚡ Offline Clinical Engine
                 </span>
               )}
               {loadedSource === 'ai' && (
-                <span className="flex items-center gap-1.5 px-2.5 py-1 bg-blue-500/10 border border-blue-500/20 text-[10px] font-bold text-blue-500 rounded-md">
-                  <Sparkles className="w-3 h-3" /> Live AI Generated
+                <span className="flex items-center gap-1.5 px-3 py-1 bg-blue-500/10 border border-blue-500/20 text-xs font-bold text-blue-500 rounded-xl">
+                  <Sparkles className="w-3.5 h-3.5" /> Live Cloud AI Generated
                 </span>
               )}
+
+              {/* Action Buttons: Export Word (.docx) & Print */}
+              <button
+                type="button"
+                onClick={exportSymptomAssessmentDocx}
+                disabled={isExportingDocx}
+                className="flex items-center gap-1.5 px-3.5 py-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-foreground rounded-xl text-xs font-bold transition-all border border-slate-200 dark:border-slate-700"
+                title="Download formatted clinical document (.docx)"
+              >
+                <FileDown className="w-3.5 h-3.5 text-neon-blue" />
+                <span>{isExportingDocx ? 'Exporting...' : 'Word (.docx)'}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => window.print()}
+                className="flex items-center gap-1.5 px-3.5 py-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-foreground rounded-xl text-xs font-bold transition-all border border-slate-200 dark:border-slate-700"
+                title="Print report"
+              >
+                <Printer className="w-3.5 h-3.5 text-slate-500" />
+                <span>Print</span>
+              </button>
             </div>
+          </div>
+
+          {/* Patient Data Correlation Banner */}
+          <div className="p-4 sm:p-5 bg-slate-50 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-800 rounded-2xl mb-8">
+            <h4 className="text-xs font-extrabold uppercase tracking-wider text-muted-foreground mb-3 flex items-center gap-2">
+              <Activity className="w-3.5 h-3.5 text-neon-blue" />
+              <span>Correlated Patient Data & Triage Criteria</span>
+            </h4>
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 text-xs">
+              <div className="p-2.5 bg-background border border-border rounded-xl">
+                <span className="text-[10px] text-muted-foreground block mb-0.5">Demographics</span>
+                <span className="font-bold text-foreground">
+                  {age || '30'} yrs • {gender}
+                  {pregnancyStatus === 'yes' ? ' (Pregnant)' : ''}
+                </span>
+              </div>
+              <div className="p-2.5 bg-background border border-border rounded-xl">
+                <span className="text-[10px] text-muted-foreground block mb-0.5">Severity Score</span>
+                <span className={cn(
+                  "font-bold",
+                  parseInt(severity, 10) >= 8 ? "text-red-500" : parseInt(severity, 10) >= 5 ? "text-amber-500" : "text-emerald-500"
+                )}>
+                  {severity}/10 • {parseInt(severity, 10) >= 8 ? 'High / Critical' : parseInt(severity, 10) >= 5 ? 'Moderate' : 'Mild'}
+                </span>
+              </div>
+              <div className="p-2.5 bg-background border border-border rounded-xl">
+                <span className="text-[10px] text-muted-foreground block mb-0.5">Duration</span>
+                <span className="font-bold text-foreground">{duration || 'Unspecified'}</span>
+              </div>
+              <div className="p-2.5 bg-background border border-border rounded-xl">
+                <span className="text-[10px] text-muted-foreground block mb-0.5">Progression</span>
+                <span className="font-bold text-foreground capitalize">{trend}</span>
+              </div>
+              <div className="p-2.5 bg-background border border-border rounded-xl">
+                <span className="text-[10px] text-muted-foreground block mb-0.5">History</span>
+                <span className="font-bold text-foreground truncate block" title={history || 'None reported'}>
+                  {history || 'None reported'}
+                </span>
+              </div>
+              <div className="p-2.5 bg-background border border-border rounded-xl">
+                <span className="text-[10px] text-muted-foreground block mb-0.5">Medications / Allergies</span>
+                <span className="font-bold text-foreground truncate block" title={allergiesMedications || 'None reported'}>
+                  {allergiesMedications || 'None reported'}
+                </span>
+              </div>
+            </div>
+
+            {selectedSymptoms.length > 0 && (
+              <div className="mt-3 flex flex-wrap items-center gap-1.5 pt-3 border-t border-border/60">
+                <span className="text-[10px] font-bold text-muted-foreground mr-1">Associated Markers:</span>
+                {selectedSymptoms.map(s => (
+                  <span key={s} className="px-2 py-0.5 bg-neon-blue/10 border border-neon-blue/20 text-neon-blue rounded-md text-[10px] font-semibold">
+                    {s}
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
 
           {parsedResult ? (

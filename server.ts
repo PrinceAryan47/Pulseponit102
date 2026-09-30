@@ -8,6 +8,7 @@ import { Server, Socket } from "socket.io";
 import { GoogleGenAI } from "@google/genai";
 import admin from "firebase-admin";
 import { getFirestore } from "firebase-admin/firestore";
+import { generateSymptomCheckerFallback } from "./src/utils/offlineHealthData";
 
 let firebaseConfig: any = {};
 try {
@@ -757,180 +758,48 @@ async function startServer() {
         const genderMatch = promptText.match(/(?:Biological Gender|Gender|gender)\s*[:]?\s*(\w+)/i);
         const gender = genderMatch && genderMatch[1] ? genderMatch[1].trim() : "Unspecified";
 
+        const pregnancyMatch = promptText.match(/(?:Pregnancy Status|pregnant)\s*[:]?\s*(\w+)/i);
+        const pregnancyStatus = pregnancyMatch ? pregnancyMatch[1].trim().toLowerCase() : "no";
+
         const symptomMatch = promptText.match(/(?:Primary Symptoms|Symptoms)\s*[:]?\s*([^\n]+)/i);
         const symptoms = symptomMatch && symptomMatch[1] ? symptomMatch[1].trim() : "general physical discomfort";
 
         const severityMatch = promptText.match(/(?:Severity)\s*[:]?\s*(\d+)/i);
         const severity = severityMatch ? parseInt(severityMatch[1], 10) : 5;
 
-        const symptomsLower = symptoms.toLowerCase();
-        let causes = "";
-        let treatments = "";
-        let prevention = "";
-        let firstaid = "";
-        let resources = "";
+        const trendMatch = promptText.match(/(?:Progression Trend|Trend)\s*[:]?\s*(\w+)/i);
+        const trend = trendMatch && trendMatch[1] ? trendMatch[1].trim() : "stable";
 
-        if (
-          symptomsLower.includes("fever") || 
-          symptomsLower.includes("cough") || 
-          symptomsLower.includes("flu") || 
-          symptomsLower.includes("cold") || 
-          symptomsLower.includes("throat")
-        ) {
-          causes = `## Possible Causes & Pathology
-- **Viral Upper Respiratory Infection (Common Cold)**: Highly likely given standard respiratory symptom onset. Corresponds to mild self-limiting bronchial inflammation.
-- **Influenza (Seasonal Flu)**: Suggested if onset was sudden and accompanied by moderate systemic body aches or chills.
-- **Acute Bronchitis**: Mild airway passage congestion often trailing common viral profiles (as documented in CDC clinical guidelines).`;
-          
-          treatments = `## Evidence-Based Treatment Pathways
-- **Symptomatic Relief**: Keep fever and aches low with over-the-counter paracetamol (acetaminophen) or ibuprofen, checking appropriate dosages with a pharmacist.
-- **Supportive Therapies**: Warm water saline gargles (1/2 tsp salt in warm water) to soothe throat irritation, and steam inhalation or humidifiers to loosen nasal secretions.
-- **Rest & Hydration**: Prioritize sleep and clear fluids (water, herbal tea) to keep mucous membranes moist and help the immune system filter pathogens.`;
+        const durationMatch = promptText.match(/(?:Symptom Duration|Duration)\s*[:]?\s*([^\n]+)/i);
+        const duration = durationMatch && durationMatch[1] ? durationMatch[1].trim() : "recent";
 
-          prevention = `## Preventive Care & Lifestyle Adjustments
-- **Hygiene Measures**: Frequent hand-washing with soap for 20 seconds, or using an alcohol-based sanitizer, particularly before meals.
-- **Vaccination Timing**: Schedule annual influenza vaccine and relevant pneumococcal or booster shots.
-- **Airway Support**: Clean indoor air filters regularly and maintain hydration to preserve your respiratory tract's natural mucosal barrier.`;
+        const associatedMatch = promptText.match(/(?:Associated Symptoms)\s*[:]?\s*([^\n]+)/i);
+        const selectedSymptoms = associatedMatch && associatedMatch[1] && !associatedMatch[1].includes("None") 
+          ? associatedMatch[1].split(",").map(s => s.trim()) 
+          : [];
 
-          firstaid = `## First Aid & Critical Warning Red Flags
-- **Difficulty Breathing**: Immediate medical attention is required if there is shortness of breath, wheezing, or feelings of chest tightness.
-- **Persistent High Fever**: Fever above 103°F (39.4°C) that does not reduce with medication.
-- **Emergency Indicators**: Bluish lips or face, confusion, or inability to stay awake are critical emergency indicators. Call emergency services (911/112) immediately.`;
+        const historyMatch = promptText.match(/(?:Pre-existing Conditions|Medical History|History)\s*[:]?\s*([^\n]+)/i);
+        const history = historyMatch && historyMatch[1] ? historyMatch[1].trim() : "none reported";
 
-          resources = `## Doctor Screening Checkpoints & Verified Sources
-### Questions for Your Doctor:
-1. "Given my respiratory symptoms, is a diagnostic throat swab or PCR panel indicated?"
-2. "Are there underlying asthma or airway considerations we should review?"
-3. "At what point should we evaluate for potential secondary bacterial infection?"
+        const allergiesMatch = promptText.match(/(?:Allergies & Active Medications|Allergies|Medications)\s*[:]?\s*([^\n]+)/i);
+        const allergiesMedications = allergiesMatch && allergiesMatch[1] ? allergiesMatch[1].trim() : "none reported";
 
-### Trustworthy Medical Directories:
-| Platform | Search Reference Term | Clinical Scope |
-| :--- | :--- | :--- |
-| **Mayo Clinic** | Influenza & Common Cold | Clinical pathways, symptom relief, and home recovery |
-| **CDC.gov** | Preventive Respiratory Guidance | Seasonal vaccination schedules and hygiene guidelines |
-| **NHS UK** | Cough and Fever Care | Standard triage protocols and recovery timelines |`;
-        } else if (symptomsLower.includes("headache") || symptomsLower.includes("migraine")) {
-          causes = `## Possible Causes & Pathology
-- **Tension Headache**: The most common primary headache type, typically presenting as a tight band of pressure around the head, often related to stress or posture.
-- **Migraine Episode**: Indicated if the pain is unilateral, throbbing, or accompanied by sensory sensitivities (photophobia, phonophobia).
-- **Dehydration Headache**: Triggered by systemic fluid deficits which affect intracranial vascular dynamics.`;
+        const triggersMatch = promptText.match(/(?:Environmental Context \/ Triggers|Triggers)\s*[:]?\s*([^\n]+)/i);
+        const triggers = triggersMatch && triggersMatch[1] ? triggersMatch[1].trim() : "none reported";
 
-          treatments = `## Evidence-Based Treatment Pathways
-- **Dark, Quiet Rest**: Seek absolute sensory decompression in a cooled, darkened room to down-regulate over-stimulated neural pathways.
-- **Hydration Protocols**: Drink a large glass of water or electrolyte-balanced fluid slowly.
-- **OTC Pharmacotherapy**: Administer non-steroidal anti-inflammatory drugs (NSAIDs) or paracetamol according to package guidelines, avoiding overuse to prevent medication-overuse headaches.`;
-
-          prevention = `## Preventive Care & Lifestyle Adjustments
-- **Symptom Diary**: Keep a precise diary recording sleep, food triggers (aged cheeses, processed meats), and caffeine intake to identify patterns.
-- **Sleep Architecture**: Maintain a rigid, consistent sleep schedule, waking and resting at identical times daily.
-- **Ergonomic Support**: Ensure correct neck alignment and computer screen height at work to minimize muscular tension.`;
-
-          firstaid = `## First Aid & Critical Warning Red Flags
-- **Thunderclap Onset**: Headaches that peak in intensity within seconds (sudden, explosive pain) require immediate emergency department evaluation.
-- **Neurological Deficits**: Accompanying confusion, visual loss, double vision, speech difficulty, or weakness on one side of the body.
-- **Meningeal Signs**: High fever accompanied by a rigid neck, nausea, and severe light sensitivity require urgent screening for meningitis.`;
-
-          resources = `## Doctor Screening Checkpoints & Verified Sources
-### Questions for Your Doctor:
-1. "Does my headache profile suggest a primary migraine disorder?"
-2. "Are preventive prescription therapies appropriate for my frequency?"
-3. "Could my headaches be associated with medication overuse or neck strain?"
-
-### Trustworthy Medical Directories:
-| Platform | Search Reference Term | Clinical Scope |
-| :--- | :--- | :--- |
-| **Mayo Clinic** | Migraine & Tension Headaches | Diagnostic criteria, acute therapies, and lifestyle habits |
-| **MedlinePlus** | Headache Management | Patient guides, trigger checklists, and warning signs |
-| **NIH NINDS** | Headache Information Page | Comprehensive research-backed neurological explanations |`;
-        } else if (
-          symptomsLower.includes("pain") || 
-          symptomsLower.includes("stomach") || 
-          symptomsLower.includes("abdomen") || 
-          symptomsLower.includes("nausea") || 
-          symptomsLower.includes("diarrhea") || 
-          symptomsLower.includes("vomit")
-        ) {
-          causes = `## Possible Causes & Pathology
-- **Acute Gastroenteritis (Stomach Flu)**: Often viral or mild foodborne irritation, causing temporary bowel tract inflammation.
-- **Dietary Indiscretion**: Gastrointestinal distress from food sensitivities, overly rich foods, or temporary digestive disruption.
-- **Gastroesophageal Reflux (GERD)**: Acid backflow causing localized burning sensation in the upper epigastrium.`;
-
-          treatments = `## Evidence-Based Treatment Pathways
-- **Oral Rehydration**: Sip Oral Rehydration Salts (ORS) or water with electrolytes frequently in small quantities to offset fluid loss.
-- **BRAT Diet Transition**: Once nausea subsides, introduce gentle foods like bananas, rice, applesauce, and plain toast.
-- **Acid Buffering**: Utilize over-the-counter antacids or H2 blockers for localized upper stomach burning, following clinical instructions.`;
-
-          prevention = `## Preventive Care & Lifestyle Adjustments
-- **Food Hygiene**: Maintain sanitary food preparation surfaces, cook poultry thoroughly, and store perishables at proper cool temperatures.
-- **Probiotic Support**: Consume fermented whole foods (yogurt, kefir) or high-quality dietary fibers to rebuild gut biome resilience.
-- **Trigger Avoidance**: Eliminate carbonated drinks, excess caffeine, and spicy or greasy meals.`;
-
-          firstaid = `## First Aid & Critical Warning Red Flags
-- **Acute Localized Pain**: Severe, sharp, localized pain (such as the lower right quadrant, indicative of appendicitis) requires urgent evaluation.
-- **Dehydration Indicators**: Inability to keep fluids down for over 24 hours, extreme thirst, dry mouth, or dark/infrequent urine.
-- **Systemic Alarms**: Presence of blood in vomit or stools, or high fever with severe abdominal rigidity. Go to the ER immediately.`;
-
-          resources = `## Doctor Screening Checkpoints & Verified Sources
-### Questions for Your Doctor:
-1. "Could my abdominal symptoms indicate a specific food intolerance or IBS?"
-2. "Is a stool panel or diagnostic breath test indicated for persistent symptoms?"
-3. "What specific hydration markers should we track in my blood work?"
-
-### Trustworthy Medical Directories:
-| Platform | Search Reference Term | Clinical Scope |
-| :--- | :--- | :--- |
-| **NIDDK NIH** | Gastroenteritis & Acid Reflux | Detailed physiological guides on digestion and stomach conditions |
-| **Mayo Clinic** | Abdominal Pain Guide | Categorized pain mapping, home care, and warning signs |
-| **CDC.gov** | Food Safety and Hygiene | Guidelines to prevent foodborne pathogens and stomach flu |`;
-        } else {
-          causes = `## Possible Causes & Pathology
-- **Mild Physical Exertion Fatigue**: Temporary muscular or metabolic recovery response following exertion or systemic stress.
-- **Minor Localized Irritation**: Non-specific tissue, dermatological, or muscular irritation, often self-limiting in nature.
-- **Dehydration or Sleep Deficit**: Minor homeostatic imbalances that trigger general physical discomfort or fatigue.`;
-
-          treatments = `## Evidence-Based Treatment Pathways
-- **Relative Rest**: Allow the body a 24-48 hour window of lower physical demand to stimulate cellular self-repair.
-- **Thermodynamics**: Apply cool compress packs for acute swelling, or warm packs to soothe stiff, tense muscles.
-- **Sustained Hydration**: Drink pure water or electrolyte-fortified fluids to stabilize cellular fluid balances.`;
-
-          prevention = `## Preventive Care & Lifestyle Adjustments
-- **Sustained Sleep Quality**: Maintain a 7.5 to 8.5 hour nocturnal sleep window to maximize growth hormone release and nervous system repair.
-- **Micro-Nutrient Stability**: Consume a balanced whole-foods diet rich in magnesium, leafy greens, and lean proteins.
-- **Daily Recovery Routines**: Include active stretching, joint mobility routines, and 10 minutes of controlled diaphragmatic breathing daily.`;
-
-          firstaid = `## First Aid & Critical Warning Red Flags
-- **Acute Systemic Signs**: Sudden facial drooping, unilateral limb weakness, or severe speech difficulty require calling 911/112 immediately.
-- **Unexplained Shortness of Breath**: Sudden onset of breathing difficulty or crushing chest pain radiating to the neck, jaw, or arm.
-- **Loss of Orientation**: Feeling faint, sudden confusion, visual gaps, or inability to stand.`;
-
-          resources = `## Doctor Screening Checkpoints & Verified Sources
-### Questions for Your Doctor:
-1. "What baseline blood markers (CBC, Vitamin D, Thyroid) should we screen?"
-2. "How might my daily stress levels or sleep quality be impacting these symptoms?"
-3. "Are there any physical activity limitations I should follow?"
-
-### Trustworthy Medical Directories:
-| Platform | Search Reference Term | Clinical Scope |
-| :--- | :--- | :--- |
-| **Mayo Clinic** | Symptom Assessment & Care | Clinical home care strategies, diagnostics, and prevention |
-| **MedlinePlus** | General Wellness & Symptoms | Comprehensive, patient-friendly medical dictionaries and search |
-| **NIH.gov** | Preventive Health Guidelines | Evidence-backed guides for daily longevity and disease prevention |`;
-        }
-
-        return `[SECTION_1: POTENTIAL_CAUSES]
-${causes}
-
-[SECTION_2: TREATMENT_PATHWAYS]
-${treatments}
-
-[SECTION_3: PREVENTION_STRATEGIES]
-${prevention}
-
-[SECTION_4: FIRST_AID_PROTOCOLS]
-${firstaid}
-
-[SECTION_5: CLINICAL_RESOURCES]
-${resources}`;
+        return generateSymptomCheckerFallback({
+          age,
+          gender,
+          pregnancyStatus,
+          symptoms,
+          severity,
+          trend,
+          duration,
+          selectedSymptoms,
+          history,
+          allergiesMedications,
+          triggers
+        });
       }
 
       // 3. Men's Health & Preventive Screening Guides
@@ -1170,8 +1039,8 @@ Our backend clinical intelligence network is temporarily offline. Please contact
     try {
       const ai = getAIClient();
       
-      // Standardize on the modern, high-performance gemini-3.5-flash model
-      let targetModel = model || "gemini-3.5-flash";
+      // Standardize on the modern, high-performance gemini-3.8-flash model
+      let targetModel = model || "gemini-3.8-flash";
       
       const prohibitedOrDeprecated = [
         "gemini-1.5-flash",
@@ -1180,10 +1049,11 @@ Our backend clinical intelligence network is temporarily offline. Please contact
         "gemini-2.0-flash",
         "gemini-2.0-pro",
         "gemini-2.0-flash-thinking",
-        "gemini-2.5-flash"
+        "gemini-2.5-flash",
+        "gemini-3.5-flash"
       ];
       if (prohibitedOrDeprecated.includes(targetModel)) {
-        targetModel = "gemini-3.5-flash";
+        targetModel = "gemini-3.8-flash";
       }
 
       console.log(`Backend proxy: Generating content using model ${targetModel}`);
