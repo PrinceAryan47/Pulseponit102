@@ -9,29 +9,54 @@ import { UserStatusManager } from './components/UserStatusManager';
 import CallManager from './components/CallManager';
 import { initializeSettings } from './services/settingsService';
 
-// Pages (to be created)
-const Home = React.lazy(() => import('./pages/Home'));
-const Login = React.lazy(() => import('./pages/Login'));
-const Register = React.lazy(() => import('./pages/Register'));
-const Dashboard = React.lazy(() => import('./pages/Dashboard'));
-const Appointments = React.lazy(() => import('./pages/Appointments'));
-const HealthTools = React.lazy(() => import('./pages/HealthTools'));
-const Hospitals = React.lazy(() => import('./pages/Hospitals'));
-const Doctors = React.lazy(() => import('./pages/Doctors'));
-const MedicalRecords = React.lazy(() => import('./pages/MedicalRecords'));
-const Prescriptions = React.lazy(() => import('./pages/Prescriptions'));
-const Articles = React.lazy(() => import('./pages/Articles'));
-const ArticleDetail = React.lazy(() => import('./pages/ArticleDetail'));
-const CreateArticle = React.lazy(() => import('./pages/CreateArticle'));
-const EditArticle = React.lazy(() => import('./pages/EditArticle'));
-const Profile = React.lazy(() => import('./pages/Profile'));
-const FirstAid = React.lazy(() => import('./pages/FirstAid'));
-const DoctorDashboard = React.lazy(() => import('./pages/DoctorDashboard'));
-const AdminDashboard = React.lazy(() => import('./pages/AdminDashboard'));
-const Messages = React.lazy(() => import('./pages/Messages'));
+// Resilient lazy loader that retries on network drops or stale Vite dev chunks
+const lazyWithRetry = <T extends React.ComponentType<any>>(
+  factory: () => Promise<{ default: T }>
+) =>
+  React.lazy(async () => {
+    try {
+      return await factory();
+    } catch (error: any) {
+      console.warn("Dynamic module import failed, attempting retry...", error);
+      await new Promise((res) => setTimeout(res, 350));
+      try {
+        return await factory();
+      } catch (retryError: any) {
+        console.error("Secondary dynamic module load failed:", retryError);
+        const key = "pulsepoint_lazy_retry_" + (typeof window !== "undefined" ? window.location.pathname : "");
+        const alreadyTried = window.sessionStorage?.getItem(key);
+        if (!alreadyTried && typeof window !== "undefined") {
+          window.sessionStorage?.setItem(key, "true");
+          window.location.reload();
+          return { default: (() => null) as unknown as T };
+        }
+        throw retryError;
+      }
+    }
+  });
 
-const Chat = React.lazy(() => import('./pages/Chat'));
-const Meeting = React.lazy(() => import('./pages/Meeting'));
+// Pages
+const Home = lazyWithRetry(() => import('./pages/Home'));
+const Login = lazyWithRetry(() => import('./pages/Login'));
+const Register = lazyWithRetry(() => import('./pages/Register'));
+const Dashboard = lazyWithRetry(() => import('./pages/Dashboard'));
+const Appointments = lazyWithRetry(() => import('./pages/Appointments'));
+const HealthTools = lazyWithRetry(() => import('./pages/HealthTools'));
+const Hospitals = lazyWithRetry(() => import('./pages/Hospitals'));
+const Doctors = lazyWithRetry(() => import('./pages/Doctors'));
+const MedicalRecords = lazyWithRetry(() => import('./pages/MedicalRecords'));
+const Prescriptions = lazyWithRetry(() => import('./pages/Prescriptions'));
+const Articles = lazyWithRetry(() => import('./pages/Articles'));
+const ArticleDetail = lazyWithRetry(() => import('./pages/ArticleDetail'));
+const CreateArticle = lazyWithRetry(() => import('./pages/CreateArticle'));
+const EditArticle = lazyWithRetry(() => import('./pages/EditArticle'));
+const Profile = lazyWithRetry(() => import('./pages/Profile'));
+const FirstAid = lazyWithRetry(() => import('./pages/FirstAid'));
+const DoctorDashboard = lazyWithRetry(() => import('./pages/DoctorDashboard'));
+const AdminDashboard = lazyWithRetry(() => import('./pages/AdminDashboard'));
+const Messages = lazyWithRetry(() => import('./pages/Messages'));
+const Chat = lazyWithRetry(() => import('./pages/Chat'));
+const Meeting = lazyWithRetry(() => import('./pages/Meeting'));
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, loading } = useAuth();
