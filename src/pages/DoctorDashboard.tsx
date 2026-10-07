@@ -44,7 +44,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '../lib/utils';
-import { collection, query, where, onSnapshot, orderBy, limit, getDocs, addDoc, serverTimestamp, doc, updateDoc, setDoc } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, orderBy, limit, getDocs, addDoc, serverTimestamp, doc, updateDoc, setDoc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { Appointment, MedicalRecord, UserProfile, Article } from '../types';
 import { format } from 'date-fns';
@@ -56,6 +56,76 @@ import { MedicalRecordDetailsModal } from '../components/MedicalRecordDetailsMod
 import { downloadMedicalRecordPDF } from '../utils/medicalDocumentUtils';
 import { DoctorConsentRequestModal } from '../components/DoctorConsentRequestModal';
 import { PatientDataDetailsModal } from '../components/PatientDataDetailsModal';
+
+// Hook to strictly restrict doctor patient access to appointed or consented patients
+const useDoctorAssignedPatients = (doctorId?: string) => {
+  const [patients, setPatients] = useState<UserProfile[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!doctorId) {
+      setPatients([]);
+      setLoading(false);
+      return;
+    }
+
+    const qAppointments = query(collection(db, 'appointments'), where('doctorId', '==', doctorId));
+    const qConsent = query(collection(db, 'accessRequests'), where('doctorId', '==', doctorId), where('status', '==', 'approved'));
+
+    let appointedMap = new Map<string, any>();
+    let consentedMap = new Map<string, any>();
+
+    const updateList = async () => {
+      const combinedIds = Array.from(new Set([...appointedMap.keys(), ...consentedMap.keys()]));
+      if (combinedIds.length === 0) {
+        setPatients([]);
+        setLoading(false);
+        return;
+      }
+      try {
+        const uDocs = await Promise.all(combinedIds.map(id => getDoc(doc(db, 'users', id))));
+        const resolved = uDocs.map((d, i) => {
+          const id = combinedIds[i];
+          const fallback = appointedMap.get(id) || consentedMap.get(id) || {};
+          if (d.exists()) {
+            return { uid: d.id, ...d.data() } as UserProfile;
+          }
+          return { uid: id, fullName: fallback.patientName || 'Patient', email: fallback.patientEmail || '', ...fallback } as UserProfile;
+        });
+        setPatients(resolved);
+      } catch (err) {
+        console.error("Error loading assigned patients:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    const unsubApp = onSnapshot(qAppointments, (snap) => {
+      appointedMap.clear();
+      snap.docs.forEach(d => {
+        const data = d.data();
+        if (data.patientId) appointedMap.set(data.patientId, data);
+      });
+      updateList();
+    }, () => setLoading(false));
+
+    const unsubConsent = onSnapshot(qConsent, (snap) => {
+      consentedMap.clear();
+      snap.docs.forEach(d => {
+        const data = d.data();
+        if (data.patientId) consentedMap.set(data.patientId, data);
+      });
+      updateList();
+    }, () => setLoading(false));
+
+    return () => {
+      unsubApp();
+      unsubConsent();
+    };
+  }, [doctorId]);
+
+  return { patients, loading };
+};
 
 // Tab Components
 const OverviewTab = ({ 
@@ -295,9 +365,8 @@ const PatientsTab = () => {
   const { profile, user } = useAuth();
   const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState('');
-  const [patients, setPatients] = useState<UserProfile[]>([]);
+  const { patients, loading } = useDoctorAssignedPatients(profile?.uid || user?.uid);
   const [accessRequests, setAccessRequests] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
 
   // States for viewing patient history and requesting/viewing consent data
   const [selectedHistoryPatient, setSelectedHistoryPatient] = useState<UserProfile | null>(null);
@@ -305,18 +374,6 @@ const PatientsTab = () => {
   const [selectedPatientForData, setSelectedPatientForData] = useState<UserProfile | null>(null);
   const [patientHistoryRecords, setPatientHistoryRecords] = useState<MedicalRecord[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
-
-  useEffect(() => {
-    const q = query(collection(db, 'users'), where('role', '==', 'patient'), limit(50));
-    const unsubscribe = onSnapshot(q, (snap) => {
-      setPatients(snap.docs.map(doc => ({ uid: doc.id, ...doc.data() } as UserProfile)));
-      setLoading(false);
-    }, (error) => {
-      console.error("Error fetching patients:", error);
-      setLoading(false);
-    });
-    return () => unsubscribe();
-  }, []);
 
   useEffect(() => {
     const currentUserId = user?.uid || profile?.uid;
@@ -638,9 +695,9 @@ const PatientsTab = () => {
 };
 
 const ConsultationsTab = () => {
-  const { profile } = useAuth();
+  const { profile, user } = useAuth();
   const [isRecording, setIsRecording] = useState(false);
-  const [patients, setPatients] = useState<UserProfile[]>([]);
+  const { patients } = useDoctorAssignedPatients(profile?.uid || user?.uid);
   const [selectedPatientId, setSelectedPatientId] = useState('');
   const [formData, setFormData] = useState({
     symptoms: '',
@@ -648,14 +705,6 @@ const ConsultationsTab = () => {
     treatment: ''
   });
   const [loading, setLoading] = useState(false);
-
-  useEffect(() => {
-    const q = query(collection(db, 'users'), where('role', '==', 'patient'), limit(50));
-    const unsubscribe = onSnapshot(q, (snap) => {
-      setPatients(snap.docs.map(doc => ({ uid: doc.id, ...doc.data() } as UserProfile)));
-    });
-    return () => unsubscribe();
-  }, []);
 
   const selectedPatient = patients.find(p => p.uid === selectedPatientId);
 
@@ -699,17 +748,26 @@ const ConsultationsTab = () => {
 
           <div className="space-y-6">
             <div>
-              <label className="block text-sm font-bold text-muted-foreground mb-2 uppercase tracking-wider">Select Patient</label>
-              <select 
-                value={selectedPatientId}
-                onChange={(e) => setSelectedPatientId(e.target.value)}
-                className="w-full p-4 bg-muted/50 border border-border rounded-2xl outline-none focus:ring-2 focus:ring-primary transition-all"
-              >
-                <option value="">Choose a patient...</option>
-                {patients.map(p => (
-                  <option key={p.uid} value={p.uid}>{p.fullName}</option>
-                ))}
-              </select>
+              <div className="flex items-center justify-between mb-2">
+                <label className="block text-sm font-bold text-muted-foreground uppercase tracking-wider">Select Patient</label>
+                <span className="text-[10px] text-muted-foreground">Only appointed or consented patients</span>
+              </div>
+              {patients.length > 0 ? (
+                <select 
+                  value={selectedPatientId}
+                  onChange={(e) => setSelectedPatientId(e.target.value)}
+                  className="w-full p-4 bg-muted/50 border border-border rounded-2xl outline-none focus:ring-2 focus:ring-primary transition-all text-sm"
+                >
+                  <option value="">Choose an authorized patient...</option>
+                  {patients.map(p => (
+                    <option key={p.uid} value={p.uid}>{p.fullName} ({p.email || 'Patient'})</option>
+                  ))}
+                </select>
+              ) : (
+                <div className="p-3.5 bg-amber-500/10 border border-amber-500/20 rounded-2xl text-xs text-amber-800 dark:text-amber-300">
+                  <span className="font-bold">No Authorized Patients:</span> Only patients who have scheduled an appointment with you or approved a medical access consent request can be selected.
+                </div>
+              )}
             </div>
 
             <div>
@@ -809,8 +867,8 @@ const ConsultationsTab = () => {
 };
 
 const PrescriptionsTab = () => {
-  const { profile } = useAuth();
-  const [patients, setPatients] = useState<UserProfile[]>([]);
+  const { profile, user } = useAuth();
+  const { patients } = useDoctorAssignedPatients(profile?.uid || user?.uid);
   const [formData, setFormData] = useState({
     patientId: '',
     medicationName: '',
@@ -820,14 +878,6 @@ const PrescriptionsTab = () => {
     instructions: ''
   });
   const [loading, setLoading] = useState(false);
-
-  useEffect(() => {
-    const q = query(collection(db, 'users'), where('role', '==', 'patient'), limit(50));
-    const unsubscribe = onSnapshot(q, (snap) => {
-      setPatients(snap.docs.map(doc => ({ uid: doc.id, ...doc.data() } as UserProfile)));
-    });
-    return () => unsubscribe();
-  }, []);
 
   const handleSendPrescription = async () => {
     if (!formData.patientId || !formData.medicationName) {
@@ -875,17 +925,26 @@ const PrescriptionsTab = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-bold text-muted-foreground mb-2 uppercase tracking-wider">Patient</label>
-              <select 
-                value={formData.patientId}
-                onChange={(e) => setFormData({...formData, patientId: e.target.value})}
-                className="w-full p-4 bg-muted/50 border border-border rounded-2xl outline-none focus:ring-2 focus:ring-primary transition-all"
-              >
-                <option value="">Select Patient...</option>
-                {patients.map(p => (
-                  <option key={p.uid} value={p.uid}>{p.fullName}</option>
-                ))}
-              </select>
+              <div className="flex items-center justify-between mb-2">
+                <label className="block text-sm font-bold text-muted-foreground uppercase tracking-wider">Patient</label>
+                <span className="text-[10px] text-muted-foreground">Only appointed or consented patients</span>
+              </div>
+              {patients.length > 0 ? (
+                <select 
+                  value={formData.patientId}
+                  onChange={(e) => setFormData({...formData, patientId: e.target.value})}
+                  className="w-full p-4 bg-muted/50 border border-border rounded-2xl outline-none focus:ring-2 focus:ring-primary transition-all text-sm"
+                >
+                  <option value="">Select an authorized patient...</option>
+                  {patients.map(p => (
+                    <option key={p.uid} value={p.uid}>{p.fullName} ({p.email || 'Patient'})</option>
+                  ))}
+                </select>
+              ) : (
+                <div className="p-3.5 bg-amber-500/10 border border-amber-500/20 rounded-2xl text-xs text-amber-800 dark:text-amber-300">
+                  <span className="font-bold">No Authorized Patients:</span> Only patients who have scheduled an appointment with you or approved a medical access consent request can be prescribed medication.
+                </div>
+              )}
             </div>
             <div>
               <label className="block text-sm font-bold text-muted-foreground mb-2 uppercase tracking-wider">Medication Name</label>

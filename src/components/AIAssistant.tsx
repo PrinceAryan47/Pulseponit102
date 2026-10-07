@@ -220,6 +220,12 @@ const AIAssistant: React.FC = () => {
 
             {!isMinimized && (
               <>
+                {/* Clinical Guidance Notice */}
+                <div className="px-4 py-2 bg-amber-500/10 border-b border-amber-500/20 text-[11px] font-medium text-amber-900 dark:text-amber-200 flex items-center gap-2">
+                  <span className="font-bold shrink-0">⚠️ Notice:</span>
+                  <span className="truncate">Informational health & navigation guide. Call 911/999/112 in emergencies.</span>
+                </div>
+
                 {/* Messages */}
                 <div 
                   ref={scrollRef}

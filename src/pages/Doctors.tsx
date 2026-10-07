@@ -93,7 +93,9 @@ const Doctors: React.FC = () => {
   useEffect(() => {
     const q = query(collection(db, 'users'), where('role', '==', 'doctor'));
     const unsubscribe = onSnapshot(q, (snap) => {
-      const data = snap.docs.map(doc => ({ uid: doc.id, ...doc.data() } as unknown as UserProfile));
+      const data = snap.docs
+        .map(doc => ({ uid: doc.id, ...doc.data() } as unknown as UserProfile))
+        .filter(d => d.status === 'approved');
       setDoctors(data);
       setLoading(false);
     });

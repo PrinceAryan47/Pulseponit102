@@ -92,10 +92,7 @@ const Meeting: React.FC = () => {
   const [currentCaption, setCurrentCaption] = useState<string | null>(null);
 
   // Chat Feed
-  const [chatMessages, setChatMessages] = useState<Array<{ sender: string; time: string; text: string; isMe: boolean; scope: 'Everyone' | 'Physician Only' }>>([
-    { sender: 'Dr. Sarah Peterson (GP)', time: '10:00 AM', text: 'Hello, thank you for joining our encrypted clinical streaming network.', isMe: false, scope: 'Everyone' },
-    { sender: 'Clinical Specialist AI', time: '10:01 AM', text: 'Vital signs integration holds 100% telemetry accuracy.', isMe: false, scope: 'Everyone' },
-  ]);
+  const [chatMessages, setChatMessages] = useState<Array<{ sender: string; time: string; text: string; isMe: boolean; scope: 'Everyone' | 'Physician Only' }>>([]);
   const [newMsgText, setNewMsgText] = useState('');
   const [chatScope, setChatScope] = useState<'Everyone' | 'Physician Only'>('Everyone');
 
@@ -142,8 +139,7 @@ const Meeting: React.FC = () => {
   // Master Participants Directory
   const [participants, setParticipants] = useState<Participant[]>([
     { id: 'local', name: userName, isLocal: true, audio: isMicOn, video: isVideoOn, handRaised: false, avatar: profile?.photoURL || '' },
-    { id: 'remote', name: 'Dr. Sarah Peterson (GP)', isLocal: false, audio: true, video: true, handRaised: false, isHost: true, role: 'Physician', avatar: 'https://images.unsplash.com/photo-1559839734-2b71ea197ec2?auto=format&fit=crop&q=80&w=240' },
-    { id: 'specialist_ai', name: 'Clinical Specialist AI', isLocal: false, audio: false, video: true, handRaised: false, role: 'AI Assistant', avatar: 'https://images.unsplash.com/photo-1581056771107-24ca5f033842?auto=format&fit=crop&q=80&w=240' }
+    { id: 'remote', name: 'Dr. Sarah Peterson (GP)', isLocal: false, audio: true, video: true, handRaised: false, isHost: true, role: 'Physician', avatar: 'https://images.unsplash.com/photo-1559839734-2b71ea197ec2?auto=format&fit=crop&q=80&w=240' }
   ]);
 
   // Synchronize local states to our master list
@@ -156,42 +152,49 @@ const Meeting: React.FC = () => {
     }));
   }, [userName, isMicOn, isVideoOn]);
 
-  // Dynamic Speaker Switching Loop
-  useEffect(() => {
-    if (!isJoined) return;
-    const speakerInterval = setInterval(() => {
-      const speakers = ['local', 'remote', 'specialist_ai'];
-      const randomSpeaker = speakers[Math.floor(Math.random() * speakers.length)];
-      setActiveSpeakerId(randomSpeaker);
-    }, 8000);
-
-    return () => clearInterval(speakerInterval);
-  }, [isJoined]);
-
-  // Captions Simulator Loop
+  // Live Web Speech Recognition for Captions
   useEffect(() => {
     if (!captionsActive || !isJoined) {
       setCurrentCaption(null);
       return;
     }
 
-    const subtitles = [
-      "Hello, I can see your visual data stream is active and secured.",
-      "Comparing current heartbeat rhythm with latest clinical profile...",
-      "Could you elaborate on any physical discomfort or exertion fatigue?",
-      "Excellent. I have processed an instant summary for your local dashboard.",
-      "The pharmacy dispatch code has been assigned to your profile page."
-    ];
+    const SpeechRec = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRec) {
+      setCurrentCaption("Live captions enabled. (Microphone listening for incoming audio...)");
+      return;
+    }
 
-    let index = 0;
-    setCurrentCaption(subtitles[0]);
+    try {
+      const recognition = new SpeechRec();
+      recognition.continuous = true;
+      recognition.interimResults = true;
+      recognition.lang = 'en-US';
 
-    const captionInterval = setInterval(() => {
-      index = (index + 1) % subtitles.length;
-      setCurrentCaption(subtitles[index]);
-    }, 6500);
+      recognition.onresult = (event: any) => {
+        let transcript = '';
+        for (let i = event.resultIndex; i < event.results.length; ++i) {
+          transcript += event.results[i][0].transcript;
+        }
+        if (transcript.trim()) {
+          setCurrentCaption(transcript.trim());
+        }
+      };
 
-    return () => clearInterval(captionInterval);
+      recognition.onerror = () => {
+        setCurrentCaption("Live captions active. (Microphone listening for speech...)");
+      };
+
+      recognition.start();
+
+      return () => {
+        try {
+          recognition.stop();
+        } catch (_) {}
+      };
+    } catch (_) {
+      setCurrentCaption("Live captions active. (Microphone listening for speech...)");
+    }
   }, [captionsActive, isJoined]);
 
   // Timing trigger

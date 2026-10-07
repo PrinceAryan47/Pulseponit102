@@ -28,6 +28,18 @@ export interface UserProfile {
   hospitalName?: string;
   status?: UserStatus;
   licenseVerificationStatus?: 'pending' | 'verified' | 'rejected';
+  licenseDocumentUrl?: string;
+  licenseDocumentName?: string;
+  licenseVerificationDetails?: {
+    board?: string;
+    boardCode?: string;
+    verificationId?: string;
+    status?: string;
+    confidenceScore?: number;
+    summary?: string;
+    expiryDate?: string;
+    verificationTimestamp?: string;
+  };
   hospitalApprovalStatus?: 'pending' | 'approved' | 'rejected';
   availability?: Record<string, string[]>;
   isOnline?: boolean;

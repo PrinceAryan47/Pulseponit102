@@ -30,7 +30,10 @@ import {
   Edit2,
   Save,
   Copy,
-  Check
+  Check,
+  ShieldCheck,
+  ExternalLink,
+  Loader2
 } from 'lucide-react';
 import { collection, query, getDocs, getDoc, setDoc, serverTimestamp, updateDoc, doc, where, orderBy, limit, getCountFromServer, deleteDoc, addDoc, onSnapshot } from 'firebase/firestore';
 import { auth, db } from '../firebase';
@@ -390,6 +393,46 @@ const AdminDashboard: React.FC = () => {
       setAlertConfig({ isOpen: true, message: err.message || "Failed to refresh Firebase data.", type: 'error' });
     } finally {
       setIsRefreshingData(false);
+    }
+  };
+
+  const [selectedLicenseDoc, setSelectedLicenseDoc] = useState<{ url: string; name: string; doctorName: string } | null>(null);
+  const [verifyingDocId, setVerifyingDocId] = useState<string | null>(null);
+
+  const handleRunAdminAutoVerification = async (targetUser: UserProfile) => {
+    setVerifyingDocId(targetUser.uid);
+    try {
+      const res = await fetch('/api/verify-license', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          licenseNumber: targetUser.licenseNumber,
+          fullName: targetUser.fullName,
+          specialization: targetUser.specialization,
+          documentUrl: targetUser.licenseDocumentUrl
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Verification API check failed');
+
+      await updateDoc(doc(db, 'users', targetUser.uid), {
+        licenseVerificationStatus: data.valid ? 'verified' : 'rejected',
+        licenseVerificationDetails: data
+      });
+
+      setAlertConfig({
+        isOpen: true,
+        message: `Automated Check Passed: ${data.board} (${data.status}). Confidence: ${Math.round(data.confidenceScore * 100)}%`,
+        type: 'success'
+      });
+    } catch (err: any) {
+      setAlertConfig({
+        isOpen: true,
+        message: err.message || 'Verification API encountered an issue',
+        type: 'error'
+      });
+    } finally {
+      setVerifyingDocId(null);
     }
   };
 
@@ -1085,16 +1128,60 @@ const AdminDashboard: React.FC = () => {
                       </div>
                     </td>
                     <td className="px-6 py-4">
-                      <div className="space-y-1">
+                      <div className="space-y-1.5">
                         <p className="text-sm font-bold text-foreground">{user.specialization}</p>
-                        <p className="text-[10px] text-muted-foreground uppercase tracking-widest">License: {user.licenseNumber}</p>
+                        <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-mono">License: {user.licenseNumber}</p>
+                        {user.licenseDocumentUrl && (
+                          <button
+                            onClick={() => setSelectedLicenseDoc({
+                              url: user.licenseDocumentUrl!,
+                              name: user.licenseDocumentName || 'Doctor_License_Document',
+                              doctorName: user.fullName
+                            })}
+                            className="inline-flex items-center gap-1.5 text-[11px] font-bold text-primary hover:underline bg-primary/10 px-2.5 py-1 rounded-lg"
+                          >
+                            <FileText className="w-3.5 h-3.5 text-primary" />
+                            <span>View Uploaded License</span>
+                          </button>
+                        )}
                       </div>
                     </td>
                     <td className="px-6 py-4">
-                      <div className="flex items-center gap-1.5 text-amber-500">
-                        <AlertCircle className="w-4 h-4 animate-pulse" />
-                        <span className="text-xs font-bold">Pending Review</span>
-                      </div>
+                      {user.licenseVerificationStatus === 'verified' ? (
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-1.5 text-emerald-500">
+                            <ShieldCheck className="w-4 h-4 text-emerald-500" />
+                            <span className="text-xs font-bold">Auto-Verified Active</span>
+                          </div>
+                          {user.licenseVerificationDetails?.board && (
+                            <p className="text-[10px] text-muted-foreground">{user.licenseVerificationDetails.board}</p>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="space-y-2">
+                          <div className="flex items-center gap-1.5 text-amber-500">
+                            <AlertCircle className="w-4 h-4 animate-pulse" />
+                            <span className="text-xs font-bold">Pending Review</span>
+                          </div>
+                          <button
+                            disabled={verifyingDocId === user.uid}
+                            onClick={() => handleRunAdminAutoVerification(user)}
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-neon-blue/10 hover:bg-neon-blue/20 text-neon-blue text-[11px] font-bold rounded-lg border border-neon-blue/30 transition-all cursor-pointer disabled:opacity-50"
+                          >
+                            {verifyingDocId === user.uid ? (
+                              <>
+                                <Loader2 className="w-3 h-3 animate-spin" />
+                                <span>Checking...</span>
+                              </>
+                            ) : (
+                              <>
+                                <Sparkles className="w-3 h-3" />
+                                <span>Run Auto-Check</span>
+                              </>
+                            )}
+                          </button>
+                        </div>
+                      )}
                     </td>
                     <td className="px-6 py-4 text-sm text-slate-500 font-medium">
                       {formatDate(user.createdAt)}
@@ -1103,13 +1190,13 @@ const AdminDashboard: React.FC = () => {
                       <div className="flex items-center justify-end gap-2">
                         <button 
                           onClick={() => handleVerifyDoctor(user.uid, 'approved')}
-                          className="px-4 py-2 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 rounded-xl text-xs font-bold hover:bg-emerald-500 hover:text-white transition-all"
+                          className="px-4 py-2 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 rounded-xl text-xs font-bold hover:bg-emerald-500 hover:text-white transition-all cursor-pointer"
                         >
                           Approve
                         </button>
                         <button 
                           onClick={() => handleVerifyDoctor(user.uid, 'rejected')}
-                          className="px-4 py-2 bg-rose-500/10 text-rose-600 dark:text-rose-400 rounded-xl text-xs font-bold hover:bg-rose-500 hover:text-white transition-all"
+                          className="px-4 py-2 bg-rose-500/10 text-rose-600 dark:text-rose-400 rounded-xl text-xs font-bold hover:bg-rose-500 hover:text-white transition-all cursor-pointer"
                         >
                           Reject
                         </button>
@@ -1798,6 +1885,61 @@ const AdminDashboard: React.FC = () => {
                   </div>
                 </form>
               )}
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* License Document Preview Modal */}
+      <AnimatePresence>
+        {selectedLicenseDoc && (
+          <div className="fixed inset-0 z-[105] flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-card w-full max-w-2xl rounded-[2.5rem] p-6 sm:p-8 border border-border shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
+            >
+              <div className="flex items-center justify-between pb-4 border-b border-border">
+                <div>
+                  <h3 className="text-xl font-bold text-foreground">Medical License Document</h3>
+                  <p className="text-xs text-muted-foreground">Practitioner: {selectedLicenseDoc.doctorName}</p>
+                </div>
+                <button
+                  onClick={() => setSelectedLicenseDoc(null)}
+                  className="p-2 hover:bg-muted rounded-xl transition-colors text-muted-foreground hover:text-foreground"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="flex-1 overflow-auto py-4 flex items-center justify-center">
+                {selectedLicenseDoc.url.startsWith('data:image/') || selectedLicenseDoc.url.startsWith('http') ? (
+                  <img
+                    src={selectedLicenseDoc.url}
+                    alt="License Document Preview"
+                    className="max-h-[60vh] max-w-full rounded-2xl object-contain border border-border"
+                  />
+                ) : (
+                  <iframe
+                    src={selectedLicenseDoc.url}
+                    title="License Document"
+                    className="w-full h-[60vh] rounded-2xl border border-border"
+                  />
+                )}
+              </div>
+
+              <div className="pt-4 border-t border-border flex items-center justify-between">
+                <span className="text-xs text-muted-foreground truncate max-w-[300px]">
+                  {selectedLicenseDoc.name}
+                </span>
+                <button
+                  onClick={() => setSelectedLicenseDoc(null)}
+                  className="px-5 py-2.5 bg-primary text-primary-foreground font-bold rounded-xl text-xs hover:opacity-90 transition-all cursor-pointer"
+                >
+                  Close Preview
+                </button>
+              </div>
             </motion.div>
           </div>
         )}

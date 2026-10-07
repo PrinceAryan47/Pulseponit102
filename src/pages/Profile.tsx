@@ -92,17 +92,44 @@ const Profile: React.FC = () => {
   const [appointmentAlerts, setAppointmentAlerts] = useState(profile?.appointmentAlertsSubscribed || false);
   const [permissionState, setPermissionState] = useState<string>('default');
 
-  // Simulated Session Management
+  // Truthful Current Session & Device Detection
+  const getBrowserInfo = () => {
+    if (typeof navigator === 'undefined') return 'Active Web Client';
+    const ua = navigator.userAgent;
+    let browser = 'Web Browser';
+    if (ua.includes('Firefox')) browser = 'Firefox';
+    else if (ua.includes('Chrome')) browser = 'Chrome';
+    else if (ua.includes('Safari')) browser = 'Safari';
+    else if (ua.includes('Edge')) browser = 'Microsoft Edge';
+    
+    let os = 'Desktop';
+    if (ua.includes('Mac')) os = 'macOS';
+    else if (ua.includes('Windows')) os = 'Windows';
+    else if (ua.includes('Linux')) os = 'Linux';
+    else if (ua.includes('Android')) os = 'Android';
+    else if (ua.includes('iPhone') || ua.includes('iPad')) os = 'iOS';
+
+    return `${browser} on ${os}`;
+  };
+
+  const currentDevice = getBrowserInfo();
   const defaultSessions = [
-    { id: '1', device: 'Chrome on macOS (Current)', lastActive: 'Active now', location: 'Europe/London (Approx)', isCurrent: true },
-    { id: '2', device: 'Safari on iPhone 15 Pro', lastActive: 'Last active 2 hours ago', location: 'London, UK', isCurrent: false },
-    { id: '3', device: 'Firefox on Windows PC', lastActive: 'Last active 3 days ago', location: 'Manchester, UK', isCurrent: false }
+    { 
+      id: 'current-session', 
+      device: `${currentDevice} (Current Active Device)`, 
+      lastActive: 'Active now', 
+      location: typeof Intl !== 'undefined' ? Intl.DateTimeFormat().resolvedOptions().timeZone || 'Current Network' : 'Current Network', 
+      isCurrent: true 
+    }
   ];
 
   const defaultLoginHistory = [
-    { timestamp: new Date(Date.now() - 5 * 60 * 1000).toLocaleString(), device: 'Chrome on macOS', ip: '192.168.1.45', location: 'London, UK (Approx)' },
-    { timestamp: new Date(Date.now() - 24 * 60 * 60 * 1000).toLocaleString(), device: 'Safari on iPhone', ip: '192.168.1.102', location: 'London, UK' },
-    { timestamp: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toLocaleString(), device: 'Firefox on Windows', ip: '82.34.12.98', location: 'Manchester, UK' }
+    { 
+      timestamp: new Date().toLocaleString(), 
+      device: currentDevice, 
+      ip: 'Client Direct Connection', 
+      location: typeof Intl !== 'undefined' ? Intl.DateTimeFormat().resolvedOptions().timeZone || 'Current Network' : 'Current Network' 
+    }
   ];
 
   const [activeSessions, setActiveSessions] = useState<Array<{ id: string; device: string; lastActive: string; location: string; isCurrent: boolean }>>(profile?.activeSessions || defaultSessions);
@@ -524,7 +551,7 @@ const Profile: React.FC = () => {
         </div>
         <div className="flex items-center gap-2 bg-card border border-border px-4 py-2 rounded-2xl text-xs font-bold text-muted-foreground">
           <Shield className="w-4 h-4 text-primary animate-pulse" />
-          <span>Secured by Firebase Trust Network</span>
+          <span>Role-Based Access Controlled</span>
         </div>
       </div>
 
@@ -1093,7 +1120,7 @@ const Profile: React.FC = () => {
                         )}
                       </div>
                       <p className="text-xs text-muted-foreground leading-relaxed">
-                        Secure your medical credentials with SMS verification codes. Strongly advised to prevent unauthorized medical records breaches.
+                        Secondary login verification challenge. Prompts additional security confirmation when signing into clinical sessions from new devices.
                       </p>
                     </div>
                     <button

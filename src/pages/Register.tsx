@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { createUserWithEmailAndPassword, signInWithPopup, GoogleAuthProvider } from 'firebase/auth';
 import { doc, getDoc, setDoc, collection, getDocs, serverTimestamp, query, where } from 'firebase/firestore';
 import { auth, db } from '../firebase';
-import { User, Mail, Lock, Phone, UserCircle, Stethoscope, Hospital, AlertCircle, ArrowRight, Building2, Eye, EyeOff, Chrome } from 'lucide-react';
+import { User, Mail, Lock, Phone, UserCircle, Stethoscope, Hospital, AlertCircle, ArrowRight, Building2, Eye, EyeOff, Chrome, Upload, CheckCircle2, FileText, Sparkles, ShieldCheck, Loader2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { UserRole, Hospital as HospitalType } from '../types';
 import { cn } from '../lib/utils';
@@ -81,6 +81,61 @@ const Register: React.FC = () => {
     specialization: '',
     hospitalId: ''
   });
+
+  // Automated Medical License Verification & Document Upload States
+  const [licenseDocData, setLicenseDocData] = useState<string>('');
+  const [licenseDocFileName, setLicenseDocFileName] = useState<string>('');
+  const [isVerifyingLicense, setIsVerifyingLicense] = useState(false);
+  const [licenseVerificationResult, setLicenseVerificationResult] = useState<any | null>(null);
+  const [licenseVerificationError, setLicenseVerificationError] = useState<string>('');
+
+  const handleDocumentUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 8 * 1024 * 1024) {
+      alert("Please upload a license document smaller than 8MB.");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      setLicenseDocData(reader.result as string);
+      setLicenseDocFileName(file.name);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleRunLicenseVerification = async (licNum: string, docName: string, spec: string) => {
+    if (!licNum.trim()) {
+      setLicenseVerificationError("Please enter your medical license number first.");
+      return;
+    }
+    setIsVerifyingLicense(true);
+    setLicenseVerificationError('');
+    try {
+      const response = await fetch('/api/verify-license', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          licenseNumber: licNum.trim(),
+          fullName: docName || formData.fullName || 'Practitioner',
+          specialization: spec || formData.specialization,
+          documentUrl: licenseDocData
+        })
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'Verification check failed');
+      }
+      setLicenseVerificationResult(data);
+    } catch (err: any) {
+      setLicenseVerificationError(err.message || 'Verification failed. Our admin team will inspect manually.');
+    } finally {
+      setIsVerifyingLicense(false);
+    }
+  };
 
   useEffect(() => {
     const handleMessage = async (event: MessageEvent) => {
@@ -174,7 +229,7 @@ const Register: React.FC = () => {
         phoneNumber: pendingUser.phoneNumber || '',
         gender: selectedGender,
         role: selected,
-        status: 'approved',
+        status: selected === 'doctor' ? 'pending' : 'approved',
         createdAt: serverTimestamp(),
         photoURL: pendingUser.photoURL || '',
       };
@@ -189,6 +244,14 @@ const Register: React.FC = () => {
         profileData.hospitalId = doctorData.hospitalId;
         profileData.hospitalName = hospitals.find(h => h.id === doctorData.hospitalId)?.name || '';
         profileData.status = 'pending';
+        profileData.licenseVerificationStatus = licenseVerificationResult?.valid ? 'verified' : 'pending';
+        if (licenseDocData) {
+          profileData.licenseDocumentUrl = licenseDocData;
+          profileData.licenseDocumentName = licenseDocFileName;
+        }
+        if (licenseVerificationResult) {
+          profileData.licenseVerificationDetails = licenseVerificationResult;
+        }
       }
 
       await setDoc(doc(db, 'users', pendingUser.uid), profileData);
@@ -258,8 +321,15 @@ const Register: React.FC = () => {
         profileData.hospitalId = formData.hospitalId;
         profileData.hospitalName = hospitals.find(h => h.id === formData.hospitalId)?.name || '';
         profileData.status = 'pending';
-        profileData.licenseVerificationStatus = 'pending';
+        profileData.licenseVerificationStatus = licenseVerificationResult?.valid ? 'verified' : 'pending';
         profileData.hospitalApprovalStatus = 'pending';
+        if (licenseDocData) {
+          profileData.licenseDocumentUrl = licenseDocData;
+          profileData.licenseDocumentName = licenseDocFileName;
+        }
+        if (licenseVerificationResult) {
+          profileData.licenseVerificationDetails = licenseVerificationResult;
+        }
       }
 
       await setDoc(doc(db, 'users', user.uid), profileData);
@@ -428,7 +498,7 @@ const Register: React.FC = () => {
                     value={formData.licenseNumber}
                     onChange={handleChange}
                     className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-2xl focus:ring-2 focus:ring-neon-blue focus:border-neon-blue outline-none transition-all text-[rgb(var(--foreground))]"
-                    placeholder="LIC-123456"
+                    placeholder="e.g., UMDPC-12847 or MOH-UG-8821"
                   />
                 </div>
                 <div>
@@ -462,6 +532,82 @@ const Register: React.FC = () => {
                     <option key={h.id} value={h.id}>{h.name}</option>
                   ))}
                 </select>
+              </div>
+
+              {/* License Document Upload */}
+              <div className="p-5 rounded-2xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <FileText className="w-5 h-5 text-neon-blue" />
+                    <div>
+                      <p className="text-sm font-bold text-foreground">Medical License Document</p>
+                      <p className="text-xs text-muted-foreground">Upload practicing certificate, medical board license or diploma</p>
+                    </div>
+                  </div>
+                  <span className="text-[10px] font-bold px-2 py-1 rounded bg-neon-blue/10 text-neon-blue">
+                    Recommended
+                  </span>
+                </div>
+
+                <div className="flex flex-col sm:flex-row items-center gap-3">
+                  <label className="w-full sm:w-auto px-4 py-2.5 bg-card hover:bg-muted border border-border rounded-xl text-xs font-bold text-foreground cursor-pointer flex items-center justify-center gap-2 transition-all">
+                    <Upload className="w-4 h-4 text-neon-blue" />
+                    <span>{licenseDocFileName ? 'Change Document' : 'Upload Document / Photo'}</span>
+                    <input
+                      type="file"
+                      accept="image/*,.pdf"
+                      onChange={handleDocumentUpload}
+                      className="hidden"
+                    />
+                  </label>
+                  {licenseDocFileName && (
+                    <div className="flex items-center gap-2 text-xs font-semibold text-emerald-600 dark:text-emerald-400">
+                      <CheckCircle2 className="w-4 h-4" />
+                      <span className="truncate max-w-[220px]">{licenseDocFileName}</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Automated Medical License Verification Trigger */}
+                <div className="pt-2 border-t border-border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-bold text-foreground">Automated Registry Verification</p>
+                    <p className="text-[11px] text-muted-foreground">Instantly validates credentials against national medical practitioner databases</p>
+                  </div>
+                  <button
+                    type="button"
+                    disabled={isVerifyingLicense || !formData.licenseNumber.trim()}
+                    onClick={() => handleRunLicenseVerification(formData.licenseNumber, formData.fullName, formData.specialization)}
+                    className="px-4 py-2 bg-gradient-to-r from-neon-blue/20 to-purple-500/20 hover:from-neon-blue/30 hover:to-purple-500/30 text-neon-blue font-bold rounded-xl text-xs flex items-center gap-2 border border-neon-blue/30 transition-all cursor-pointer disabled:opacity-50"
+                  >
+                    {isVerifyingLicense ? (
+                      <>
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        <span>Verifying...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="w-3.5 h-3.5" />
+                        <span>Verify with Board API</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                {licenseVerificationResult && (
+                  <div className="p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-xs text-emerald-700 dark:text-emerald-300 space-y-1">
+                    <div className="flex items-center gap-2 font-bold">
+                      <ShieldCheck className="w-4 h-4 text-emerald-500" />
+                      <span>{licenseVerificationResult.board} (Verified Active)</span>
+                    </div>
+                    <p className="text-[11px] opacity-90">{licenseVerificationResult.summary}</p>
+                    <p className="text-[10px] text-muted-foreground font-mono">Ref ID: {licenseVerificationResult.verificationId} • Expiry: {licenseVerificationResult.expiryDate}</p>
+                  </div>
+                )}
+
+                {licenseVerificationError && (
+                  <p className="text-xs text-rose-500 font-semibold">{licenseVerificationError}</p>
+                )}
               </div>
             </div>
           )}

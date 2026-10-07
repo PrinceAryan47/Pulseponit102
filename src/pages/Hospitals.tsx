@@ -55,16 +55,59 @@ const getHospitalImage = (hospital: HospitalType) => {
   return FALLBACK_HOSPITAL_IMAGES[index];
 };
 
+export interface RegionPreset {
+  name: string;
+  country: string;
+  lat: number;
+  lng: number;
+  flag: string;
+}
+
+export const REGION_PRESETS: RegionPreset[] = [
+  { name: "Kampala", country: "Uganda", lat: 0.3476, lng: 32.5825, flag: "🇺🇬" },
+  { name: "Nairobi", country: "Kenya", lat: -1.2921, lng: 36.8219, flag: "🇰🇪" },
+  { name: "Kigali", country: "Rwanda", lat: -1.9441, lng: 30.0619, flag: "🇷🇼" },
+  { name: "Dar es Salaam", country: "Tanzania", lat: -6.7924, lng: 39.2083, flag: "🇹🇿" },
+  { name: "Lagos", country: "Nigeria", lat: 6.5244, lng: 3.3792, flag: "🇳🇬" },
+  { name: "Johannesburg", country: "South Africa", lat: -26.2041, lng: 28.0473, flag: "🇿🇦" },
+  { name: "London", country: "United Kingdom", lat: 51.5074, lng: -0.1278, flag: "🇬🇧" },
+  { name: "New York", country: "United States", lat: 40.7128, lng: -74.0060, flag: "🇺🇸" },
+  { name: "Chicago", country: "United States", lat: 41.8781, lng: -87.6298, flag: "🇺🇸" },
+  { name: "Los Angeles", country: "United States", lat: 34.0522, lng: -118.2437, flag: "🇺🇸" },
+  { name: "Toronto", country: "Canada", lat: 43.6532, lng: -79.3832, flag: "🇨🇦" },
+  { name: "New Delhi", country: "India", lat: 28.6139, lng: 77.2090, flag: "🇮🇳" },
+  { name: "Sydney", country: "Australia", lat: -33.8688, lng: 151.2093, flag: "🇦🇺" },
+  { name: "Dubai", country: "United Arab Emirates", lat: 25.2048, lng: 55.2708, flag: "🇦🇪" }
+];
+
+const getStoredRegion = (): RegionPreset => {
+  try {
+    const saved = localStorage.getItem('pulsepoint_user_region');
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (parsed.lat && parsed.lng && parsed.name) {
+        return parsed;
+      }
+    }
+  } catch {}
+  return REGION_PRESETS[0];
+};
+
 const Hospitals: React.FC = () => {
   const { profile } = useAuth();
+  const initialPreset = getStoredRegion();
   const [hospitals, setHospitals] = useState<HospitalType[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
   const [locating, setLocating] = useState(false);
   const [showBrowserLocationHelp, setShowBrowserLocationHelp] = useState(false);
+  const [selectedRegionLabel, setSelectedRegionLabel] = useState<string>(`${initialPreset.name}, ${initialPreset.country}`);
+  const [currentPreset, setCurrentPreset] = useState<RegionPreset>(initialPreset);
+  const [customCitySearch, setCustomCitySearch] = useState<string>("");
+  const [isSearchingCity, setIsSearchingCity] = useState<boolean>(false);
   const [nearbyFacilities, setNearbyFacilities] = useState<NearbyFacility[]>(() => {
     return COMPREHENSIVE_FACILITIES_CATALOG.map(cat => {
-      const dist = calculateDistanceMeters(0.3476, 32.5825, cat.lat, cat.lng);
+      const dist = calculateDistanceMeters(initialPreset.lat, initialPreset.lng, cat.lat, cat.lng);
       return {
         ...cat,
         distanceMeter: dist,
@@ -76,9 +119,9 @@ const Hospitals: React.FC = () => {
   const [groundingSources, setGroundingSources] = useState<any[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [filterType, setFilterType] = useState<string>('all');
-  const [userLocation, setUserLocation] = useState<[number, number] | null>([0.3476, 32.5825]);
+  const [userLocation, setUserLocation] = useState<[number, number] | null>([initialPreset.lat, initialPreset.lng]);
   const [isPreciseLocation, setIsPreciseLocation] = useState<boolean>(false);
-  const [mapCenter, setMapCenter] = useState<[number, number]>([0.3476, 32.5825]);
+  const [mapCenter, setMapCenter] = useState<[number, number]>([initialPreset.lat, initialPreset.lng]);
   const [mapZoom, setMapZoom] = useState<number>(13);
   const [selectedFacility, setSelectedFacility] = useState<any | null>(null);
 
@@ -98,8 +141,8 @@ const Hospitals: React.FC = () => {
     setAiFacilities(null);
 
     try {
-      const lat = userLocation ? userLocation[0] : (profile?.simulatedLatitude || 0.3476);
-      const lng = userLocation ? userLocation[1] : (profile?.simulatedLongitude || 32.5825);
+      const lat = userLocation ? userLocation[0] : (profile?.simulatedLatitude || currentPreset.lat);
+      const lng = userLocation ? userLocation[1] : (profile?.simulatedLongitude || currentPreset.lng);
 
       const response = await fetch("/api/facilities/search-advice", {
         method: "POST",
@@ -236,8 +279,8 @@ const Hospitals: React.FC = () => {
       setLoading(false);
 
       // Refresh facility distances immediately with new partner hospitals
-      const currentLat = userLocation ? userLocation[0] : 0.3476;
-      const currentLng = userLocation ? userLocation[1] : 32.5825;
+      const currentLat = userLocation ? userLocation[0] : currentPreset.lat;
+      const currentLng = userLocation ? userLocation[1] : currentPreset.lng;
       setNearbyFacilities(prev => buildComprehensiveFacilityList(currentLat, currentLng, data));
     }, (err) => {
       console.error("Error fetching hospitals:", err);
@@ -248,8 +291,8 @@ const Hospitals: React.FC = () => {
 
   // Automatically fetch user location on mount with high compatibility for Edge, Firefox, and Chrome
   useEffect(() => {
-    let initialLat = 0.3476;
-    let initialLng = 32.5825;
+    let initialLat = currentPreset.lat;
+    let initialLng = currentPreset.lng;
     let precise = false;
 
     if (profile?.simulatedLocationEnabled && profile?.simulatedLatitude && profile?.simulatedLongitude) {
@@ -258,12 +301,13 @@ const Hospitals: React.FC = () => {
       precise = true;
       setUserLocation([initialLat, initialLng]);
       setMapCenter([initialLat, initialLng]);
+      setSelectedRegionLabel("Simulated GPS Location");
       setIsPreciseLocation(true);
       loadFacilitiesForCoords(initialLat, initialLng);
       return;
     }
 
-    // Always fetch facilities for initial coordinates so user never sees blank lists
+    // Load facilities for chosen city / preset so user immediately gets local results
     loadFacilitiesForCoords(initialLat, initialLng);
 
     if (!precise && navigator.geolocation) {
@@ -273,10 +317,11 @@ const Hospitals: React.FC = () => {
           setUserLocation([latitude, longitude]);
           setMapCenter([latitude, longitude]);
           setIsPreciseLocation(true);
+          setSelectedRegionLabel("My Current GPS Location");
           await loadFacilitiesForCoords(latitude, longitude);
         },
         (err) => {
-          console.warn("Browser GPS access blocked/delayed (using Kampala coordinates fallback):", err);
+          console.warn(`Browser GPS access blocked/delayed (using ${currentPreset.name} coordinates fallback):`, err);
           loadFacilitiesForCoords(initialLat, initialLng);
         },
         // Low accuracy is faster and works across Edge Windows services & Firefox privacy protections
@@ -302,8 +347,8 @@ const Hospitals: React.FC = () => {
 
     if (!navigator.geolocation) {
       setError("Geolocation is not supported by this browser. Displaying facilities based on reference coordinates.");
-      const fallbackLat = userLocation ? userLocation[0] : 0.3476;
-      const fallbackLng = userLocation ? userLocation[1] : 32.5825;
+      const fallbackLat = userLocation ? userLocation[0] : currentPreset.lat;
+      const fallbackLng = userLocation ? userLocation[1] : currentPreset.lng;
       loadFacilitiesForCoords(fallbackLat, fallbackLng);
       return;
     }
@@ -323,8 +368,8 @@ const Hospitals: React.FC = () => {
       },
       async (err) => {
         console.warn("Geolocation denied or timed out in Edge/Firefox:", err);
-        const fallbackLat = userLocation ? userLocation[0] : 0.3476;
-        const fallbackLng = userLocation ? userLocation[1] : 32.5825;
+        const fallbackLat = userLocation ? userLocation[0] : currentPreset.lat;
+        const fallbackLng = userLocation ? userLocation[1] : currentPreset.lng;
         setUserLocation([fallbackLat, fallbackLng]);
         setMapCenter([fallbackLat, fallbackLng]);
         await loadFacilitiesForCoords(fallbackLat, fallbackLng);
@@ -339,7 +384,8 @@ const Hospitals: React.FC = () => {
   };
 
   const handleResetToCityCenter = async () => {
-    const center: [number, number] = [0.3476, 32.5825];
+    const center: [number, number] = [currentPreset.lat, currentPreset.lng];
+    setSelectedRegionLabel(`${currentPreset.name}, ${currentPreset.country}`);
     setUserLocation(center);
     setMapCenter(center);
     setIsPreciseLocation(true);
@@ -349,6 +395,75 @@ const Hospitals: React.FC = () => {
       await loadFacilitiesForCoords(center[0], center[1]);
     } finally {
       setLocating(false);
+    }
+  };
+
+  const handleSelectPresetRegion = async (preset: RegionPreset) => {
+    setCurrentPreset(preset);
+    setSelectedRegionLabel(`${preset.name}, ${preset.country}`);
+    setUserLocation([preset.lat, preset.lng]);
+    setMapCenter([preset.lat, preset.lng]);
+    setIsPreciseLocation(true);
+    setLocating(true);
+    setError(null);
+    try {
+      localStorage.setItem('pulsepoint_user_region', JSON.stringify(preset));
+    } catch {}
+    try {
+      await loadFacilitiesForCoords(preset.lat, preset.lng);
+    } finally {
+      setLocating(false);
+    }
+  };
+
+  const handleCustomCityLookup = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!customCitySearch.trim()) return;
+    setIsSearchingCity(true);
+    setError(null);
+    try {
+      const match = REGION_PRESETS.find(p => 
+        p.name.toLowerCase().includes(customCitySearch.trim().toLowerCase()) ||
+        p.country.toLowerCase().includes(customCitySearch.trim().toLowerCase())
+      );
+      if (match) {
+        await handleSelectPresetRegion(match);
+      } else {
+        const res = await fetch("/api/facilities/search-advice", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ query: customCitySearch.trim() })
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.facilities && data.facilities.length > 0) {
+            const first = data.facilities[0];
+            const fLat = first.lat || currentPreset.lat;
+            const fLng = first.lng || currentPreset.lng;
+            const newPreset: RegionPreset = {
+              name: customCitySearch.trim(),
+              country: "Global",
+              lat: fLat,
+              lng: fLng,
+              flag: "📍"
+            };
+            setCurrentPreset(newPreset);
+            try {
+              localStorage.setItem('pulsepoint_user_region', JSON.stringify(newPreset));
+            } catch {}
+            setSelectedRegionLabel(customCitySearch.trim());
+            setUserLocation([fLat, fLng]);
+            setMapCenter([fLat, fLng]);
+            setIsPreciseLocation(true);
+            await loadFacilitiesForCoords(fLat, fLng);
+          }
+        }
+      }
+    } catch (err) {
+      console.warn("City lookup error:", err);
+    } finally {
+      setIsSearchingCity(false);
+      setCustomCitySearch("");
     }
   };
 
@@ -430,8 +545,8 @@ const Hospitals: React.FC = () => {
         name: facility.name,
         address: facility.address,
         location: {
-          lat: facility.lat || userLocation?.[0] || 0.3476,
-          lng: facility.lng || userLocation?.[1] || 32.5825
+          lat: facility.lat || userLocation?.[0] || currentPreset.lat,
+          lng: facility.lng || userLocation?.[1] || currentPreset.lng
         },
         licenseNumber: "MOH-UG-" + Math.floor(100000 + Math.random() * 900000),
         contactPhone: "+256 414 " + Math.floor(100000 + Math.random() * 900000),
@@ -481,7 +596,7 @@ const Hospitals: React.FC = () => {
               className="flex items-center gap-2 px-5 py-3 bg-secondary hover:bg-secondary/80 text-foreground rounded-2xl font-bold transition-all border border-border disabled:opacity-50 text-xs sm:text-sm cursor-pointer"
             >
               <Compass className="w-4 h-4 text-primary" />
-              <span>Use City Center (Kampala)</span>
+              <span>Center on {currentPreset.name}</span>
             </button>
             <button 
               onClick={handleLocateNearby}
@@ -491,6 +606,75 @@ const Hospitals: React.FC = () => {
               <Navigation className="w-4 h-4 sm:w-5 sm:h-5" />
               {locating ? 'Acquiring GPS...' : 'Calculate Distances to Facilities'}
             </button>
+          </div>
+        </div>
+
+        {/* Global City / Country Selector Toolbar */}
+        <div className="mb-6 p-5 rounded-3xl bg-card border border-border shadow-sm">
+          <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 mb-3">
+            <div className="flex items-center gap-2.5">
+              <Compass className="w-5 h-5 text-primary" />
+              <div>
+                <h4 className="font-bold text-sm text-foreground">Select City or Country</h4>
+                <p className="text-xs text-muted-foreground">Choose or search any city or country to instantly map local hospitals, clinics, and pharmacies.</p>
+              </div>
+            </div>
+            {/* Quick Country Dropdown & Custom Search */}
+            <div className="flex flex-col sm:flex-row items-center gap-2 w-full lg:w-auto">
+              <select
+                value={currentPreset.name}
+                onChange={(e) => {
+                  const found = REGION_PRESETS.find(p => p.name === e.target.value);
+                  if (found) handleSelectPresetRegion(found);
+                }}
+                className="px-3.5 py-2 bg-muted/60 border border-border rounded-xl text-xs font-bold text-foreground outline-none focus:ring-2 focus:ring-primary w-full sm:w-56 cursor-pointer"
+              >
+                {REGION_PRESETS.map((p) => (
+                  <option key={p.name} value={p.name}>
+                    {p.flag} {p.name}, {p.country}
+                  </option>
+                ))}
+              </select>
+
+              <form onSubmit={handleCustomCityLookup} className="flex items-center gap-2 w-full sm:w-auto">
+                <input
+                  type="text"
+                  placeholder="Type any city/country..."
+                  value={customCitySearch}
+                  onChange={(e) => setCustomCitySearch(e.target.value)}
+                  className="px-4 py-2 bg-muted/60 border border-border rounded-xl text-xs font-medium text-foreground outline-none focus:ring-2 focus:ring-primary w-full sm:w-48"
+                />
+                <button
+                  type="submit"
+                  disabled={isSearchingCity || !customCitySearch.trim()}
+                  className="px-4 py-2 bg-primary text-primary-foreground rounded-xl text-xs font-bold shrink-0 hover:opacity-90 disabled:opacity-50 transition-all cursor-pointer"
+                >
+                  {isSearchingCity ? 'Searching...' : 'Go'}
+                </button>
+              </form>
+            </div>
+          </div>
+
+          {/* Quick preset chips */}
+          <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar pt-1">
+            <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider shrink-0 mr-1">Popular Hubs:</span>
+            {REGION_PRESETS.map((preset) => {
+              const isSelected = selectedRegionLabel.includes(preset.name);
+              return (
+                <button
+                  key={preset.name}
+                  onClick={() => handleSelectPresetRegion(preset)}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 flex items-center gap-1.5 border cursor-pointer ${
+                    isSelected
+                      ? "bg-primary text-primary-foreground border-primary shadow-sm"
+                      : "bg-muted/40 hover:bg-muted text-foreground/80 border-border"
+                  }`}
+                >
+                  <span>{preset.flag}</span>
+                  <span>{preset.name}</span>
+                </button>
+              );
+            })}
           </div>
         </div>
 
@@ -510,16 +694,16 @@ const Hospitals: React.FC = () => {
               <div>
                 <div className="flex flex-wrap items-center gap-2 mb-1">
                   <h4 className="font-bold text-sm">
-                    {isPreciseLocation ? 'Precise GPS Coordinates Active' : 'Default Reference Geolocation Active'}
+                    {isPreciseLocation ? `Active Region: ${selectedRegionLabel}` : `Reference Geolocation: ${selectedRegionLabel}`}
                   </h4>
-                  <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-white/40 dark:bg-black/20">
-                    {isPreciseLocation ? 'Live Centered' : 'Kampala Hub (0.3476, 32.5825)'}
+                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-white/40 dark:bg-black/20">
+                    {selectedRegionLabel}
                   </span>
                 </div>
                 <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
                   {isPreciseLocation 
-                    ? `Coordinates: [${userLocation?.[0].toFixed(5)}, ${userLocation?.[1].toFixed(5)}]. All distances, driving durations, and nearest facilities have been calculated in real time.`
-                    : "Displaying real facilities with distances calculated from reference coordinates. You can click anywhere on the live map below, or click 'Acquire Precise GPS' to pinpoint your browser location."}
+                    ? `Coordinates: [${userLocation?.[0].toFixed(5)}, ${userLocation?.[1].toFixed(5)}]. Facilities and driving durations calculated in real time around ${selectedRegionLabel}.`
+                    : `Displaying facilities near ${selectedRegionLabel}. You can select any city hub above, click on the map, or click 'Acquire Precise GPS' to use your browser location.`}
                 </p>
               </div>
             </div>

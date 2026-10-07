@@ -5,8 +5,8 @@ import { auth, db } from '../firebase';
 import { UserProfile } from '../types';
 
 export const SUPER_ADMIN_EMAILS = [
-  "mafialord1247@gmail.com",
   "mafia.lord1247@gmail.com",
+  "kyleisrael44@gmail.com",
   "prince47aryan@gmail.com"
 ];
 

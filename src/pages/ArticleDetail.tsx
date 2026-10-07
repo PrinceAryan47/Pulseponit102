@@ -3,7 +3,7 @@ import { useParams, Link, useNavigate } from 'react-router-dom';
 import { doc, getDoc, updateDoc, arrayUnion, arrayRemove, deleteDoc, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebase';
 import { Article } from '../types';
-import { useAuth } from '../context/AuthContext';
+import { useAuth, SUPER_ADMIN_EMAILS } from '../context/AuthContext';
 import { 
   ArrowLeft, 
   Clock, 
@@ -43,8 +43,8 @@ const getArticleImage = (article: Article) => {
 const ArticleDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { user, profile } = useAuth();
-  const isAdmin = user && ["mafialord1247@gmail.com", "mafia.lord1247@gmail.com", "prince47aryan@gmail.com"].includes(user.email || '');
+  const { user, profile, isSuperAdmin } = useAuth();
+  const isAdmin = isSuperAdmin || profile?.role === 'admin' || (user && SUPER_ADMIN_EMAILS.includes(user.email || ''));
   const [article, setArticle] = useState<Article | null>(null);
   const [loading, setLoading] = useState(true);
   const [commentText, setCommentText] = useState('');

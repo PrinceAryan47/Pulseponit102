@@ -273,6 +273,287 @@ export const COMPREHENSIVE_FACILITIES_CATALOG: CatalogFacility[] = [
     lat: 2.7611,
     lng: 32.2589,
     reviews: ["Award-winning mission hospital known for high quality and affordable healthcare."]
+  },
+  // Nairobi, Kenya Facilities
+  {
+    name: "The Nairobi Hospital",
+    address: "Argwings Kodhek Road, Upper Hill, Nairobi, Kenya",
+    type: "hospital",
+    phone: "+254 20 2845000",
+    openingHours: "24/7 Emergency Service",
+    services: ["Emergency Trauma Unit", "Cardiology", "Intensive Care Unit", "Pediatrics", "Robotic Surgery"],
+    mapsUrl: "https://www.google.com/maps/search/?api=1&query=The+Nairobi+Hospital+Nairobi",
+    lat: -1.2974,
+    lng: 36.8048,
+    reviews: ["Premier private tertiary referral hospital in East Africa with state-of-the-art facilities."]
+  },
+  {
+    name: "Kenyatta National Hospital",
+    address: "Hospital Road, Upper Hill, Nairobi, Kenya",
+    type: "hospital",
+    phone: "+254 20 2726300",
+    openingHours: "24/7 Emergency Service",
+    services: ["National Level 6 Referral", "Trauma & Burn Center", "Neurosurgery", "Oncology", "ICU"],
+    mapsUrl: "https://www.google.com/maps/search/?api=1&query=Kenyatta+National+Hospital+Nairobi",
+    lat: -1.3013,
+    lng: 36.8066,
+    reviews: ["Largest teaching referral hospital in East Africa with comprehensive multi-specialty coverage."]
+  },
+  {
+    name: "Aga Khan University Hospital, Nairobi",
+    address: "3rd Parklands Avenue, Limuru Road, Nairobi, Kenya",
+    type: "hospital",
+    phone: "+254 20 3662000",
+    openingHours: "24/7 Emergency & Inpatient",
+    services: ["Heart and Cancer Center", "Advanced Diagnostics", "Neonatal ICU", "Ambulance Dispatch"],
+    mapsUrl: "https://www.google.com/maps/search/?api=1&query=Aga+Khan+University+Hospital+Nairobi",
+    lat: -1.2619,
+    lng: 36.8242,
+    reviews: ["Joint Commission International (JCI) accredited hospital known for exceptional specialist care."]
+  },
+  {
+    name: "Goodlife Pharmacy Sarit Centre",
+    address: "Sarit Centre, Karuna Road, Westlands, Nairobi, Kenya",
+    type: "pharmacy",
+    phone: "+254 709 119000",
+    openingHours: "8:00 AM - 10:00 PM",
+    services: ["Prescription Dispensing", "Chronic Medication Management", "Health Screening"],
+    mapsUrl: "https://www.google.com/maps/search/?api=1&query=Goodlife+Pharmacy+Sarit+Centre+Nairobi",
+    lat: -1.2612,
+    lng: 36.8042,
+    reviews: ["Well-stocked retail pharmacy chain with qualified dispensing pharmacists."]
+  },
+
+  // Kigali, Rwanda Facilities
+  {
+    name: "King Faisal Hospital Rwanda",
+    address: "KG 544 St, Gasabo, Kigali, Rwanda",
+    type: "hospital",
+    phone: "+250 252 588888",
+    openingHours: "24/7 Emergency Service",
+    services: ["Emergency Medicine", "Cardiology", "Nephrology & Dialysis", "Surgical Oncology", "ICU"],
+    mapsUrl: "https://www.google.com/maps/search/?api=1&query=King+Faisal+Hospital+Kigali",
+    lat: -1.9441,
+    lng: 30.0939,
+    reviews: ["Leading multi-specialty referral facility in Rwanda offering specialized tertiary care."]
+  },
+  {
+    name: "Centre Hospitalier Universitaire de Kigali (CHUK)",
+    address: "KN 4 Ave, Nyarugenge, Kigali, Rwanda",
+    type: "hospital",
+    phone: "+250 252 575555",
+    openingHours: "24/7 Emergency Service",
+    services: ["University Referral", "Trauma Care", "Obstetrics", "Infectious Diseases", "Pediatrics"],
+    mapsUrl: "https://www.google.com/maps/search/?api=1&query=CHUK+Kigali",
+    lat: -1.9547,
+    lng: 30.0601,
+    reviews: ["Rwanda's central public academic hospital for trauma and specialist intervention."]
+  },
+
+  // Dar es Salaam, Tanzania Facilities
+  {
+    name: "Muhimbili National Hospital",
+    address: "Kalenga St, Upanga West, Dar es Salaam, Tanzania",
+    type: "hospital",
+    phone: "+255 22 2151367",
+    openingHours: "24/7 Emergency Service",
+    services: ["National Referral", "Cardiac Care (JKCI)", "Trauma Resuscitation", "Nephrology", "ICU"],
+    mapsUrl: "https://www.google.com/maps/search/?api=1&query=Muhimbili+National+Hospital+Dar+es+Salaam",
+    lat: -6.8044,
+    lng: 39.2747,
+    reviews: ["National tertiary apex hospital with premier cardiac and trauma centers."]
+  },
+  {
+    name: "Aga Khan Hospital Dar es Salaam",
+    address: "Ocean Road, Upanga, Dar es Salaam, Tanzania",
+    type: "hospital",
+    phone: "+255 22 2115151",
+    openingHours: "24/7 Emergency & Urgent Care",
+    services: ["Emergency Trauma", "Interventional Cardiology", "Oncology", "Advanced Imaging"],
+    mapsUrl: "https://www.google.com/maps/search/?api=1&query=Aga+Khan+Hospital+Dar+es+Salaam",
+    lat: -6.8092,
+    lng: 39.2882,
+    reviews: ["JCI-accredited modern private medical center with quick emergency response."]
+  },
+
+  // Lagos, Nigeria Facilities
+  {
+    name: "Lagos University Teaching Hospital (LUTH)",
+    address: "Ishaga Road, Idi-Araba, Surulere, Lagos, Nigeria",
+    type: "hospital",
+    phone: "+234 1 7745341",
+    openingHours: "24/7 Emergency Service",
+    services: ["Trauma Center", "Cardiothoracic Surgery", "Oncology", "Pediatrics", "Adult ICU"],
+    mapsUrl: "https://www.google.com/maps/search/?api=1&query=LUTH+Idi-Araba+Lagos",
+    lat: 6.5192,
+    lng: 3.3562,
+    reviews: ["Major tertiary teaching hospital with extensive emergency and surgical capacity."]
+  },
+  {
+    name: "Reddington Multi-Specialist Hospital",
+    address: "12 Idowu Martins Street, Victoria Island, Lagos, Nigeria",
+    type: "hospital",
+    phone: "+234 1 2715341",
+    openingHours: "24/7 Emergency & ICU",
+    services: ["Emergency Care", "Cardiac Centre", "Endoscopy", "Dialysis Unit", "Digital Radiology"],
+    mapsUrl: "https://www.google.com/maps/search/?api=1&query=Reddington+Hospital+Victoria+Island+Lagos",
+    lat: 6.4312,
+    lng: 3.4243,
+    reviews: ["Top-tier private hospital serving Victoria Island and Lekki corridor."]
+  },
+
+  // Johannesburg, South Africa Facilities
+  {
+    name: "Charlotte Maxeke Johannesburg Academic Hospital",
+    address: "Jubilee Road, Parktown, Johannesburg, South Africa",
+    type: "hospital",
+    phone: "+27 11 488 4911",
+    openingHours: "24/7 Emergency Service",
+    services: ["Level 1 Trauma Unit", "Organ Transplants", "Cardiology", "Burn Care", "Critical Care"],
+    mapsUrl: "https://www.google.com/maps/search/?api=1&query=Charlotte+Maxeke+Hospital+Johannesburg",
+    lat: -26.1772,
+    lng: 28.0435,
+    reviews: ["Central academic referral institution affiliated with University of the Witwatersrand."]
+  },
+  {
+    name: "Netcare Milpark Hospital",
+    address: "9 Guild Road, Parktown West, Johannesburg, South Africa",
+    type: "hospital",
+    phone: "+27 11 480 5600",
+    openingHours: "24/7 Emergency Trauma",
+    services: ["Accredited Level 1 Trauma Center", "Cardiac Catheterization", "Burns Unit", "ICU"],
+    mapsUrl: "https://www.google.com/maps/search/?api=1&query=Netcare+Milpark+Hospital+Johannesburg",
+    lat: -26.1824,
+    lng: 28.0163,
+    reviews: ["Renowned private emergency trauma center with dedicated helipad."]
+  },
+
+  // London, United Kingdom Facilities
+  {
+    name: "St Thomas' Hospital",
+    address: "Westminster Bridge Road, Lambeth, London SE1 7EH, United Kingdom",
+    type: "hospital",
+    phone: "+44 20 7188 7188",
+    openingHours: "24/7 A&E Emergency Department",
+    services: ["Major Trauma Center", "Cardiovascular Care", "Pediatrics (Evelina London)", "ICU"],
+    mapsUrl: "https://www.google.com/maps/search/?api=1&query=St+Thomas+Hospital+London",
+    lat: 51.4988,
+    lng: -0.1192,
+    reviews: ["World-renowned NHS Foundation Trust hospital directly opposite the Houses of Parliament."]
+  },
+  {
+    name: "University College Hospital (UCLH)",
+    address: "235 Euston Road, Fitzrovia, London NW1 2BU, United Kingdom",
+    type: "hospital",
+    phone: "+44 20 3456 7890",
+    openingHours: "24/7 Accident & Emergency",
+    services: ["Emergency Medicine", "Cancer Centre", "Neurology", "Clinical Trials", "Critical Care"],
+    mapsUrl: "https://www.google.com/maps/search/?api=1&query=University+College+Hospital+London",
+    lat: 51.5247,
+    lng: -0.1362,
+    reviews: ["Premier academic medical centre in central London with rapid A&E triage."]
+  },
+  {
+    name: "Boots Pharmacy Piccadilly Circus",
+    address: "44-46 Regent Street, Piccadilly Circus, London W1B 5RA, United Kingdom",
+    type: "pharmacy",
+    phone: "+44 20 7734 6126",
+    openingHours: "8:00 AM - 11:00 PM",
+    services: ["Emergency Prescriptions", "Travel Health", "Minor Ailments Service", "Rapid Dispensing"],
+    mapsUrl: "https://www.google.com/maps/search/?api=1&query=Boots+Piccadilly+Circus+London",
+    lat: 51.5101,
+    lng: -0.1347,
+    reviews: ["Central London flagship pharmacy with comprehensive medication stock."]
+  },
+
+  // New York, United States Facilities
+  {
+    name: "NewYork-Presbyterian / Weill Cornell Medical Center",
+    address: "525 East 68th Street, New York, NY 10065, United States",
+    type: "hospital",
+    phone: "+1 212-746-5454",
+    openingHours: "24/7 Emergency Room",
+    services: ["Level 1 Adult & Pediatric Trauma", "Burn Center", "Cardiology", "Neurological Institute", "ICU"],
+    mapsUrl: "https://www.google.com/maps/search/?api=1&query=NewYork-Presbyterian+Hospital+NYC",
+    lat: 40.7646,
+    lng: -73.9542,
+    reviews: ["Consistently ranked among the top medical institutions in the United States."]
+  },
+  {
+    name: "Mount Sinai Hospital",
+    address: "1468 Madison Avenue, New York, NY 10029, United States",
+    type: "hospital",
+    phone: "+1 212-241-6500",
+    openingHours: "24/7 Emergency Department",
+    services: ["Emergency Trauma", "Gastroenterology", "Geriatrics", "Cardiac Care", "Surgical Suites"],
+    mapsUrl: "https://www.google.com/maps/search/?api=1&query=Mount+Sinai+Hospital+New+York",
+    lat: 40.7900,
+    lng: -73.9527,
+    reviews: ["Internationally recognized academic hospital offering comprehensive emergency medicine."]
+  },
+  {
+    name: "Duane Reade / Walgreens Pharmacy Herald Square",
+    address: "1350 Broadway, New York, NY 10018, United States",
+    type: "pharmacy",
+    phone: "+1 212-695-6346",
+    openingHours: "24/7 Open Daily",
+    services: ["24/7 Pharmacy Dispensing", "Vaccinations", "Health Testing", "OTC Medicine"],
+    mapsUrl: "https://www.google.com/maps/search/?api=1&query=Duane+Reade+Herald+Square+NYC",
+    lat: 40.7516,
+    lng: -73.9877,
+    reviews: ["24-hour pharmacy with registered pharmacists on staff around the clock."]
+  },
+
+  // New Delhi, India Facilities
+  {
+    name: "All India Institute of Medical Sciences (AIIMS)",
+    address: "Sri Aurobindo Marg, Ansari Nagar, New Delhi 110029, India",
+    type: "hospital",
+    phone: "+91 11 2658 8500",
+    openingHours: "24/7 Emergency Medicine",
+    services: ["Apex Medical Institute", "Trauma Centre", "Cardiology", "Neurology", "Transplantation"],
+    mapsUrl: "https://www.google.com/maps/search/?api=1&query=AIIMS+New+Delhi",
+    lat: 28.5672,
+    lng: 77.2100,
+    reviews: ["India's premier public medical research university and national hospital."]
+  },
+  {
+    name: "Max Super Speciality Hospital Saket",
+    address: "1 2, Press Enclave Marg, Saket Institutional Area, New Delhi 110017, India",
+    type: "hospital",
+    phone: "+91 11 2651 5050",
+    openingHours: "24/7 Emergency & ICU",
+    services: ["Emergency Resuscitation", "Interventional Cardiology", "Oncology", "Robotic Surgery"],
+    mapsUrl: "https://www.google.com/maps/search/?api=1&query=Max+Super+Speciality+Hospital+Saket+New+Delhi",
+    lat: 28.5286,
+    lng: 77.2126,
+    reviews: ["NABH and NABL accredited super-speciality facility with high clinical standards."]
+  },
+
+  // Dubai, United Arab Emirates Facilities
+  {
+    name: "Rashid Hospital",
+    address: "315 Umm Hurair Second, Oud Metha Road, Dubai, UAE",
+    type: "hospital",
+    phone: "+971 4 219 2000",
+    openingHours: "24/7 Trauma & Emergency",
+    services: ["Level 1 Trauma Center", "Emergency Intensive Care", "Cardiology", "Surgical Theatres"],
+    mapsUrl: "https://www.google.com/maps/search/?api=1&query=Rashid+Hospital+Dubai",
+    lat: 25.2444,
+    lng: 55.3211,
+    reviews: ["Flagship government emergency and trauma care center in Dubai."]
+  },
+  {
+    name: "American Hospital Dubai",
+    address: "19th Street, Oud Metha, Bur Dubai, Dubai, UAE",
+    type: "hospital",
+    phone: "+971 4 377 5500",
+    openingHours: "24/7 Emergency Department",
+    services: ["Emergency Care", "Heart Center", "Cancer Care", "Orthopedics", "Pediatrics"],
+    mapsUrl: "https://www.google.com/maps/search/?api=1&query=American+Hospital+Dubai",
+    lat: 25.2343,
+    lng: 55.3168,
+    reviews: ["Member of the Mayo Clinic Care Network with premier American-standard private care."]
   }
 ];
 

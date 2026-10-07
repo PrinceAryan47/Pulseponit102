@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { collection, query, where, onSnapshot, orderBy, addDoc, getDocs } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, orderBy, addDoc, getDocs, getDoc, doc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { MedicalRecord, UserProfile, MedicalAttachment } from '../types';
 import { 
@@ -64,11 +64,71 @@ const MedicalRecords: React.FC = () => {
     if (profile.role === 'doctor') {
       const fetchPatients = async () => {
         try {
-          const q = query(collection(db, 'users'), where('role', '==', 'patient'));
-          const snap = await getDocs(q);
-          setPatients(snap.docs.map(doc => ({ uid: doc.id, ...doc.data() } as unknown as UserProfile)));
+          // Query patients who have scheduled appointments with this doctor
+          const appointmentsSnap = await getDocs(
+            query(collection(db, 'appointments'), where('doctorId', '==', profile.uid))
+          );
+          
+          // Query patients who have approved an access request with this doctor
+          const consentSnap = await getDocs(
+            query(
+              collection(db, 'accessRequests'),
+              where('doctorId', '==', profile.uid),
+              where('status', '==', 'approved')
+            )
+          );
+
+          const patientMap = new Map<string, { uid: string; fullName: string; email: string }>();
+
+          appointmentsSnap.docs.forEach(docSnap => {
+            const data = docSnap.data();
+            if (data.patientId) {
+              patientMap.set(data.patientId, {
+                uid: data.patientId,
+                fullName: data.patientName || 'Patient',
+                email: data.patientEmail || ''
+              });
+            }
+          });
+
+          consentSnap.docs.forEach(docSnap => {
+            const data = docSnap.data();
+            if (data.patientId) {
+              const existing = patientMap.get(data.patientId);
+              patientMap.set(data.patientId, {
+                uid: data.patientId,
+                fullName: data.patientName || existing?.fullName || 'Patient',
+                email: data.patientEmail || existing?.email || ''
+              });
+            }
+          });
+
+          const authorizedIds = Array.from(patientMap.keys());
+          if (authorizedIds.length > 0) {
+            const userDocs = await Promise.all(authorizedIds.map(id => getDoc(doc(db, 'users', id))));
+            const resolvedPatients = userDocs.map((uDoc, idx) => {
+              const fallback = patientMap.get(authorizedIds[idx])!;
+              if (uDoc.exists()) {
+                const uData = uDoc.data();
+                return {
+                  uid: uDoc.id,
+                  fullName: uData.fullName || fallback.fullName,
+                  email: uData.email || fallback.email,
+                  ...uData
+                } as unknown as UserProfile;
+              }
+              return {
+                uid: fallback.uid,
+                fullName: fallback.fullName,
+                email: fallback.email
+              } as unknown as UserProfile;
+            });
+            setPatients(resolvedPatients);
+          } else {
+            setPatients([]);
+          }
         } catch (e) {
-          console.error("Error fetching patients:", e);
+          console.error("Error fetching authorized patients:", e);
         }
       };
       fetchPatients();
@@ -474,18 +534,27 @@ const MedicalRecords: React.FC = () => {
                   <form onSubmit={handleAddRecord} className="space-y-5">
                     {/* Patient Selection */}
                     <div className="space-y-1.5">
-                      <label className="text-xs font-bold text-foreground/70 uppercase tracking-wider">Select Patient</label>
-                      <select
-                        required
-                        value={selectedPatientId}
-                        onChange={(e) => setSelectedPatientId(e.target.value)}
-                        className="w-full px-5 py-3.5 bg-muted/50 border border-border rounded-2xl focus:ring-2 focus:ring-primary outline-none transition-all text-foreground appearance-none text-sm"
-                      >
-                        <option value="">Choose a patient...</option>
-                        {patients.map(p => (
-                          <option key={p.uid} value={p.uid}>{p.fullName} ({p.email})</option>
-                        ))}
-                      </select>
+                      <div className="flex items-center justify-between">
+                        <label className="text-xs font-bold text-foreground/70 uppercase tracking-wider">Select Patient</label>
+                        <span className="text-[10px] text-muted-foreground">Only appointed or consented patients</span>
+                      </div>
+                      {patients.length > 0 ? (
+                        <select
+                          required
+                          value={selectedPatientId}
+                          onChange={(e) => setSelectedPatientId(e.target.value)}
+                          className="w-full px-5 py-3.5 bg-muted/50 border border-border rounded-2xl focus:ring-2 focus:ring-primary outline-none transition-all text-foreground appearance-none text-sm"
+                        >
+                          <option value="">Choose an authorized patient...</option>
+                          {patients.map(p => (
+                            <option key={p.uid} value={p.uid}>{p.fullName} ({p.email || 'Patient'})</option>
+                          ))}
+                        </select>
+                      ) : (
+                        <div className="p-3.5 bg-amber-500/10 border border-amber-500/20 rounded-2xl text-xs text-amber-800 dark:text-amber-300">
+                          <span className="font-bold">No Authorized Patients:</span> Only patients who have scheduled an appointment with you or approved a medical access consent request can be selected for consultation documentation.
+                        </div>
+                      )}
                     </div>
 
                     {/* Primary Diagnosis */}

@@ -73,6 +73,15 @@ const SuperAdminRoute: React.FC<{ children: React.ReactNode }> = ({ children }) 
   return <>{children}</>;
 };
 
+const DoctorRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { user, profile, loading, isSuperAdmin } = useAuth();
+  
+  if (loading) return <LoadingScreen />;
+  if (!user) return <Navigate to="/login" />;
+  if (profile?.role !== 'doctor' && !isSuperAdmin) return <Navigate to="/dashboard" />;
+  return <>{children}</>;
+};
+
 const LoadingScreen = () => (
   <div className="flex flex-col items-center justify-center min-h-screen bg-slate-50 dark:bg-slate-900">
     <div className="w-16 h-16 border-4 border-neon-blue/20 border-t-neon-blue rounded-full animate-spin mb-4"></div>
@@ -122,9 +131,9 @@ export default function App() {
                     </ProtectedRoute>
                   } />
                   <Route path="doctor-dashboard" element={
-                    <ProtectedRoute>
+                    <DoctorRoute>
                       <DoctorDashboard />
-                    </ProtectedRoute>
+                    </DoctorRoute>
                   } />
                   <Route path="admin" element={
                     <SuperAdminRoute>

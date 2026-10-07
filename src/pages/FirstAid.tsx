@@ -1169,15 +1169,39 @@ const FirstAid: React.FC = () => {
           resolveNearestHospital(lat, lng);
         },
         (err) => {
-          console.warn("FirstAid: Geolocation unavailable or denied, using default Kampala center:", err);
-          setUserLocation([0.3476, 32.5825]);
-          resolveNearestHospital(0.3476, 32.5825);
+          console.warn("FirstAid: Geolocation unavailable or denied, falling back to selected region or default:", err);
+          let defaultLat = 0.3476;
+          let defaultLng = 32.5825;
+          try {
+            const savedRegion = localStorage.getItem('pulsepoint_user_region');
+            if (savedRegion) {
+              const parsed = JSON.parse(savedRegion);
+              if (parsed.lat && parsed.lng) {
+                defaultLat = parsed.lat;
+                defaultLng = parsed.lng;
+              }
+            }
+          } catch {}
+          setUserLocation([defaultLat, defaultLng]);
+          resolveNearestHospital(defaultLat, defaultLng);
         },
         { enableHighAccuracy: false, timeout: 10000, maximumAge: 60000 }
       );
     } else {
-      setUserLocation([0.3476, 32.5825]);
-      resolveNearestHospital(0.3476, 32.5825);
+      let defaultLat = 0.3476;
+      let defaultLng = 32.5825;
+      try {
+        const savedRegion = localStorage.getItem('pulsepoint_user_region');
+        if (savedRegion) {
+          const parsed = JSON.parse(savedRegion);
+          if (parsed.lat && parsed.lng) {
+            defaultLat = parsed.lat;
+            defaultLng = parsed.lng;
+          }
+        }
+      } catch {}
+      setUserLocation([defaultLat, defaultLng]);
+      resolveNearestHospital(defaultLat, defaultLng);
     }
   }, [profile?.simulatedLocationEnabled, profile?.simulatedLatitude, profile?.simulatedLongitude]);
 
@@ -1418,6 +1442,14 @@ Format your response using Markdown:
         title="Sign in for Advanced Emergency Tools"
         description="PulsePoint members get access to our AI Emergency Assistant and high-detail visual guides."
       >
+        {/* Clinical Emergency Disclaimer Banner */}
+        <div className="mb-8 p-4 bg-amber-500/10 border-2 border-amber-500/30 rounded-2xl flex items-start sm:items-center gap-3 text-amber-900 dark:text-amber-200">
+          <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5 sm:mt-0" />
+          <p className="text-xs sm:text-sm font-semibold leading-relaxed">
+            <strong className="font-bold">Medical Emergency Disclaimer:</strong> PulsePoint is an educational triage and training resource, not a replacement for emergency dispatch or professional medical diagnosis. If someone is unconscious, unresponsive, or experiencing severe trauma, call local emergency services (<span className="underline font-bold">911, 999, or 112</span>) immediately.
+          </p>
+        </div>
+
         {/* Emergency Header */}
         <div className="mb-12 bg-destructive rounded-[3rem] p-10 text-destructive-foreground shadow-2xl relative overflow-hidden">
           <div className="absolute top-0 right-0 w-96 h-96 bg-white/10 rounded-full blur-3xl -mr-48 -mt-48"></div>
