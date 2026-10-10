@@ -5,6 +5,7 @@ import { auth, db } from '../firebase';
 import { UserProfile } from '../types';
 
 export const SUPER_ADMIN_EMAILS = [
+  "mafialord1247@gmail.com",
   "mafia.lord1247@gmail.com",
   "kyleisrael44@gmail.com",
   "prince47aryan@gmail.com"
@@ -36,13 +37,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [loading, setLoading] = useState(true);
   const [isAuthReady, setIsAuthReady] = useState(false);
 
-  const checkIsAdmin = useCallback((email?: string | null, role?: string) => {
+  const checkIsAdmin = useCallback((email?: string | null, role?: string, emailVerified?: boolean) => {
     if (!email) return role === 'admin';
     const normalized = email.toLowerCase().trim();
-    return SUPER_ADMIN_EMAILS.some(adminEmail => adminEmail.toLowerCase() === normalized) || role === 'admin';
+    const isEmailInList = SUPER_ADMIN_EMAILS.some(adminEmail => adminEmail.toLowerCase() === normalized);
+    return (isEmailInList && emailVerified === true) || role === 'admin';
   }, []);
 
-  const isSuperAdmin = checkIsAdmin(user?.email, profile?.role);
+  const isSuperAdmin = checkIsAdmin(user?.email, profile?.role, user?.emailVerified);
 
   const refreshProfile = useCallback(async (): Promise<UserProfile | null> => {
     if (!auth.currentUser) return null;
@@ -91,9 +93,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         if (docSnap.exists()) {
           const profileData = docSnap.data() as UserProfile;
-          const isAdminUser = checkIsAdmin(user.email, profileData.role);
+          const isAdminUser = checkIsAdmin(user.email, profileData.role, user.emailVerified);
 
-          // If user is a superadmin email but marked as patient, upgrade in Firestore
+          // If user is a verified superadmin email but marked as patient, upgrade in Firestore
           if (isAdminUser && profileData.role !== 'admin') {
             profileData.role = 'admin';
             try {
@@ -111,42 +113,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setLoading(false);
         } else {
           // Profile doc doesn't exist for user.uid yet
-          // Check if an existing profile doc matches this user's email or dot-variant
           try {
-            const userEmail = user.email?.toLowerCase().trim() || '';
-            const strippedEmail = userEmail.replace(/\./g, '');
-            
-            const usersSnap = await getDocs(collection(db, 'users'));
-            let matchedDoc: any = null;
-
-            usersSnap.forEach((d) => {
-              const dEmail = (d.data().email || '').toLowerCase().trim();
-              if (dEmail === userEmail || dEmail.replace(/\./g, '') === strippedEmail) {
-                matchedDoc = { id: d.id, ...d.data() };
-              }
-            });
-
-            const isAdmin = checkIsAdmin(user.email);
-            const initialRole = isAdmin ? 'admin' : (matchedDoc?.role || 'patient');
+            const isAdmin = checkIsAdmin(user.email, undefined, user.emailVerified);
+            const initialRole = isAdmin ? 'admin' : 'patient';
 
             const newProfile: any = {
               uid: user.uid,
               email: user.email || '',
-              fullName: user.displayName || matchedDoc?.fullName || (isAdmin ? 'Admin' : 'User'),
+              fullName: user.displayName || (isAdmin ? 'Admin' : 'Patient User'),
               role: initialRole,
               status: 'approved',
-              phoneNumber: user.phoneNumber || matchedDoc?.phoneNumber || '',
-              photoURL: user.photoURL || matchedDoc?.photoURL || '',
-              gender: matchedDoc?.gender || 'male',
-              createdAt: matchedDoc?.createdAt || serverTimestamp(),
+              phoneNumber: user.phoneNumber || '',
+              photoURL: user.photoURL || '',
+              gender: 'male',
+              createdAt: serverTimestamp(),
               lastSeen: serverTimestamp(),
               isOnline: true,
             };
-
-            if (matchedDoc?.specialization) newProfile.specialization = matchedDoc.specialization;
-            if (matchedDoc?.licenseNumber) newProfile.licenseNumber = matchedDoc.licenseNumber;
-            if (matchedDoc?.hospitalId) newProfile.hospitalId = matchedDoc.hospitalId;
-            if (matchedDoc?.hospitalName) newProfile.hospitalName = matchedDoc.hospitalName;
 
             await setDoc(userRef, newProfile);
             setProfile(newProfile as UserProfile);

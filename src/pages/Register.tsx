@@ -244,7 +244,8 @@ const Register: React.FC = () => {
         profileData.hospitalId = doctorData.hospitalId;
         profileData.hospitalName = hospitals.find(h => h.id === doctorData.hospitalId)?.name || '';
         profileData.status = 'pending';
-        profileData.licenseVerificationStatus = licenseVerificationResult?.valid ? 'verified' : 'pending';
+        profileData.licenseVerificationStatus = 'pending';
+        profileData.hospitalApprovalStatus = 'pending';
         if (licenseDocData) {
           profileData.licenseDocumentUrl = licenseDocData;
           profileData.licenseDocumentName = licenseDocFileName;
@@ -282,26 +283,19 @@ const Register: React.FC = () => {
     setLoading(true);
     setError('');
     try {
-      // Check if email is already in registry (to prevent duplicate emails across different UIDs if needed, 
-      // though Firebase Auth handles this for the same provider)
-      const emailRef = doc(db, 'emails', formData.email.toLowerCase());
-      const emailSnap = await getDocs(query(collection(db, 'emails'), where('email', '==', formData.email.toLowerCase())));
-      
-      if (!emailSnap.empty) {
-        setError('This email is already registered. Please use a different email or sign in.');
-        setLoading(false);
-        return;
-      }
-
       const userCredential = await createUserWithEmailAndPassword(auth, formData.email, formData.password);
       const user = userCredential.user;
 
-      // Add to email registry first
-      await setDoc(doc(db, 'emails', formData.email.toLowerCase()), {
-        email: formData.email.toLowerCase(),
-        uid: user.uid,
-        createdAt: serverTimestamp()
-      });
+      // Register email record securely once authenticated
+      try {
+        await setDoc(doc(db, 'emails', formData.email.toLowerCase()), {
+          email: formData.email.toLowerCase(),
+          uid: user.uid,
+          createdAt: serverTimestamp()
+        });
+      } catch (e) {
+        // Non-blocking metadata registration
+      }
 
       const profileData: any = {
         uid: user.uid,
@@ -321,7 +315,7 @@ const Register: React.FC = () => {
         profileData.hospitalId = formData.hospitalId;
         profileData.hospitalName = hospitals.find(h => h.id === formData.hospitalId)?.name || '';
         profileData.status = 'pending';
-        profileData.licenseVerificationStatus = licenseVerificationResult?.valid ? 'verified' : 'pending';
+        profileData.licenseVerificationStatus = 'pending'; // Always pending until administrator review
         profileData.hospitalApprovalStatus = 'pending';
         if (licenseDocData) {
           profileData.licenseDocumentUrl = licenseDocData;
@@ -335,7 +329,9 @@ const Register: React.FC = () => {
       await setDoc(doc(db, 'users', user.uid), profileData);
       navigate('/dashboard');
     } catch (err: any) {
-      if (err.code === 'auth/unauthorized-domain') {
+      if (err.code === 'auth/email-already-in-use') {
+        setError('This email address is already registered. Please sign in or use password recovery.');
+      } else if (err.code === 'auth/unauthorized-domain') {
         setError('Domain not authorized. Please add this domain to the "Authorized domains" list in your Firebase Console (Authentication > Settings).');
       } else if (err.code === 'auth/operation-not-allowed') {
         setError('Registration is not enabled. Please enable Email/Password sign-in in your Firebase Console (Authentication > Sign-in method).');

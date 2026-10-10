@@ -94,7 +94,7 @@ const getStoredRegion = (): RegionPreset => {
 };
 
 const Hospitals: React.FC = () => {
-  const { profile } = useAuth();
+  const { profile, isSuperAdmin } = useAuth();
   const initialPreset = getStoredRegion();
   const [hospitals, setHospitals] = useState<HospitalType[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -538,6 +538,10 @@ const Hospitals: React.FC = () => {
   };
 
   const handleEmbedHospital = async (facility: NearbyFacility) => {
+    if (!isSuperAdmin) {
+      alert("Only verified platform administrators can register partner facilities to the database.");
+      return;
+    }
     if (isAlreadyPartner(facility)) return;
     setEmbeddingId(facility.name);
     try {
@@ -1261,24 +1265,26 @@ const Hospitals: React.FC = () => {
                                 <Navigation className="w-4 h-4 animate-pulse" />
                                 Get Directions
                               </button>
-                              <button
-                                onClick={() => handleEmbedHospital(facility)}
-                                disabled={embeddingId === facility.name || isAlreadyPartner(facility)}
-                                className={`flex-1 py-3 px-4 rounded-xl font-bold text-sm flex items-center justify-center gap-2 border transition-all cursor-pointer ${
-                                  isAlreadyPartner(facility)
-                                    ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20'
-                                    : 'bg-transparent text-indigo-600 dark:text-indigo-400 border-indigo-500/20 hover:bg-indigo-500/5'
-                                }`}
-                              >
-                                <Database className="w-4 h-4" />
-                                {embeddingId === facility.name ? (
-                                  <>Embedding...</>
-                                ) : isAlreadyPartner(facility) ? (
-                                  <>Saved Partner 🤝</>
-                                ) : (
-                                  <>Embed in DB</>
-                                )}
-                              </button>
+                              {isSuperAdmin && (
+                                <button
+                                  onClick={() => handleEmbedHospital(facility)}
+                                  disabled={embeddingId === facility.name || isAlreadyPartner(facility)}
+                                  className={`flex-1 py-3 px-4 rounded-xl font-bold text-sm flex items-center justify-center gap-2 border transition-all cursor-pointer ${
+                                    isAlreadyPartner(facility)
+                                      ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20'
+                                      : 'bg-transparent text-indigo-600 dark:text-indigo-400 border-indigo-500/20 hover:bg-indigo-500/5'
+                                  }`}
+                                >
+                                  <Database className="w-4 h-4" />
+                                  {embeddingId === facility.name ? (
+                                    <>Embedding...</>
+                                  ) : isAlreadyPartner(facility) ? (
+                                    <>Saved Partner 🤝</>
+                                  ) : (
+                                    <>Embed in DB</>
+                                  )}
+                                </button>
+                              )}
                             </div>
                           </motion.div>
                         ))
@@ -1422,24 +1428,26 @@ const Hospitals: React.FC = () => {
                           <Navigation className="w-4 h-4 animate-pulse" />
                           Get Directions
                         </button>
-                        <button
-                          onClick={() => handleEmbedHospital(facility)}
-                          disabled={embeddingId === facility.name || isAlreadyPartner(facility)}
-                          className={`flex-1 py-3 px-4 rounded-xl font-bold text-sm flex items-center justify-center gap-2 border transition-all cursor-pointer ${
-                            isAlreadyPartner(facility)
-                              ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20'
-                              : 'bg-transparent text-primary dark:text-primary-foreground border-primary/20 hover:bg-primary/5'
-                          }`}
-                        >
-                          <Database className="w-4 h-4" />
-                          {embeddingId === facility.name ? (
-                            <>Embedding...</>
-                          ) : isAlreadyPartner(facility) ? (
-                            <>Saved Partner 🤝</>
-                          ) : (
-                            <>Embed in DB</>
-                          )}
-                        </button>
+                        {isSuperAdmin && (
+                          <button
+                            onClick={() => handleEmbedHospital(facility)}
+                            disabled={embeddingId === facility.name || isAlreadyPartner(facility)}
+                            className={`flex-1 py-3 px-4 rounded-xl font-bold text-sm flex items-center justify-center gap-2 border transition-all cursor-pointer ${
+                              isAlreadyPartner(facility)
+                                ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20'
+                                : 'bg-transparent text-primary dark:text-primary-foreground border-primary/20 hover:bg-primary/5'
+                            }`}
+                          >
+                            <Database className="w-4 h-4" />
+                            {embeddingId === facility.name ? (
+                              <>Embedding...</>
+                            ) : isAlreadyPartner(facility) ? (
+                              <>Saved Partner 🤝</>
+                            ) : (
+                              <>Embed in DB</>
+                            )}
+                          </button>
+                        )}
                       </div>
                     </motion.div>
                   )) : (

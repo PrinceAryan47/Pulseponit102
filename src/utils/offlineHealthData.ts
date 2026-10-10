@@ -1101,6 +1101,26 @@ ${triggers && triggers !== 'none reported' ? `- **Environmental Context / Trigge
 - **Clinical Assessment Note:** ${urgencyDescription}
 ${demographicFlags.length > 0 ? '\n' + demographicFlags.map(f => `> ${f}`).join('\n') : ''}`;
 
+  const recheckTimeline = `## When to Recheck & Clinical Monitoring Window
+
+### 🚨 1. Immediate Warning Window (0 - 2 Hours)
+- **Emergency Criteria**: If you experience sudden onset of shortness of breath, crushing or radiating chest pressure, acute confusion, slurred speech, sudden facial weakness, inability to swallow, or uncontrolled bleeding, do **not** wait. Call local emergency services (999/911/112) or go to the nearest emergency facility immediately.
+- **Pain & Vital Spike**: If pain rapidly escalates to > 8/10 or resting heart rate exceeds 120 bpm at rest, immediate clinical triage is warranted.
+
+### ⏱️ 2. Short-Term Monitoring Window (2 - 6 Hours)
+- **Response to Intervention**: If you have taken approved antipyretics (e.g. acetaminophen/paracetamol) or fluids, re-evaluate body temperature and comfort 2 to 4 hours post-dose.
+- **Hydration Tolerance**: For nausea or vomiting, assess if small frequent sips of water or oral rehydration solution (50-100 mL every 15-30 minutes) are being tolerated without recurrent emesis.
+- **Respiratory Check**: Monitor whether breathing remains comfortable and unlabored while resting.
+
+### 📅 3. Progression Evaluation Window (24 - 48 Hours)
+- **Fever & Infection Trajectory**: Viral symptoms and fever should begin stabilizing or improving. If a fever > 38.5°C (101.3°F) persists beyond 48 hours without downward trend, schedule an in-person primary care consultation.
+- **Dermatologic & Soft Tissue**: If monitoring a rash, insect bite, or localized skin redness, mark the margin with a pen; if redness spreads beyond the line within 24 hours, seek prompt medical care.
+- **GI Progression**: Diarrhea or cramping should show stabilization; if stools become bloody or severe dehydration signs emerge (dark urine, severe dizziness), visit urgent care.
+
+### 🩺 4. Extended Provider Follow-Up (3 - 7 Days)
+- **Expected Resolution**: Common viral upper respiratory infections, minor strains, or acute gastroenteritis typically resolve significantly within 5 to 7 days.
+- **Secondary Complications**: If cough, sinus pressure, localized pain, or fatigue persists beyond 7 to 10 days, or follows a "double sickening" pattern (worsening after brief improvement), consult a qualified physician to evaluate for secondary bacterial infection or targeted therapy.`;
+
   return `[SECTION_1: POTENTIAL_CAUSES]
 ${patientSummaryHeader}
 
@@ -1116,6 +1136,9 @@ ${prevention}
 ${firstaid}
 
 [SECTION_5: CLINICAL_RESOURCES]
-${resources}`;
+${resources}
+
+[SECTION_6: RECHECK_TIMELINE]
+${recheckTimeline}`;
 }
 

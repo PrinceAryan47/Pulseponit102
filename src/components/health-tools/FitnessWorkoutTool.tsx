@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
+import { motion } from 'framer-motion';
 import { 
   Activity, 
-  Trash2, 
-  CheckCircle2, 
-  Shield, 
   Sparkles, 
+  CheckCircle2, 
+  Trash2, 
+  Shield, 
   FileDown, 
   Printer, 
   Compass, 
@@ -12,15 +13,14 @@ import {
   TrendingUp, 
   BookOpen 
 } from 'lucide-react';
-import { motion } from 'framer-motion';
 import Markdown from 'react-markdown';
 import { useAuth } from '../../context/AuthContext';
 import { db } from '../../firebase';
 import { collection, addDoc, getDocs, query, where, orderBy, deleteDoc, doc } from 'firebase/firestore';
-import { generateFitnessWorkoutFallback } from '../../utils/offlineHealthData';
 import { GoogleGenAI } from '../../services/aiService';
+import { generateFitnessWorkoutFallback } from '../../utils/offlineHealthData';
+import { exportFitnessPlanDocx } from '../../utils/exportDocxUtils';
 import { cn } from '../../lib/utils';
-import { exportFitnessPlanDocx } from '../../utils/docxExport';
 
 export const WorkoutTimer: React.FC = () => {
   const [timeLeft, setTimeLeft] = useState(60);
@@ -33,20 +33,19 @@ export const WorkoutTimer: React.FC = () => {
     let interval: NodeJS.Timeout | null = null;
     if (isRunning && timeLeft > 0) {
       interval = setInterval(() => {
-        setTimeLeft(prev => prev - 1);
+        setTimeLeft((prev) => prev - 1);
       }, 1000);
     } else if (timeLeft === 0) {
       if (timerType === 'work') {
         setTimerType('rest');
-        setTimeLeft(45);
-      } else {
-        setTimerType('work');
         setTimeLeft(60);
+      } else {
         if (currentSet < totalSets) {
-          setCurrentSet(prev => prev + 1);
+          setCurrentSet((prev) => prev + 1);
+          setTimerType('work');
+          setTimeLeft(45);
         } else {
           setIsRunning(false);
-          setCurrentSet(1);
         }
       }
     }
@@ -55,11 +54,11 @@ export const WorkoutTimer: React.FC = () => {
     };
   }, [isRunning, timeLeft, timerType, currentSet, totalSets]);
 
-  const handleReset = () => {
+  const toggleTimer = () => setIsRunning(!isRunning);
+
+  const resetTimer = () => {
     setIsRunning(false);
-    setTimeLeft(60);
-    setCurrentSet(1);
-    setTimerType('work');
+    setTimeLeft(timerType === 'work' ? 45 : 60);
   };
 
   const formatTime = (seconds: number) => {
@@ -69,46 +68,72 @@ export const WorkoutTimer: React.FC = () => {
   };
 
   return (
-    <div className="bg-card border border-border p-6 rounded-3xl mt-8 flex flex-col md:flex-row items-center justify-between gap-6 shadow-sm select-none">
+    <div className="bg-card p-6 sm:p-8 rounded-[2.5rem] border border-border shadow-sm flex flex-col md:flex-row items-center justify-between gap-6">
       <div className="flex items-center gap-4">
-        <div className="w-12 h-12 bg-primary/10 rounded-2xl flex items-center justify-center">
-          <Activity className="w-6 h-6 text-primary animate-pulse" />
+        <div className="w-14 h-14 rounded-2xl bg-primary/10 flex items-center justify-center text-primary font-black text-xl shrink-0">
+          <Activity className="w-7 h-7" />
         </div>
         <div>
-          <h4 className="font-bold text-base text-foreground uppercase tracking-wider">Workout Interval Buddy</h4>
-          <p className="text-xs text-muted-foreground">Keep pace between your training sets to maximize hypertrophy and glycogen capacity.</p>
+          <span className="text-[10px] font-black uppercase tracking-widest text-primary">In-Gym Companion</span>
+          <h4 className="text-xl font-bold text-foreground">Interval & Rest Timer</h4>
+          <p className="text-xs text-muted-foreground mt-0.5">Track your set durations and optimal recovery windows</p>
         </div>
       </div>
 
-      <div className="flex flex-col sm:flex-row items-center gap-6">
-        <div className="flex flex-col items-center">
-          <span className="text-[10px] font-black text-muted-foreground uppercase tracking-widest leading-none mb-1">Set</span>
-          <span className="text-2xl font-black text-foreground leading-none">{currentSet} <span className="text-sm text-muted-foreground/60">/ {totalSets}</span></span>
+      <div className="flex flex-wrap items-center justify-center gap-4 w-full md:w-auto">
+        <div className="px-5 py-2.5 bg-muted/60 rounded-2xl flex items-center gap-3 border border-border">
+          <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Mode:</span>
+          <button
+            type="button"
+            onClick={() => {
+              setTimerType('work');
+              setTimeLeft(45);
+              setIsRunning(false);
+            }}
+            className={cn(
+              "px-3 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer",
+              timerType === 'work' ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+            )}
+          >
+            Work (45s)
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setTimerType('rest');
+              setTimeLeft(60);
+              setIsRunning(false);
+            }}
+            className={cn(
+              "px-3 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer",
+              timerType === 'rest' ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+            )}
+          >
+            Rest (60s)
+          </button>
         </div>
 
-        <div className="flex flex-col items-center px-6 py-1 border-l border-r border-border min-w-[125px]">
-          <span className={cn(
-            "text-[9px] font-black uppercase tracking-widest px-2.5 py-0.5 rounded-full mb-1",
-            timerType === 'work' ? "bg-rose-500/10 text-rose-500" : "bg-emerald-500/10 text-emerald-500"
-          )}>
-            {timerType === 'work' ? "Lift Set" : "Rest Break"}
-          </span>
-          <span className="text-3xl font-black font-mono tracking-tighter text-foreground leading-none">{formatTime(timeLeft)}</span>
+        <div className="text-3xl font-black font-mono tracking-tight text-foreground bg-muted/30 px-6 py-2 rounded-2xl border border-border min-w-[110px] text-center">
+          {formatTime(timeLeft)}
         </div>
 
         <div className="flex items-center gap-2">
           <button
-            onClick={() => setIsRunning(!isRunning)}
+            type="button"
+            onClick={toggleTimer}
             className={cn(
-              "px-4 py-2 text-xs font-black uppercase tracking-wider transition-all rounded-xl cursor-pointer",
-              isRunning ? "bg-amber-500 hover:bg-amber-600 text-white" : "bg-primary hover:bg-primary/90 text-primary-foreground"
+              "px-6 py-2.5 rounded-xl font-bold text-xs uppercase tracking-wider transition-all shadow-md cursor-pointer",
+              isRunning
+                ? "bg-amber-500 hover:bg-amber-600 text-white"
+                : "bg-primary hover:bg-neon-blue-dark text-primary-foreground"
             )}
           >
-            {isRunning ? "Pause" : "Start"}
+            {isRunning ? 'Pause' : 'Start'}
           </button>
           <button
-            onClick={handleReset}
-            className="px-3 py-2 bg-muted hover:bg-muted/80 text-muted-foreground rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer"
+            type="button"
+            onClick={resetTimer}
+            className="px-4 py-2.5 bg-muted hover:bg-muted/80 text-muted-foreground hover:text-foreground rounded-xl font-bold text-xs uppercase tracking-wider transition-all border border-border cursor-pointer"
           >
             Reset
           </button>
@@ -118,7 +143,7 @@ export const WorkoutTimer: React.FC = () => {
   );
 };
 
-export const FitnessWorkoutTool: React.FC = () => {
+const FitnessWorkoutTool: React.FC = () => {
   const { profile, user } = useAuth();
   const [weight, setWeight] = useState('');
   const [height, setHeight] = useState('');
@@ -137,7 +162,6 @@ export const FitnessWorkoutTool: React.FC = () => {
   const [savedReports, setSavedReports] = useState<any[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
 
-  // Fetch Saved Reports History
   const fetchHistory = async () => {
     if (!user) return;
     setHistoryLoading(true);
@@ -164,7 +188,6 @@ export const FitnessWorkoutTool: React.FC = () => {
     }
   }, [user]);
 
-  // Load a report from history
   const loadReport = (report: any) => {
     setAge(report.inputCriteria?.age?.toString() || '');
     setGender(report.inputCriteria?.gender || 'male');
@@ -179,7 +202,6 @@ export const FitnessWorkoutTool: React.FC = () => {
     setCompletedWorkouts({});
   };
 
-  // Delete a report from history
   const deleteReport = async (reportId: string, e: React.MouseEvent) => {
     e.stopPropagation();
     if (!window.confirm("Are you sure you want to delete this saved workout program?")) return;
@@ -201,14 +223,14 @@ export const FitnessWorkoutTool: React.FC = () => {
     setCompletedWorkouts(prev => ({ ...prev, [dayKey]: !prev[dayKey] }));
   };
 
+  // Uses lazy dynamic import of docx via exportDocxUtils
   const downloadWorkoutAsDocx = async () => {
     if (!routine) return;
     try {
       await exportFitnessPlanDocx({
         goal,
         days: parseInt(days, 10) || 4,
-        fitnessLevel: level,
-        routine
+        fitnessPlanText: routine
       });
     } catch (docxErr) {
       console.error("Failed to generate Word document:", docxErr);
@@ -341,6 +363,7 @@ export const FitnessWorkoutTool: React.FC = () => {
         Generate custom splits, precise exercise programs, and elite nutritional guides matched directly to your biometrics.
       </p>
       
+      {/* Evidence-based Sports Science Background Panel */}
       <div className="bg-blue-500/10 border border-blue-500/25 p-5 rounded-3xl mb-8 flex flex-col sm:flex-row gap-4 items-start">
         <div className="p-3 bg-blue-500/10 rounded-2xl text-blue-600 dark:text-blue-400 shrink-0">
           <Activity className="w-6 h-6" />
@@ -475,7 +498,7 @@ export const FitnessWorkoutTool: React.FC = () => {
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-4 bg-primary text-primary-foreground rounded-xl font-bold hover:bg-neon-blue-dark transition-all shadow-lg shadow-primary/20 disabled:opacity-50 neon-glow text-xs uppercase tracking-wider cursor-pointer"
+            className="w-full py-4 bg-primary text-primary-foreground rounded-xl font-bold hover:bg-neon-blue-dark transition-all shadow-lg shadow-primary/20 disabled:opacity-50 neon-glow text-xs uppercase tracking-wider"
           >
             {loading ? 'Assembling Weekly Program...' : 'Generate Workout Routine'}
           </button>
@@ -499,7 +522,7 @@ export const FitnessWorkoutTool: React.FC = () => {
                       "group flex items-center justify-between p-3.5 rounded-xl border transition-all cursor-pointer select-none text-left",
                       routine === report.reportText
                         ? "bg-primary/5 border-primary/40"
-                        : "border-border/60 bg-background/50 hover:bg-background hover:border-border"
+                        : "border-border/60 bg-background/50 hover:bg-background hover:border-border-dark"
                     )}
                   >
                     <div className="flex-1 min-w-0 pr-2">
@@ -568,17 +591,17 @@ export const FitnessWorkoutTool: React.FC = () => {
                   </span>
                   {loadedSource === 'database' && (
                     <span className="flex items-center gap-1.5 px-2.5 py-1 bg-emerald-500/10 border border-emerald-500/20 text-[10px] font-bold text-emerald-500 rounded-md">
-                      <CheckCircle2 className="w-3 h-3" /> DB Loaded
+                      <CheckCircle2 className="w-3.5 h-3.5" /> DB Loaded
                     </span>
                   )}
                   {loadedSource === 'fallback' && (
-                    <span className="flex items-center gap-1.5 px-2.5 py-1 bg-muted border border-border text-[10px] font-bold text-muted-foreground rounded-md">
-                      <Shield className="w-3 h-3" /> Offline
+                    <span className="flex items-center gap-1.5 px-2.5 py-1 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-[10px] font-bold text-muted-foreground rounded-md">
+                      <Shield className="w-3.5 h-3.5" /> Offline
                     </span>
                   )}
                   {loadedSource === 'ai' && (
                     <span className="flex items-center gap-1.5 px-2.5 py-1 bg-blue-500/10 border border-blue-500/20 text-[10px] font-bold text-blue-500 rounded-md">
-                      <Sparkles className="w-3 h-3" /> Live AI Generated
+                      <Sparkles className="w-3.5 h-3.5" /> Live AI Generated
                     </span>
                   )}
                 </div>
@@ -622,7 +645,7 @@ export const FitnessWorkoutTool: React.FC = () => {
                         "p-4 rounded-xl border cursor-pointer select-none transition-all flex items-center justify-between",
                         completedWorkouts[dayId]
                           ? "bg-emerald-500/10 border-emerald-500/25 text-foreground"
-                          : "bg-background border-border hover:border-border"
+                          : "bg-background border-border hover:border-border-dark"
                       )}
                     >
                       <div className="flex flex-col">

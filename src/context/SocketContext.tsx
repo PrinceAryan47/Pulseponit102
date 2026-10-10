@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useState, useRef } from 'r
 import { io, Socket } from 'socket.io-client';
 import { useAuth } from './AuthContext';
 import { useNavigate } from 'react-router-dom';
+import { auth } from '../firebase';
 
 export interface CallSession {
   roomId: string;
@@ -62,7 +63,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const [iceServers, setIceServers] = useState<any[] | null>(null);
   const socketRef = useRef<Socket | null>(null);
 
-  // Connect to Socket.io when profile is available
+  // Connect to Socket.io when profile is available with verified Firebase ID token
   useEffect(() => {
     if (!profile) {
       if (socketRef.current) {
@@ -73,26 +74,49 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       return;
     }
 
-    const host = window.location.origin;
-    console.log("[SocketContext] Connecting to socket server at:", host);
-    const s = io(host, {
-      transports: ["websocket", "polling"],
-      reconnection: true,
-      reconnectionAttempts: 10,
-      reconnectionDelay: 1000,
-    });
+    let isCancelled = false;
 
-    socketRef.current = s;
-    setSocket(s);
+    async function connectSocket() {
+      const host = window.location.origin;
+      let token = "";
+      try {
+        if (auth.currentUser) {
+          token = await auth.currentUser.getIdToken();
+        }
+      } catch (e) {
+        console.warn("[SocketContext] Error acquiring ID token:", e);
+      }
 
-    s.on("connect", () => {
-      console.log("[SocketContext] Connected to signaling socket:", s.id);
-      s.emit("register-user", {
-        userId: profile.uid,
-        fullName: profile.fullName,
-        photoURL: profile.photoURL || "",
+      if (isCancelled) return;
+
+      console.log("[SocketContext] Connecting to secure socket server at:", host);
+      const s = io(host, {
+        auth: {
+          token,
+          uid: profile?.uid
+        },
+        transports: ["websocket", "polling"],
+        reconnection: true,
+        reconnectionAttempts: 10,
+        reconnectionDelay: 1000,
       });
-    });
+
+      if (isCancelled) {
+        s.disconnect();
+        return;
+      }
+
+      socketRef.current = s;
+      setSocket(s);
+
+      s.on("connect", () => {
+        console.log("[SocketContext] Connected to signaling socket:", s.id);
+        s.emit("register-user", {
+          userId: profile?.uid,
+          fullName: profile?.fullName,
+          photoURL: profile?.photoURL || "",
+        });
+      });
 
     s.on("incoming-call", (data) => {
       console.log("[SocketContext] Incoming call received:", data);
@@ -167,11 +191,17 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     s.on("multi-login-logout", () => {
       console.log("[SocketContext] Logged out due to login from another device.");
     });
+  }
+
+  connectSocket();
 
     return () => {
-      s.disconnect();
-      socketRef.current = null;
-      setSocket(null);
+      isCancelled = true;
+      if (socketRef.current) {
+        socketRef.current.disconnect();
+        socketRef.current = null;
+        setSocket(null);
+      }
     };
   }, [profile]);
 

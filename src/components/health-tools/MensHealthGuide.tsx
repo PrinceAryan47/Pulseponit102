@@ -1,22 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  Activity, 
-  Sparkles, 
-  Trash2, 
-  CheckCircle2, 
-  Shield, 
-  Info 
-} from 'lucide-react';
 import { motion } from 'framer-motion';
+import { Activity, Sparkles, CheckCircle2, Info, Trash2, Shield } from 'lucide-react';
 import Markdown from 'react-markdown';
 import { useAuth } from '../../context/AuthContext';
 import { db } from '../../firebase';
 import { collection, addDoc, getDocs, query, where, orderBy, deleteDoc, doc } from 'firebase/firestore';
-import { generateMensHealthFallback } from '../../utils/offlineHealthData';
 import { GoogleGenAI } from '../../services/aiService';
+import { generateMensHealthFallback } from '../../utils/offlineHealthData';
 import { cn } from '../../lib/utils';
 
-export const MensHealthGuide: React.FC = () => {
+const MensHealthGuide: React.FC = () => {
   const { profile, user } = useAuth();
   const [age, setAge] = useState(profile?.age?.toString() || '');
   const [focus, setFocus] = useState('overall');
@@ -83,6 +76,7 @@ export const MensHealthGuide: React.FC = () => {
     }
   };
 
+  // Dynamic Client-side Screening Checklist based on age limits
   const getScreeningRecommendations = (currentAge: number) => {
     const list = [
       { id: 'bp', label: 'Blood Pressure Assessment', frequency: 'Annually', desc: 'Identify risks for hypertension and silent stroke indicators.', minAge: 18 },
@@ -99,6 +93,7 @@ export const MensHealthGuide: React.FC = () => {
   const parsedAge = parseInt(age, 10) || 0;
   const screeningList = getScreeningRecommendations(parsedAge);
 
+  // Simple local state to track checked screenings
   const [checkedScreenings, setCheckedScreenings] = useState<Record<string, boolean>>({});
 
   const toggleScreening = (id: string) => {
@@ -193,7 +188,8 @@ export const MensHealthGuide: React.FC = () => {
         Generate custom screening plans, age-graded risk reports, and evidence-guided preventative roadmaps from our clinical database.
       </p>
       
-      <div className="bg-muted/40 border border-border p-5 rounded-3xl mb-8 flex flex-col sm:flex-row gap-4 items-start">
+      {/* Evidence-based Medical Guidelines Background Panel */}
+      <div className="bg-slate-50 dark:bg-slate-900/40 border border-slate-100 dark:border-slate-800 p-5 rounded-3xl mb-8 flex flex-col sm:flex-row gap-4 items-start">
         <div className="p-3 bg-primary/10 rounded-2xl text-primary shrink-0">
           <Activity className="w-6 h-6" />
         </div>
@@ -203,15 +199,16 @@ export const MensHealthGuide: React.FC = () => {
             All age-graded diagnostic screenings, checkups, and cardiological warning indicators are matched against current preventive guidelines established by elite clinical academies:
           </p>
           <div className="flex flex-wrap gap-2 text-[10px] font-bold tracking-wider uppercase">
-            <span className="px-2.5 py-1 bg-muted border border-border rounded-md text-foreground/80">USPSTF Guidelines</span>
-            <span className="px-2.5 py-1 bg-muted border border-border rounded-md text-foreground/80">American Cancer Society (ACS)</span>
-            <span className="px-2.5 py-1 bg-muted border border-border rounded-md text-foreground/80">American Heart Assoc. (AHA)</span>
-            <span className="px-2.5 py-1 bg-muted border border-border rounded-md text-foreground/80">AUA Urology Standard</span>
+            <span className="px-2.5 py-1 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md text-slate-600 dark:text-slate-300">USPSTF Guidelines</span>
+            <span className="px-2.5 py-1 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md text-slate-600 dark:text-slate-300">American Cancer Society (ACS)</span>
+            <span className="px-2.5 py-1 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md text-slate-600 dark:text-slate-300">American Heart Assoc. (AHA)</span>
+            <span className="px-2.5 py-1 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md text-slate-600 dark:text-slate-300">AUA Urology Standard</span>
           </div>
         </div>
       </div>
       
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+        {/* Left Side Column: Form + Saved History Panel */}
         <div className="lg:col-span-5 space-y-6">
           <form onSubmit={generateGuide} className="bg-muted/30 p-6 sm:p-8 rounded-3xl border border-border/80 space-y-6">
             <h3 className="font-bold text-sm text-foreground uppercase tracking-widest pb-2 border-b border-border/60">Patient Criteria</h3>
@@ -277,13 +274,14 @@ export const MensHealthGuide: React.FC = () => {
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-4 bg-primary text-primary-foreground rounded-xl font-bold hover:bg-neon-blue-dark transition-all flex items-center justify-center gap-2 disabled:opacity-50 neon-glow text-xs uppercase tracking-wider cursor-pointer"
+              className="w-full py-4 bg-primary text-primary-foreground rounded-xl font-bold hover:bg-neon-blue-dark transition-all flex items-center justify-center gap-2 disabled:opacity-50 neon-glow text-xs uppercase tracking-wider"
             >
               {loading ? 'Synthesizing Guide...' : 'Generate Health Guide'}
               <Activity className="w-4 h-4 ml-1" />
             </button>
           </form>
 
+          {/* Saved History Panel */}
           {user && (
             <div className="bg-muted/30 p-6 sm:p-8 rounded-3xl border border-border/80">
               <h3 className="font-extrabold text-xs text-foreground uppercase tracking-wider mb-4 flex items-center justify-between">
@@ -302,7 +300,7 @@ export const MensHealthGuide: React.FC = () => {
                         "group flex items-center justify-between p-3 rounded-xl border transition-all cursor-pointer select-none text-left",
                         guide === report.reportText
                           ? "bg-primary/5 border-primary/40"
-                          : "border-border/60 bg-background/50 hover:bg-background hover:border-border"
+                          : "border-border/60 bg-background/50 hover:bg-background hover:border-border-dark"
                       )}
                     >
                       <div className="flex-1 min-w-0 pr-2">
@@ -329,6 +327,7 @@ export const MensHealthGuide: React.FC = () => {
           )}
         </div>
 
+        {/* Live clinical checkpoints panel */}
         <div className="lg:col-span-7 bg-muted/20 p-6 sm:p-8 rounded-3xl border border-border/60">
           <h3 className="font-bold text-base text-foreground mb-1">Target Men's Health Screenings</h3>
           <p className="text-xs text-muted-foreground mb-6">Based on your entered age ({parsedAge || 'Fill form above'}), track and tick off your key age-graded clinical examinations:</p>
@@ -351,7 +350,7 @@ export const MensHealthGuide: React.FC = () => {
                     "p-4 rounded-2xl border transition-all cursor-pointer flex gap-4 items-start select-none",
                     checkedScreenings[item.id]
                       ? "bg-primary/5 border-primary/20 text-foreground"
-                      : "bg-background border-border hover:border-border text-foreground/90"
+                      : "bg-background border-border hover:border-border-dark text-foreground/90"
                   )}
                 >
                   <div className={cn(
@@ -380,6 +379,7 @@ export const MensHealthGuide: React.FC = () => {
         </div>
       </div>
 
+      {/* Endocrine & Longevity FAQ Accordion */}
       <div className="bg-muted/15 p-6 sm:p-8 rounded-[2rem] mt-8 border border-border/80">
         <h3 className="font-bold text-lg text-foreground mb-1 flex items-center gap-2">
           <Info className="w-5 h-5 text-primary" />
@@ -430,7 +430,7 @@ export const MensHealthGuide: React.FC = () => {
                 </span>
               )}
               {loadedSource === 'fallback' && (
-                <span className="flex items-center gap-1.5 px-2.5 py-1 bg-muted border border-border text-[10px] font-bold text-muted-foreground rounded-full">
+                <span className="flex items-center gap-1.5 px-2.5 py-1 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-[10px] font-bold text-muted-foreground rounded-full">
                   <Shield className="w-3.5 h-3.5" /> Offline
                 </span>
               )}
@@ -442,7 +442,7 @@ export const MensHealthGuide: React.FC = () => {
             </div>
             <button 
               onClick={() => window.print()}
-              className="text-xs font-bold text-primary hover:underline flex items-center gap-1.5 self-start sm:self-auto cursor-pointer"
+              className="text-xs font-bold text-primary hover:underline flex items-center gap-1.5 self-start sm:self-auto"
             >
               Print Document
             </button>

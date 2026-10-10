@@ -1,31 +1,32 @@
 import React, { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Stethoscope, 
-  Activity, 
+  Heart, 
+  AlertTriangle, 
+  Shield, 
+  Info, 
+  CheckCircle2, 
+  AlertCircle, 
   FileDown, 
   Printer, 
-  Shield, 
-  Sparkles, 
-  CheckCircle2, 
-  ChevronRight, 
   ChevronLeft, 
-  Trash2, 
-  AlertTriangle, 
-  AlertCircle, 
-  Info,
-  Heart
+  ChevronRight, 
+  Sparkles, 
+  Activity, 
+  Trash2,
+  Clock
 } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
 import Markdown from 'react-markdown';
 import { useAuth } from '../../context/AuthContext';
 import { db } from '../../firebase';
 import { collection, addDoc, getDocs, query, where, orderBy, deleteDoc, doc } from 'firebase/firestore';
-import { generateSymptomCheckerFallback } from '../../utils/offlineHealthData';
 import { GoogleGenAI } from '../../services/aiService';
+import { generateSymptomCheckerFallback } from '../../utils/offlineHealthData';
+import { exportClinicalAssessmentDocx } from '../../utils/exportDocxUtils';
 import { cn } from '../../lib/utils';
-import { exportSymptomAssessmentDocx } from '../../utils/docxExport';
 
-export const SymptomChecker: React.FC = () => {
+const SymptomChecker: React.FC = () => {
   const { profile, user } = useAuth();
   
   // 5 Form Step states
@@ -64,7 +65,9 @@ export const SymptomChecker: React.FC = () => {
 
   // Synchronize network online/offline events
   useEffect(() => {
-    const handleOnline = () => setNetworkOnline(true);
+    const handleOnline = () => {
+      setNetworkOnline(true);
+    };
     const handleOffline = () => {
       setNetworkOnline(false);
       setIsOfflineEngine(true);
@@ -140,6 +143,7 @@ export const SymptomChecker: React.FC = () => {
     fetchHistory();
   }, [user, networkOnline]);
 
+  // Load a report from history
   const loadReport = (report: any) => {
     setAge(report.inputCriteria?.age?.toString() || '');
     setGender(report.inputCriteria?.gender || 'male');
@@ -191,8 +195,9 @@ export const SymptomChecker: React.FC = () => {
     prevention: string;
     firstaid: string;
     resources: string;
+    recheck: string;
   } | null>(null);
-  const [activeResultTab, setActiveResultTab] = useState<'causes' | 'treatments' | 'firstaid' | 'prevention' | 'resources'>('causes');
+  const [activeResultTab, setActiveResultTab] = useState<'causes' | 'treatments' | 'firstaid' | 'prevention' | 'resources' | 'recheck'>('causes');
 
   const COMMON_ASSOCIATED_SYMPTOMS = [
     'Fever', 'Headache', 'Cough', 'Shortness of breath', 
@@ -234,6 +239,7 @@ export const SymptomChecker: React.FC = () => {
       prevention: '',
       firstaid: '',
       resources: '',
+      recheck: '',
     };
 
     const keys = {
@@ -242,6 +248,7 @@ export const SymptomChecker: React.FC = () => {
       prevention: '[SECTION_3: PREVENTION_STRATEGIES]',
       firstaid: '[SECTION_4: FIRST_AID_PROTOCOLS]',
       resources: '[SECTION_5: CLINICAL_RESOURCES]',
+      recheck: '[SECTION_6: RECHECK_TIMELINE]',
     };
 
     let currentKey: keyof typeof sections | null = null;
@@ -272,20 +279,24 @@ export const SymptomChecker: React.FC = () => {
     return sections;
   };
 
-  const handleExportDocx = async () => {
+  // Uses lazy dynamic chunked docx import via exportDocxUtils
+  const exportSymptomAssessmentDocx = async () => {
     if (!analysis) return;
     setIsExportingDocx(true);
     try {
-      await exportSymptomAssessmentDocx({
-        age,
-        gender: `${gender}${pregnancyStatus === 'yes' ? ' (Pregnant)' : ''}`,
-        duration,
-        severity: parseInt(severity, 10) || 5,
-        selectedSymptoms,
-        history,
-        allergiesMedications,
-        triggers,
-        parsed: parsedResult || parseAnalysis(analysis)
+      const parsed = parsedResult || parseAnalysis(analysis);
+      const sectionConfigs = [
+        { label: "1. Potential Causes & Pathologies", content: parsed?.causes || "" },
+        { label: "2. Evidence-Based Treatment Pathways", content: parsed?.treatments || "" },
+        { label: "3. First Aid & Critical Warning Red Flags", content: parsed?.firstaid || "" },
+        { label: "4. When to Recheck & Clinical Monitoring Window", content: parsed?.recheck || "" },
+        { label: "5. Preventive Care & Lifestyle Adjustments", content: parsed?.prevention || "" },
+        { label: "6. Physician Questions & Verified Clinical Sources", content: parsed?.resources || "" }
+      ];
+
+      await exportClinicalAssessmentDocx({
+        symptoms,
+        sections: sectionConfigs
       });
     } catch (exportErr) {
       console.error("Failed to generate docx symptom assessment:", exportErr);
@@ -346,7 +357,7 @@ Patient Configuration Details:
 
 Instructions:
 1. Deeply correlate EVERY single input provided: evaluate how the duration (${duration}) impacts acute vs chronic timelines; assess whether severity (${severity}/10) warrants immediate emergency care; cross-reference pre-existing conditions (${history}) and active medications (${allergiesMedications}) for contraindications or drug side effects; assess demographic vulnerabilities (${age} yrs old, ${gender}${pregnancyStatus === 'yes' ? ', pregnant' : ''}).
-2. You MUST structure your response into exactly 5 distinct sections, each preceded by its corresponding section tag EXACTLY as shown below:
+2. You MUST structure your response into exactly 6 distinct sections, each preceded by its corresponding section tag EXACTLY as shown below:
 
 [SECTION_1: POTENTIAL_CAUSES]
 ### Clinical Patient Profile & Triage Summary
@@ -374,6 +385,13 @@ Instructions:
 ## Doctor Screening Checkpoints & Verified Sources
 - Provide 3-5 high-value, precise questions the patient should directly ask their consulting primary care provider.
 - Provide a verified educational directory table referencing trustworthy medical platforms (such as MayoClinic.org, CDC.gov, MedlinePlus) with specific search terms.
+
+[SECTION_6: RECHECK_TIMELINE]
+## When to Recheck & Clinical Monitoring Window
+- 🚨 0 - 2 Hours (Immediate Red Flag Window): Specific acute deterioration signs that mandate emergency evaluation without waiting.
+- ⏱️ 2 - 6 Hours (Short-Term Response): Benchmarks for checking medication response, fever/hydration, and vitals.
+- 📅 24 - 48 Hours (Progression Evaluation): Trajectory benchmarks for whether symptoms should plateau or improve, and what requires seeing a doctor.
+- 🩺 3 - 7 Days (Provider Follow-Up & Resolution): When full resolution should be expected vs scheduling a formal doctor visit.
 
 Be professional, direct, supportive, and clear. Avoid fluff. Do not use conversational preambles or postambles outside of the sections.`,
         });
@@ -453,23 +471,23 @@ Be professional, direct, supportive, and clear. Avoid fluff. Do not use conversa
     <div id="advanced-symptom-checker" className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h2 id="symptom-checker-title" className="text-2xl font-bold text-foreground mb-1">Advanced Symptom Checker</h2>
-          <p id="symptom-checker-subtitle" className="text-muted-foreground text-sm">Complete the five diagnostic sections to receive a comprehensive clinically-grounded report.</p>
+          <h2 id="symptom-checker-title" className="text-2xl font-bold text-[rgb(var(--foreground))] mb-1">Advanced Symptom Checker</h2>
+          <p id="symptom-checker-subtitle" className="text-slate-500 dark:text-slate-400 text-sm">Complete the five diagnostic sections to receive a comprehensive clinically-grounded report.</p>
         </div>
       </div>
       
       {/* Offline Mode & Clinical Engine Switcher */}
-      <div className="bg-card border border-border p-4 sm:p-5 rounded-3xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-sm">
+      <div className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-4 sm:p-5 rounded-3xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-sm">
         <div className="flex items-center gap-3.5">
           <div className={cn(
             "p-3 rounded-2xl flex items-center justify-center shrink-0",
-            isOfflineEngine ? "bg-amber-500/15 text-amber-500" : "bg-primary/15 text-primary"
+            isOfflineEngine ? "bg-amber-500/15 text-amber-500" : "bg-neon-blue/15 text-neon-blue"
           )}>
             {isOfflineEngine ? <Shield className="w-5 h-5" /> : <Sparkles className="w-5 h-5" />}
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h4 className="font-bold text-sm text-foreground">
+              <h4 className="font-bold text-sm text-[rgb(var(--foreground))]">
                 {isOfflineEngine ? "Offline Clinical Engine Active" : "Live Cloud AI Diagnostic Mode"}
               </h4>
               <span className={cn(
@@ -484,7 +502,7 @@ Be professional, direct, supportive, and clear. Avoid fluff. Do not use conversa
             <p className="text-xs text-muted-foreground mt-0.5">
               {isOfflineEngine 
                 ? "⚡ Zero-latency local processing grounded in Mayo Clinic, CDC, NIH & NHS medical databases."
-                : "✨ Powered by clinical AI with deep cross-referencing and automatic offline fallback."}
+                : "✨ Powered by Gemini 2.5 Flash with deep clinical cross-referencing and automatic offline fallback."}
             </p>
           </div>
         </div>
@@ -495,10 +513,10 @@ Be professional, direct, supportive, and clear. Avoid fluff. Do not use conversa
             onClick={() => setIsOfflineEngine(false)}
             disabled={!networkOnline}
             className={cn(
-              "px-4 py-2.5 rounded-xl text-xs font-bold transition-all border flex items-center gap-1.5 cursor-pointer",
+              "px-4 py-2.5 rounded-xl text-xs font-bold transition-all border flex items-center gap-1.5",
               !isOfflineEngine 
-                ? "bg-primary text-primary-foreground border-primary shadow-sm" 
-                : "bg-background border-border text-muted-foreground hover:text-foreground disabled:opacity-40 disabled:cursor-not-allowed"
+                ? "bg-neon-blue text-slate-900 border-neon-blue shadow-sm" 
+                : "bg-background border-slate-200 dark:border-slate-800 text-slate-500 hover:text-foreground disabled:opacity-40 disabled:cursor-not-allowed"
             )}
             title={!networkOnline ? "Device is offline. Connect to network for Cloud AI." : "Use live AI model"}
           >
@@ -508,10 +526,10 @@ Be professional, direct, supportive, and clear. Avoid fluff. Do not use conversa
             type="button"
             onClick={() => setIsOfflineEngine(true)}
             className={cn(
-              "px-4 py-2.5 rounded-xl text-xs font-bold transition-all border flex items-center gap-1.5 cursor-pointer",
+              "px-4 py-2.5 rounded-xl text-xs font-bold transition-all border flex items-center gap-1.5",
               isOfflineEngine 
                 ? "bg-amber-500 text-slate-900 border-amber-500 shadow-sm" 
-                : "bg-background border-border text-muted-foreground hover:text-foreground"
+                : "bg-background border-slate-200 dark:border-slate-800 text-slate-500 hover:text-foreground"
             )}
             title="Use local offline medical knowledge base"
           >
@@ -539,9 +557,11 @@ Be professional, direct, supportive, and clear. Avoid fluff. Do not use conversa
         </div>
       </div>
 
+      {/* 5-Step Interactive Form with Saved Assessments History */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-        <div id="stepper-card" className={cn("bg-card border border-border rounded-3xl p-6 sm:p-8 shadow-sm", user ? "lg:col-span-8" : "lg:col-span-12")}>
+        <div id="stepper-card" className={cn("bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-3xl p-6 sm:p-8 shadow-sm", user ? "lg:col-span-8" : "lg:col-span-12")}>
         
+        {/* Stepper Header */}
         <div id="stepper-progress" className="mb-10">
           <div className="flex justify-between items-center relative">
             {stepLabels.map((sl, index) => {
@@ -557,38 +577,40 @@ Be professional, direct, supportive, and clear. Avoid fluff. Do not use conversa
                       else if (num === step + 1) handleNext();
                     }}
                     className={cn(
-                      "w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm transition-all duration-300 border-2 cursor-pointer",
+                      "w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm transition-all duration-300 border-2",
                       isCompleted && "bg-emerald-500 border-emerald-500 text-white",
-                      isActive && "bg-primary border-primary text-primary-foreground shadow-md shadow-primary/25 scale-110",
-                      !isActive && !isCompleted && "bg-muted border-border text-muted-foreground"
+                      isActive && "bg-neon-blue border-neon-blue text-slate-900 shadow-md shadow-neon-blue/25 scale-110",
+                      !isActive && !isCompleted && "bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-400"
                     )}
                   >
                     {isCompleted ? <CheckCircle2 className="w-5 h-5" /> : num}
                   </button>
                   <span className={cn(
                     "text-[10px] font-bold uppercase tracking-wider mt-2 text-center hidden md:block",
-                    isActive ? "text-primary" : "text-muted-foreground"
+                    isActive ? "text-neon-blue" : "text-slate-400"
                   )}>
                     {sl.title}
                   </span>
-                  <span className="text-[9px] text-muted-foreground/80 mt-0.5 text-center hidden lg:block">
+                  <span className="text-[9px] text-slate-400/80 mt-0.5 text-center hidden lg:block">
                     {sl.desc}
                   </span>
                 </div>
               );
             })}
             
-            <div className="absolute top-5 left-0 right-0 h-0.5 bg-border -z-10" />
+            <div className="absolute top-5 left-0 right-0 h-0.5 bg-slate-100 dark:bg-slate-800 -z-10" />
             <div 
-              className="absolute top-5 left-0 h-0.5 bg-primary transition-all duration-500 -z-10" 
+              className="absolute top-5 left-0 h-0.5 bg-neon-blue transition-all duration-500 -z-10" 
               style={{ width: `${((Math.max(1, step) - 1) / (stepLabels.length - 1)) * 100}%` }}
             />
           </div>
         </div>
 
+        {/* Dynamic Form Sections */}
         <form onSubmit={checkSymptoms} className="space-y-6">
           <AnimatePresence mode="wait">
             
+            {/* STEP 1: DEMOGRAPHICS */}
             {step === 1 && (
               <motion.div
                 key="step1"
@@ -597,30 +619,30 @@ Be professional, direct, supportive, and clear. Avoid fluff. Do not use conversa
                 exit={{ opacity: 0, x: -20 }}
                 className="space-y-6"
               >
-                <div className="border-b border-border pb-3">
-                  <h3 className="text-lg font-bold text-foreground">Section 1: Demographics & Profile</h3>
-                  <p className="text-xs text-muted-foreground">Basic demographic indicators help tailor age-and-gender-related clinical diagnostic rules.</p>
+                <div className="border-b border-slate-100 dark:border-slate-800 pb-3">
+                  <h3 className="text-lg font-bold text-[rgb(var(--foreground))]">Section 1: Demographics & Profile</h3>
+                  <p className="text-xs text-slate-400">Basic demographic indicators help tailor age-and-gender-related clinical diagnostic rules.</p>
                 </div>
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
-                    <label className="block text-sm font-semibold text-foreground/80 mb-2">Age</label>
+                    <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">Age</label>
                     <input
                       type="number"
                       value={age}
                       onChange={(e) => setAge(e.target.value)}
-                      className="w-full px-5 py-3.5 bg-muted/50 border border-border rounded-2xl focus:ring-2 focus:ring-primary outline-none transition-all text-foreground"
+                      className="w-full px-5 py-3.5 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-2xl focus:ring-2 focus:ring-neon-blue outline-none transition-all text-[rgb(var(--foreground))]"
                       placeholder="Enter age (e.g. 32)"
                       min="0"
                       max="125"
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-semibold text-foreground/80 mb-2">Biological Gender</label>
+                    <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">Biological Gender</label>
                     <select
                       value={gender}
                       onChange={(e) => setGender(e.target.value)}
-                      className="w-full px-5 py-3.5 bg-muted/50 border border-border rounded-2xl focus:ring-2 focus:ring-primary outline-none transition-all text-foreground"
+                      className="w-full px-5 py-3.5 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-2xl focus:ring-2 focus:ring-neon-blue outline-none transition-all text-[rgb(var(--foreground))]"
                     >
                       <option value="male">Male</option>
                       <option value="female">Female</option>
@@ -643,10 +665,10 @@ Be professional, direct, supportive, and clear. Avoid fluff. Do not use conversa
                           type="button"
                           onClick={() => setPregnancyStatus(status)}
                           className={cn(
-                            "px-5 py-2.5 rounded-xl font-semibold text-xs capitalize transition-all border cursor-pointer",
+                            "px-5 py-2.5 rounded-xl font-semibold text-xs capitalize transition-all border",
                             pregnancyStatus === status 
                               ? "bg-purple-500/15 border-purple-500 text-purple-400" 
-                              : "bg-muted/30 border-border text-muted-foreground hover:text-foreground"
+                              : "bg-slate-50 dark:bg-slate-900/30 border-slate-200 dark:border-slate-800 text-slate-400 hover:text-slate-300"
                           )}
                         >
                           {status}
@@ -658,6 +680,7 @@ Be professional, direct, supportive, and clear. Avoid fluff. Do not use conversa
               </motion.div>
             )}
 
+            {/* STEP 2: PRIMARY SYMPTOMS & TREND */}
             {step === 2 && (
               <motion.div
                 key="step2"
@@ -666,42 +689,42 @@ Be professional, direct, supportive, and clear. Avoid fluff. Do not use conversa
                 exit={{ opacity: 0, x: -20 }}
                 className="space-y-6"
               >
-                <div className="border-b border-border pb-3">
-                  <h3 className="text-lg font-bold text-foreground">Section 2: Primary Symptoms & Trend</h3>
-                  <p className="text-xs text-muted-foreground">Describe what you are currently feeling and the trend of these feelings.</p>
+                <div className="border-b border-slate-100 dark:border-slate-800 pb-3">
+                  <h3 className="text-lg font-bold text-[rgb(var(--foreground))]">Section 2: Primary Symptoms & Trend</h3>
+                  <p className="text-xs text-slate-400">Describe what you are currently feeling and the trend of these feelings.</p>
                 </div>
 
                 <div>
-                  <label className="block text-sm font-semibold text-foreground/80 mb-2">Describe Your Primary Symptoms <span className="text-red-500">*</span></label>
+                  <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">Describe Your Primary Symptoms <span className="text-red-500">*</span></label>
                   <textarea
                     value={symptoms}
                     onChange={(e) => setSymptoms(e.target.value)}
-                    className="w-full px-5 py-4 bg-muted/50 border border-border rounded-2xl focus:ring-2 focus:ring-primary outline-none transition-all min-h-[120px] resize-none text-foreground"
+                    className="w-full px-5 py-4 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-2xl focus:ring-2 focus:ring-neon-blue outline-none transition-all min-h-[120px] resize-none text-[rgb(var(--foreground))]"
                     placeholder="e.g., Throbbing localized pain on the right side of my head, accompanied by visual flickering, and sensitivity to bright lights..."
                   />
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
-                    <label className="block text-sm font-semibold text-foreground/80 mb-2">Symptom Intensity / Severity (1-10)</label>
-                    <div className="flex items-center gap-4 px-5 py-3.5 bg-muted/50 border border-border rounded-2xl">
+                    <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">Symptom Intensity / Severity (1-10)</label>
+                    <div className="flex items-center gap-4 px-5 py-3.5 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-2xl">
                       <input
                         type="range"
                         min="1"
                         max="10"
                         value={severity}
                         onChange={(e) => setSeverity(e.target.value)}
-                        className="flex-grow h-2 bg-muted rounded-lg appearance-none cursor-pointer accent-primary"
+                        className="flex-grow h-2 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer accent-neon-blue"
                       />
-                      <span className="font-bold text-primary text-lg w-6 text-center">{severity}</span>
+                      <span className="font-bold text-neon-blue text-lg w-6 text-center">{severity}</span>
                     </div>
                   </div>
                   <div>
-                    <label className="block text-sm font-semibold text-foreground/80 mb-2">Symptom Trend over Time</label>
+                    <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">Symptom Trend over Time</label>
                     <select
                       value={trend}
                       onChange={(e) => setTrend(e.target.value)}
-                      className="w-full px-5 py-3.5 bg-muted/50 border border-border rounded-2xl focus:ring-2 focus:ring-primary outline-none transition-all text-foreground"
+                      className="w-full px-5 py-3.5 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-2xl focus:ring-2 focus:ring-neon-blue outline-none transition-all text-[rgb(var(--foreground))]"
                     >
                       <option value="stable">Stable / Consistent</option>
                       <option value="increasing">Worsening / Increasing</option>
@@ -713,6 +736,7 @@ Be professional, direct, supportive, and clear. Avoid fluff. Do not use conversa
               </motion.div>
             )}
 
+            {/* STEP 3: TIMELINE & ASSOCIATED SYMPTOMS */}
             {step === 3 && (
               <motion.div
                 key="step3"
@@ -721,18 +745,18 @@ Be professional, direct, supportive, and clear. Avoid fluff. Do not use conversa
                 exit={{ opacity: 0, x: -20 }}
                 className="space-y-6"
               >
-                <div className="border-b border-border pb-3">
-                  <h3 className="text-lg font-bold text-foreground">Section 3: Timeline & Associated Symptoms</h3>
-                  <p className="text-xs text-muted-foreground">Identify how long you've been sick and any secondary markers.</p>
+                <div className="border-b border-slate-100 dark:border-slate-800 pb-3">
+                  <h3 className="text-lg font-bold text-[rgb(var(--foreground))]">Section 3: Timeline & Associated Symptoms</h3>
+                  <p className="text-xs text-slate-400">Identify how long you've been sick and any secondary markers.</p>
                 </div>
 
                 <div>
-                  <label className="block text-sm font-semibold text-foreground/80 mb-2">How long have you had these symptoms? <span className="text-red-500">*</span></label>
+                  <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">How long have you had these symptoms? <span className="text-red-500">*</span></label>
                   <input
                     type="text"
                     value={duration}
                     onChange={(e) => setDuration(e.target.value)}
-                    className="w-full px-5 py-3.5 bg-muted/50 border border-border rounded-2xl focus:ring-2 focus:ring-primary outline-none transition-all text-foreground"
+                    className="w-full px-5 py-3.5 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-2xl focus:ring-2 focus:ring-neon-blue outline-none transition-all text-[rgb(var(--foreground))]"
                     placeholder="e.g., 3 days, 1 week, since this morning"
                   />
                   <div className="flex flex-wrap items-center gap-2 mt-2.5">
@@ -745,8 +769,8 @@ Be professional, direct, supportive, and clear. Avoid fluff. Do not use conversa
                         className={cn(
                           "px-2.5 py-1 text-[11px] rounded-lg border transition-all cursor-pointer",
                           duration === qd
-                            ? "bg-primary/15 border-primary text-primary font-bold shadow-xs"
-                            : "bg-muted/40 border-border text-muted-foreground hover:text-foreground"
+                            ? "bg-neon-blue/15 border-neon-blue text-neon-blue font-bold shadow-xs"
+                            : "bg-slate-100 dark:bg-slate-800/60 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:text-foreground"
                         )}
                       >
                         {qd}
@@ -756,7 +780,7 @@ Be professional, direct, supportive, and clear. Avoid fluff. Do not use conversa
                 </div>
 
                 <div>
-                  <label className="block text-sm font-semibold text-foreground/80 mb-3">Do you have any of these associated symptoms? (Select all that apply)</label>
+                  <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3">Do you have any of these associated symptoms? (Select all that apply)</label>
                   <div className="flex flex-wrap gap-2.5">
                     {COMMON_ASSOCIATED_SYMPTOMS.map((symptom) => {
                       const isSelected = selectedSymptoms.includes(symptom);
@@ -768,8 +792,8 @@ Be professional, direct, supportive, and clear. Avoid fluff. Do not use conversa
                           className={cn(
                             "px-4 py-2 rounded-xl text-xs font-semibold transition-all border duration-200 cursor-pointer",
                             isSelected 
-                              ? "bg-primary/15 border-primary text-primary shadow-sm" 
-                              : "bg-muted/30 border-border text-muted-foreground hover:bg-muted"
+                              ? "bg-neon-blue/15 border-neon-blue text-neon-blue shadow-sm" 
+                              : "bg-slate-50 dark:bg-slate-900/30 border-slate-200 dark:border-slate-800 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"
                           )}
                         >
                           {symptom}
@@ -781,6 +805,7 @@ Be professional, direct, supportive, and clear. Avoid fluff. Do not use conversa
               </motion.div>
             )}
 
+            {/* STEP 4: HEALTH BACKGROUND */}
             {step === 4 && (
               <motion.div
                 key="step4"
@@ -789,17 +814,17 @@ Be professional, direct, supportive, and clear. Avoid fluff. Do not use conversa
                 exit={{ opacity: 0, x: -20 }}
                 className="space-y-6"
               >
-                <div className="border-b border-border pb-3">
-                  <h3 className="text-lg font-bold text-foreground">Section 4: Medical History & Background</h3>
-                  <p className="text-xs text-muted-foreground">Underlying medical history or chronic conditions can severely impact triage assessments.</p>
+                <div className="border-b border-slate-100 dark:border-slate-800 pb-3">
+                  <h3 className="text-lg font-bold text-[rgb(var(--foreground))]">Section 4: Medical History & Background</h3>
+                  <p className="text-xs text-slate-400">Underlying medical history or chronic conditions can severely impact triage assessments.</p>
                 </div>
 
                 <div>
-                  <label className="block text-sm font-semibold text-foreground/80 mb-2">Pre-existing Medical Conditions / History (Optional)</label>
+                  <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">Pre-existing Medical Conditions / History (Optional)</label>
                   <textarea
                     value={history}
                     onChange={(e) => setHistory(e.target.value)}
-                    className="w-full px-5 py-3.5 bg-muted/50 border border-border rounded-2xl focus:ring-2 focus:ring-primary outline-none transition-all min-h-[90px] resize-none text-foreground"
+                    className="w-full px-5 py-3.5 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-2xl focus:ring-2 focus:ring-neon-blue outline-none transition-all min-h-[90px] resize-none text-[rgb(var(--foreground))]"
                     placeholder="e.g. Hypertension, asthma, diabetes, heart condition, none..."
                   />
                   <div className="flex flex-wrap items-center gap-2 mt-2.5">
@@ -823,7 +848,7 @@ Be professional, direct, supportive, and clear. Avoid fluff. Do not use conversa
                           "px-2.5 py-1 text-[11px] rounded-lg border transition-all cursor-pointer",
                           history.includes(qh)
                             ? "bg-purple-500/15 border-purple-500 text-purple-400 font-bold shadow-xs"
-                            : "bg-muted/40 border-border text-muted-foreground hover:text-foreground"
+                            : "bg-slate-100 dark:bg-slate-800/60 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:text-foreground"
                         )}
                       >
                         + {qh}
@@ -833,17 +858,18 @@ Be professional, direct, supportive, and clear. Avoid fluff. Do not use conversa
                 </div>
 
                 <div>
-                  <label className="block text-sm font-semibold text-foreground/80 mb-2">Known Allergies & Active Medications (Optional)</label>
+                  <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">Known Allergies & Active Medications (Optional)</label>
                   <textarea
                     value={allergiesMedications}
                     onChange={(e) => setAllergiesMedications(e.target.value)}
-                    className="w-full px-5 py-3.5 bg-muted/50 border border-border rounded-2xl focus:ring-2 focus:ring-primary outline-none transition-all min-h-[90px] resize-none text-foreground"
+                    className="w-full px-5 py-3.5 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-2xl focus:ring-2 focus:ring-neon-blue outline-none transition-all min-h-[90px] resize-none text-[rgb(var(--foreground))]"
                     placeholder="e.g. Allergic to penicillin. Currently taking 10mg Lisinopril daily..."
                   />
                 </div>
               </motion.div>
             )}
 
+            {/* STEP 5: TRIGGERS & CONTEXT */}
             {step === 5 && (
               <motion.div
                 key="step5"
@@ -852,23 +878,23 @@ Be professional, direct, supportive, and clear. Avoid fluff. Do not use conversa
                 exit={{ opacity: 0, x: -20 }}
                 className="space-y-6"
               >
-                <div className="border-b border-border pb-3">
-                  <h3 className="text-lg font-bold text-foreground">Section 5: Triggers, Exposures & Environmental Context</h3>
-                  <p className="text-xs text-muted-foreground">Environmental context can highlight toxic, viral, bacterial, or traumatic triggers.</p>
+                <div className="border-b border-slate-100 dark:border-slate-800 pb-3">
+                  <h3 className="text-lg font-bold text-[rgb(var(--foreground))]">Section 5: Triggers, Exposures & Environmental Context</h3>
+                  <p className="text-xs text-slate-400">Environmental context can highlight toxic, viral, bacterial, or traumatic triggers.</p>
                 </div>
 
                 <div>
-                  <label className="block text-sm font-semibold text-foreground/80 mb-2">Recent Travel, Injuries, Sick Contacts, or Stressors (Optional)</label>
+                  <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">Recent Travel, Injuries, Sick Contacts, or Stressors (Optional)</label>
                   <textarea
                     value={triggers}
                     onChange={(e) => setTriggers(e.target.value)}
-                    className="w-full px-5 py-4 bg-muted/50 border border-border rounded-2xl focus:ring-2 focus:ring-primary outline-none transition-all min-h-[140px] resize-none text-foreground"
-                    placeholder="e.g., Traveled recently, was bitten by an insect, or exposed to someone with infectious symptoms..."
+                    className="w-full px-5 py-4 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-2xl focus:ring-2 focus:ring-neon-blue outline-none transition-all min-h-[140px] resize-none text-[rgb(var(--foreground))]"
+                    placeholder="e.g., Traveled to Costa Rica 10 days ago, was recently bitten by a tick, or exposed to a child with chickenpox..."
                   />
                 </div>
 
-                <div className="p-4 bg-muted/40 border border-border text-muted-foreground rounded-2xl flex gap-3 text-xs leading-relaxed">
-                  <Info className="w-5 h-5 shrink-0 text-muted-foreground" />
+                <div className="p-4 bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800 text-muted-foreground rounded-2xl flex gap-3 text-xs leading-relaxed">
+                  <Info className="w-5 h-5 shrink-0 text-slate-400" />
                   <p>
                     <strong>Educational Guidance:</strong> This digital symptom evaluation is driven by clinical databases but does not constitute, replace, or override a professional in-person medical diagnosis. If you are experiencing serious, acute symptoms, please seek emergency medical attention.
                   </p>
@@ -878,7 +904,8 @@ Be professional, direct, supportive, and clear. Avoid fluff. Do not use conversa
 
           </AnimatePresence>
 
-          <div id="form-nav-buttons" className="flex justify-between items-center pt-4 border-t border-border mt-8">
+          {/* Stepper Navigation Buttons */}
+          <div id="form-nav-buttons" className="flex justify-between items-center pt-4 border-t border-slate-100 dark:border-slate-800 mt-8">
             <button
               type="button"
               onClick={handleBack}
@@ -886,8 +913,8 @@ Be professional, direct, supportive, and clear. Avoid fluff. Do not use conversa
               className={cn(
                 "px-5 py-3 rounded-xl font-bold text-xs flex items-center gap-2 border transition-all cursor-pointer",
                 step === 1 
-                  ? "opacity-40 cursor-not-allowed border-transparent text-muted-foreground" 
-                  : "border-border text-foreground hover:bg-muted"
+                  ? "opacity-40 cursor-not-allowed border-transparent text-slate-400" 
+                  : "border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
               )}
             >
               <ChevronLeft className="w-4 h-4" /> Back
@@ -897,7 +924,7 @@ Be professional, direct, supportive, and clear. Avoid fluff. Do not use conversa
               <button
                 type="button"
                 onClick={handleNext}
-                className="px-6 py-3 bg-muted hover:bg-muted/80 text-foreground rounded-xl font-bold text-xs flex items-center gap-2 transition-all cursor-pointer"
+                className="px-6 py-3 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-900 dark:text-slate-100 rounded-xl font-bold text-xs flex items-center gap-2 transition-all cursor-pointer"
               >
                 Next <ChevronRight className="w-4 h-4" />
               </button>
@@ -905,7 +932,7 @@ Be professional, direct, supportive, and clear. Avoid fluff. Do not use conversa
               <button
                 type="submit"
                 disabled={loading || !symptoms.trim()}
-                className="px-8 py-3 bg-primary text-primary-foreground rounded-xl font-extrabold text-xs tracking-wider uppercase hover:bg-neon-blue-dark transition-all disabled:opacity-40 disabled:cursor-not-allowed neon-glow flex items-center gap-2 cursor-pointer"
+                className="px-8 py-3 bg-neon-blue text-slate-900 rounded-xl font-extrabold text-xs tracking-wider uppercase hover:bg-neon-blue-dark transition-all disabled:opacity-40 disabled:cursor-not-allowed neon-glow flex items-center gap-2 cursor-pointer"
               >
                 {loading ? 'Analyzing Data...' : 'Submit Assessment Report'}
               </button>
@@ -914,12 +941,13 @@ Be professional, direct, supportive, and clear. Avoid fluff. Do not use conversa
         </form>
       </div>
 
+      {/* Saved Assessments History List */}
       {(user || savedReports.length > 0) && (
-        <div className="lg:col-span-4 bg-card border border-border p-6 sm:p-8 rounded-3xl shadow-sm">
+        <div className="lg:col-span-4 bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 p-6 sm:p-8 rounded-3xl shadow-sm">
           <h3 className="font-extrabold text-xs text-foreground uppercase tracking-wider mb-4 flex items-center justify-between">
             <span className="flex items-center gap-2">
               <span>📂 Saved Assessments</span>
-              <span className="px-2 py-0.5 rounded-full text-[10px] bg-muted text-muted-foreground font-normal">
+              <span className="px-2 py-0.5 rounded-full text-[10px] bg-slate-100 dark:bg-slate-800 text-muted-foreground font-normal">
                 {savedReports.length}
               </span>
             </span>
@@ -936,8 +964,8 @@ Be professional, direct, supportive, and clear. Avoid fluff. Do not use conversa
                   className={cn(
                     "group flex items-center justify-between p-3.5 rounded-xl border transition-all cursor-pointer select-none text-left",
                     analysis === report.reportText
-                      ? "bg-primary/10 border-primary/40 shadow-xs"
-                      : "border-border bg-background hover:bg-muted"
+                      ? "bg-neon-blue/10 border-neon-blue/40 shadow-xs"
+                      : "border-slate-100 dark:border-slate-800 bg-background hover:bg-slate-50 dark:hover:bg-slate-800 hover:border-slate-300 dark:hover:border-slate-700"
                   )}
                 >
                   <div className="flex-1 min-w-0 pr-2">
@@ -953,7 +981,7 @@ Be professional, direct, supportive, and clear. Avoid fluff. Do not use conversa
                         Sev {report.inputCriteria?.severity || 5}/10
                       </span>
                       {report.isOffline && (
-                        <span className="text-[9px] bg-muted text-muted-foreground px-1.5 py-0.5 rounded border border-border">
+                        <span className="text-[9px] bg-slate-100 dark:bg-slate-800 text-muted-foreground px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-700">
                           Offline
                         </span>
                       )}
@@ -981,18 +1009,20 @@ Be professional, direct, supportive, and clear. Avoid fluff. Do not use conversa
       )}
     </div>
 
+      {/* Analysis Results Display */}
       {analysis && (
         <motion.div 
           id="symptom-analysis-results"
           initial={{ opacity: 0, y: 30 }}
           animate={{ opacity: 1, y: 0 }}
-          className="mt-12 bg-card border border-border rounded-3xl p-6 sm:p-8 shadow-sm"
+          className="mt-12 bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-3xl p-6 sm:p-8 shadow-sm"
         >
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 border-b border-border pb-4">
-            <div className="flex items-center gap-2.5 text-primary">
+          {/* Header & Source Badges */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 border-b border-slate-100 dark:border-slate-800 pb-4">
+            <div className="flex items-center gap-2.5 text-neon-blue">
               <AlertCircle className="w-6 h-6 shrink-0" />
               <div>
-                <h3 className="text-xl font-bold text-foreground">Clinical Triage & Symptom Breakdown</h3>
+                <h3 className="text-xl font-bold text-[rgb(var(--foreground))]">Clinical Triage & Symptom Breakdown</h3>
                 <p className="text-xs text-muted-foreground">Comprehensive multi-factor health evaluation based on entered criteria.</p>
               </div>
             </div>
@@ -1014,32 +1044,34 @@ Be professional, direct, supportive, and clear. Avoid fluff. Do not use conversa
                 </span>
               )}
 
+              {/* Action Buttons: Export Word (.docx) & Print */}
               <button
                 type="button"
-                onClick={handleExportDocx}
+                onClick={exportSymptomAssessmentDocx}
                 disabled={isExportingDocx}
-                className="flex items-center gap-1.5 px-3.5 py-1.5 bg-muted hover:bg-muted/80 text-foreground rounded-xl text-xs font-bold transition-all border border-border cursor-pointer"
+                className="flex items-center gap-1.5 px-3.5 py-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-foreground rounded-xl text-xs font-bold transition-all border border-slate-200 dark:border-slate-700 cursor-pointer disabled:opacity-50"
                 title="Download formatted clinical document (.docx)"
               >
-                <FileDown className="w-3.5 h-3.5 text-primary" />
+                <FileDown className="w-3.5 h-3.5 text-neon-blue" />
                 <span>{isExportingDocx ? 'Exporting...' : 'Word (.docx)'}</span>
               </button>
 
               <button
                 type="button"
                 onClick={() => window.print()}
-                className="flex items-center gap-1.5 px-3.5 py-1.5 bg-muted hover:bg-muted/80 text-foreground rounded-xl text-xs font-bold transition-all border border-border cursor-pointer"
+                className="flex items-center gap-1.5 px-3.5 py-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-foreground rounded-xl text-xs font-bold transition-all border border-slate-200 dark:border-slate-700 cursor-pointer"
                 title="Print report"
               >
-                <Printer className="w-3.5 h-3.5 text-muted-foreground" />
+                <Printer className="w-3.5 h-3.5 text-slate-500" />
                 <span>Print</span>
               </button>
             </div>
           </div>
 
-          <div className="p-4 sm:p-5 bg-muted/40 border border-border rounded-2xl mb-8">
+          {/* Patient Data Correlation Banner */}
+          <div className="p-4 sm:p-5 bg-slate-50 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-800 rounded-2xl mb-8">
             <h4 className="text-xs font-extrabold uppercase tracking-wider text-muted-foreground mb-3 flex items-center gap-2">
-              <Activity className="w-3.5 h-3.5 text-primary" />
+              <Activity className="w-3.5 h-3.5 text-neon-blue" />
               <span>Correlated Patient Data & Triage Criteria</span>
             </h4>
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 text-xs">
@@ -1085,7 +1117,7 @@ Be professional, direct, supportive, and clear. Avoid fluff. Do not use conversa
               <div className="mt-3 flex flex-wrap items-center gap-1.5 pt-3 border-t border-border/60">
                 <span className="text-[10px] font-bold text-muted-foreground mr-1">Associated Markers:</span>
                 {selectedSymptoms.map(s => (
-                  <span key={s} className="px-2 py-0.5 bg-primary/10 border border-primary/20 text-primary rounded-md text-[10px] font-semibold">
+                  <span key={s} className="px-2 py-0.5 bg-neon-blue/10 border border-neon-blue/20 text-neon-blue rounded-md text-[10px] font-semibold">
                     {s}
                   </span>
                 ))}
@@ -1095,11 +1127,14 @@ Be professional, direct, supportive, and clear. Avoid fluff. Do not use conversa
 
           {parsedResult ? (
             <div id="tabbed-results" className="space-y-6">
-              <div className="flex flex-wrap gap-2 border-b border-border pb-2">
+              
+              {/* Tab Selector Menu */}
+              <div className="flex flex-wrap gap-2 border-b border-slate-100 dark:border-slate-800 pb-2">
                 {[
                   { id: 'causes', label: 'Potential Causes', icon: Stethoscope, color: 'text-blue-500' },
                   { id: 'treatments', label: 'Treatments', icon: Heart, color: 'text-rose-500' },
                   { id: 'firstaid', label: 'First Aid & Warnings', icon: AlertTriangle, color: 'text-amber-500' },
+                  { id: 'recheck', label: 'When to Recheck', icon: Clock, color: 'text-amber-500' },
                   { id: 'prevention', label: 'Prevention', icon: Shield, color: 'text-emerald-500' },
                   { id: 'resources', label: 'Doctor Questions & Sources', icon: Info, color: 'text-indigo-500' },
                 ].map((tab) => {
@@ -1113,8 +1148,8 @@ Be professional, direct, supportive, and clear. Avoid fluff. Do not use conversa
                       className={cn(
                         "flex items-center gap-2 px-4 py-3 rounded-2xl text-xs font-bold transition-all border duration-150 cursor-pointer",
                         isActive 
-                          ? "bg-muted border-border text-primary shadow-sm" 
-                          : "border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                          ? "bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-neon-blue shadow-sm" 
+                          : "border-transparent text-slate-500 hover:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800/50"
                       )}
                     >
                       <Icon className={cn("w-4 h-4 shrink-0", tab.color)} />
@@ -1124,7 +1159,8 @@ Be professional, direct, supportive, and clear. Avoid fluff. Do not use conversa
                 })}
               </div>
 
-              <div className="p-2 sm:p-4 bg-muted/20 rounded-2xl min-h-[250px]">
+              {/* Tab Content Display Area */}
+              <div className="p-2 sm:p-4 bg-slate-50/50 dark:bg-slate-900/30 rounded-2xl min-h-[250px]">
                 <AnimatePresence mode="wait">
                   <motion.div
                     key={activeResultTab}
@@ -1132,7 +1168,7 @@ Be professional, direct, supportive, and clear. Avoid fluff. Do not use conversa
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -10 }}
                     transition={{ duration: 0.15 }}
-                    className="markdown-body text-foreground/90 leading-relaxed max-w-none"
+                    className="markdown-body text-slate-700 dark:text-slate-300 leading-relaxed max-w-none"
                   >
                     {activeResultTab === 'causes' && (
                       <div className="space-y-4">
@@ -1155,10 +1191,68 @@ Be professional, direct, supportive, and clear. Avoid fluff. Do not use conversa
                         <div className="flex items-center gap-2 text-rose-500 text-sm font-bold bg-rose-500/10 w-fit px-3.5 py-1.5 rounded-full mb-2">
                           <AlertTriangle className="w-4 h-4" /> Immediate Care & Red Flags
                         </div>
-                        <div className="bg-red-500/5 border border-red-500/10 p-5 rounded-2xl mb-4 text-xs text-red-500 leading-relaxed font-semibold">
+                        <div className="bg-red-500/5 border border-red-500/10 p-5 rounded-2xl mb-4 text-xs text-red-400 leading-relaxed font-semibold">
                           Please evaluate these warning metrics immediately. If your condition qualifies as acute or emergency, contact emergency service departments at once.
                         </div>
                         <Markdown>{parsedResult.firstaid}</Markdown>
+                      </div>
+                    )}
+                    {activeResultTab === 'recheck' && (
+                      <div className="space-y-6">
+                        <div className="flex items-center gap-2 text-amber-500 text-sm font-bold bg-amber-500/10 w-fit px-3.5 py-1.5 rounded-full mb-2">
+                          <Clock className="w-4 h-4" /> Recommended Clinical Recheck Timelines
+                        </div>
+
+                        {/* Interactive Timeline Visual Cards */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 not-prose mb-6">
+                          <div className="p-4 rounded-2xl bg-rose-500/10 border border-rose-500/20">
+                            <div className="flex items-center gap-2 text-rose-600 dark:text-rose-400 font-bold text-xs mb-1">
+                              <span className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-pulse" />
+                              <span>0 – 2 Hours: Emergency Watch</span>
+                            </div>
+                            <p className="text-xs text-slate-700 dark:text-slate-300">
+                              Immediate check for red flags: breathing difficulty, sudden chest pressure, confusion, or severe acute pain spike. Do not wait if any emerge.
+                            </p>
+                          </div>
+
+                          <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/20">
+                            <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400 font-bold text-xs mb-1">
+                              <Clock className="w-3.5 h-3.5 text-amber-500" />
+                              <span>2 – 6 Hours: Vitals & Hydration</span>
+                            </div>
+                            <p className="text-xs text-slate-700 dark:text-slate-300">
+                              Re-evaluate response to antipyretics or fluids. Check temperature 2–4h post medication. Ensure fluid retention and resting comfort.
+                            </p>
+                          </div>
+
+                          <div className="p-4 rounded-2xl bg-blue-500/10 border border-blue-500/20">
+                            <div className="flex items-center gap-2 text-blue-600 dark:text-blue-400 font-bold text-xs mb-1">
+                              <Activity className="w-3.5 h-3.5 text-blue-500" />
+                              <span>24 – 48 Hours: Progression Check</span>
+                            </div>
+                            <p className="text-xs text-slate-700 dark:text-slate-300">
+                              Check if fever or pain is stabilizing. If fever &gt;38.5°C persists &gt;48h, or if skin redness/rash spreads, seek primary medical consult.
+                            </p>
+                          </div>
+
+                          <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/20">
+                            <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400 font-bold text-xs mb-1">
+                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
+                              <span>3 – 7 Days: Provider Consult & Resolution</span>
+                            </div>
+                            <p className="text-xs text-slate-700 dark:text-slate-300">
+                              Viral infections and mild strains usually show marked recovery within 5–7 days. Persistent cough or fatigue &gt;7–10 days requires doctor visit.
+                            </p>
+                          </div>
+                        </div>
+
+                        {parsedResult.recheck ? (
+                          <Markdown>{parsedResult.recheck}</Markdown>
+                        ) : (
+                          <div className="p-4 bg-muted/40 rounded-xl text-xs text-muted-foreground">
+                            Follow the timeline above to track recovery milestones. Keep a symptom log of temperature, fluid intake, and pain levels.
+                          </div>
+                        )}
                       </div>
                     )}
                     {activeResultTab === 'prevention' && (
@@ -1183,7 +1277,7 @@ Be professional, direct, supportive, and clear. Avoid fluff. Do not use conversa
 
             </div>
           ) : (
-            <div className="markdown-body text-foreground/90 leading-relaxed">
+            <div className="markdown-body text-slate-700 dark:text-slate-300 leading-relaxed">
               <Markdown>{analysis}</Markdown>
             </div>
           )}

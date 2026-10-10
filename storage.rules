@@ -1,0 +1,38 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isSuperAdmin() {
+      return isAuthenticated() && 
+             request.auth.token.email in ["mafia.lord1247@gmail.com", "kyleisrael44@gmail.com", "prince47aryan@gmail.com"] &&
+             request.auth.token.email_verified == true;
+    }
+
+    // Chat attachments & consultation voice notes: strictly authorized room participants only
+    match /chats/{roomId}/{fileName} {
+      allow read: if isAuthenticated() && (
+        (roomId.split('_').size() == 2 && (request.auth.uid == roomId.split('_')[0] || request.auth.uid == roomId.split('_')[1])) ||
+        isSuperAdmin()
+      );
+      allow write: if isAuthenticated() && (
+        (roomId.split('_').size() == 2 && (request.auth.uid == roomId.split('_')[0] || request.auth.uid == roomId.split('_')[1])) ||
+        isSuperAdmin()
+      ) && request.resource.size < 50 * 1024 * 1024; // 50MB maximum upload limit
+    }
+
+    // User profile documents & medical license uploads
+    match /users/{userId}/{allPaths=**} {
+      allow read: if isAuthenticated() && (request.auth.uid == userId || isSuperAdmin());
+      allow write: if isAuthenticated() && (request.auth.uid == userId || isSuperAdmin())
+                   && request.resource.size < 15 * 1024 * 1024; // 15MB limit
+    }
+
+    // Default deny all other paths
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

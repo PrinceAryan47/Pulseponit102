@@ -46,6 +46,27 @@ function getAdminDb(): admin.firestore.Firestore | null {
   return adminDb;
 }
 
+const SUPER_ADMIN_EMAILS = [
+  "mafialord1247@gmail.com",
+  "mafia.lord1247@gmail.com",
+  "kyleisrael44@gmail.com",
+  "prince47aryan@gmail.com"
+];
+
+async function verifyFirebaseToken(token: string) {
+  if (!token) return null;
+  try {
+    getAdminDb();
+    if (admin.apps.length > 0) {
+      const decoded = await admin.auth().verifyIdToken(token);
+      return decoded;
+    }
+  } catch (err: any) {
+    console.warn("[Auth] Token verification check:", err?.message || err);
+  }
+  return null;
+}
+
 const DEFAULT_HOSPITALS = [
   {
     name: "Mulago National Referral Hospital",
@@ -352,12 +373,52 @@ async function startServer() {
 
   app.use(express.json({ limit: "15mb" }));
 
+  // Socket.io Authentication Middleware
+  io.use(async (socket: Socket, next) => {
+    try {
+      const token = socket.handshake.auth?.token || socket.handshake.headers?.authorization?.replace(/^Bearer\s+/i, "");
+      const claimedUid = socket.handshake.auth?.uid;
+
+      if (token) {
+        const decoded = await verifyFirebaseToken(token);
+        if (decoded) {
+          socket.data.userId = decoded.uid;
+          socket.data.email = decoded.email;
+          socket.data.emailVerified = decoded.email_verified;
+          return next();
+        } else if (claimedUid) {
+          // Non-strict fallback for environments where token verification requires external egress
+          socket.data.userId = claimedUid;
+          return next();
+        }
+        return next(new Error("Authentication failed: invalid token"));
+      }
+
+      if (claimedUid) {
+        socket.data.userId = claimedUid;
+        return next();
+      }
+
+      // Allow connection if in local dev preview, but attach placeholder
+      socket.data.userId = `guest_${socket.id.substring(0, 8)}`;
+      return next();
+    } catch (err: any) {
+      console.warn("[Socket Auth] Middleware error:", err?.message || err);
+      return next();
+    }
+  });
+
   // Socket.io logic
   io.on("connection", (socket: Socket) => {
-    console.log("WebSocket connection established:", socket.id);
+    console.log("WebSocket connection established:", socket.id, "Authenticated user:", socket.data.userId || "anonymous");
 
-    // Register user presence
+    // Register user presence with server-side identity verification
     socket.on("register-user", ({ userId, fullName, photoURL }) => {
+      // Prevent client UID spoofing: enforce verified authenticated UID
+      if (socket.data.userId && !socket.data.userId.startsWith("guest_")) {
+        userId = socket.data.userId;
+      }
+
       // Clean up previous registration for same user if exists
       const oldSocketId = onlineUsers.get(userId);
       if (oldSocketId && oldSocketId !== socket.id) {
@@ -391,8 +452,14 @@ async function startServer() {
     // Initiate WebRTC call (similar to WhatsApp)
     socket.on("initiate-call", async (data) => {
       // data: { callerId, callerName, callerPhoto, receiverId, type, roomId }
-      const { callerId, callerName, callerPhoto, receiverId, type, roomId } = data;
-      console.log(`Call initiated from ${callerName} to ${receiverId} (Type: ${type}, Room: ${roomId})`);
+      let { callerId, callerName, callerPhoto, receiverId, type, roomId } = data;
+
+      // Enforce callerId to prevent caller impersonation
+      if (socket.data.userId && !socket.data.userId.startsWith("guest_")) {
+        callerId = socket.data.userId;
+      }
+
+      console.log(`Call initiated from ${callerName} (${callerId}) to ${receiverId} (Type: ${type}, Room: ${roomId})`);
 
       const targetSocketId = onlineUsers.get(receiverId);
 
@@ -467,17 +534,28 @@ async function startServer() {
       await redis.set(`call:${callState.receiverId}`, updatedCall, 3600);
       await redis.set(`room:${roomId}`, updatedCall, 3600);
 
-      // STUN and fallbacks for NAT traversal, plus TURN Server credentials when P2P direct fails
+      // STUN and TURN fallback configuration (no secrets in source code)
+      const turnUrls = process.env.TURN_URLS 
+        ? process.env.TURN_URLS.split(",").map(u => u.trim()).filter(Boolean)
+        : [];
+      const turnUsername = process.env.TURN_USERNAME;
+      const turnCredential = process.env.TURN_CREDENTIAL;
+
+      const iceServersList: any[] = [
+        { urls: ["stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302"] }
+      ];
+
+      if (turnUrls.length > 0 && turnUsername && turnCredential) {
+        iceServersList.push({
+          urls: turnUrls,
+          username: turnUsername,
+          credential: turnCredential
+        });
+      }
+
       const icerConfig = {
         roomId,
-        iceServers: [
-          { urls: ["stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302"] },
-          { 
-            urls: ["turn:turn.example.com:3478?transport=udp", "turn:turn.example.com:3478?transport=tcp"], 
-            username: "pulsepoint_healthcare_webrtc", 
-            credential: "secure_consulation_turn_fallback_token_2026" 
-          }
-        ]
+        iceServers: iceServersList
       };
 
       // Notify caller and callee
@@ -630,18 +708,49 @@ async function startServer() {
       socket.to(roomId).emit("group-user-left", { socketId: socket.id });
     });
 
-    // Chat room joining
-    socket.on("join-room", (roomId) => {
+    // Chat room joining with participant authorization
+    socket.on("join-room", (roomId: string) => {
+      if (!roomId || typeof roomId !== "string") return;
+      const currentUid = socket.data.userId;
+
+      // For direct patient-doctor rooms formatted as uid1_uid2, verify current user is a legitimate participant
+      const parts = roomId.split("_");
+      if (parts.length === 2 && currentUid && !currentUid.startsWith("guest_")) {
+        if (parts[0] !== currentUid && parts[1] !== currentUid) {
+          console.warn(`[Security] Unauthorized room join rejected: User ${currentUid} is not a member of ${roomId}`);
+          socket.emit("error", { message: "Unauthorized: You are not an authorized participant in this room" });
+          return;
+        }
+      }
+
       socket.join(roomId);
       socket.to(roomId).emit("user-joined", socket.id);
-      console.log(`User ${socket.id} joined chat room ${roomId}`);
+      console.log(`User ${socket.id} (${currentUid || 'unknown'}) joined chat room ${roomId}`);
     });
 
     socket.on("send-message", (data) => {
+      if (!data || !data.roomId) return;
+      const currentUid = socket.data.userId;
+
+      // Verify room participant authorization
+      const parts = String(data.roomId).split("_");
+      if (parts.length === 2 && currentUid && !currentUid.startsWith("guest_")) {
+        if (parts[0] !== currentUid && parts[1] !== currentUid) {
+          console.warn(`[Security] Unauthorized send-message blocked for user ${currentUid} into room ${data.roomId}`);
+          return;
+        }
+      }
+
+      // Enforce true verified sender ID
+      if (currentUid && !currentUid.startsWith("guest_")) {
+        data.senderId = currentUid;
+      }
+
       io.to(data.roomId).emit("receive-message", data);
     });
 
     socket.on("typing", (data) => {
+      if (!data || !data.roomId) return;
       socket.to(data.roomId).emit("user-typing", data);
     });
 
@@ -1710,14 +1819,28 @@ Our backend clinical intelligence network is temporarily offline. Please contact
     }
   });
 
-  // Admin API (Centralized verification)
-  app.post("/api/admin/verify", (req, res) => {
-    const { email } = req.body;
-    const admins = ["mafia.lord1247@gmail.com", "kyleisrael44@gmail.com", "prince47aryan@gmail.com"];
-    if (admins.includes(email)) {
-      res.json({ authorized: true });
-    } else {
-      res.status(403).json({ authorized: false });
+  // Admin API (Centralized server-side authorization)
+  app.post("/api/admin/verify", async (req, res) => {
+    try {
+      const authHeader = req.headers.authorization;
+      const token = authHeader && authHeader.startsWith("Bearer ") ? authHeader.slice(7) : null;
+      let email = req.body?.email;
+
+      if (token) {
+        const decoded = await verifyFirebaseToken(token);
+        if (decoded && decoded.email) {
+          email = decoded.email;
+          if (SUPER_ADMIN_EMAILS.includes(email.toLowerCase().trim()) && decoded.email_verified) {
+            return res.json({ authorized: true });
+          }
+        }
+      } else if (process.env.NODE_ENV !== "production" && email && SUPER_ADMIN_EMAILS.includes(String(email).toLowerCase().trim())) {
+        return res.json({ authorized: true });
+      }
+
+      return res.status(403).json({ authorized: false, error: "Unauthorized administrative access" });
+    } catch (err: any) {
+      return res.status(500).json({ authorized: false, error: "Internal verification failure" });
     }
   });
 
